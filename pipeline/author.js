@@ -17,6 +17,8 @@
 //   npm run demo [-- --live]
 //       The live segment. Cached by default.
 import { readFile, writeFile, mkdir } from 'node:fs/promises';
+import { resolve as resolvePath } from 'node:path';
+import { fileURLToPath } from 'node:url';
 import {
   openAuthedSession, openCaptureSession, saveProfile, closeSession,
   listProfiles, adoptProfile,
@@ -44,6 +46,21 @@ function parseArgs(argv) {
   }
   return { positional, flags };
 }
+
+/**
+ * A flag given with no value parses as `true`. That is right for --live and --no-verify,
+ * and wrong for anything expected to carry a string: `--doc $DEMO_DOC_URL` where the shell
+ * expanded the variable to nothing leaves you with `--doc` and `flags.doc === true`, which
+ * then beats the process.env fallback and fails much later with a useless message.
+ */
+const str = v => (typeof v === 'string' && v.length ? v : undefined);
+
+/**
+ * Paths a human types are relative to where they are standing, not to this file.
+ * Defaults are relative to this file, because that is where they were written.
+ */
+const fromCwd = p => resolvePath(process.cwd(), p);
+const fromHere = p => fileURLToPath(new URL(p, import.meta.url));
 
 const commands = {
   async 'capture-profile'() {
@@ -79,29 +96,29 @@ const commands = {
 
   async verify({ positional, flags }) {
     const paths = positional.length
-      ? positional
-      : ['../extension/lessons/styles-toc.json', '../extension/lessons/version-history.json'];
+      ? positional.map(fromCwd)
+      : ['../extension/lessons/styles-toc.json', '../extension/lessons/version-history.json'].map(fromHere);
 
     let allOk = true;
     for (const p of paths) {
-      const lesson = JSON.parse(await readFile(new URL(p, import.meta.url), 'utf8'));
-      const report = await verifyLesson(lesson, { docUrl: flags.doc });
+      const lesson = JSON.parse(await readFile(p, 'utf8'));
+      const report = await verifyLesson(lesson, { docUrl: str(flags.doc) });
       allOk = printReport(lesson, report) && allOk;
     }
     if (!allOk) process.exitCode = 1;
   },
 
   async run({ flags }) {
-    const id = flags.id ?? 'scratch';
-    const goal = flags.goal;
+    const id = str(flags.id) ?? 'scratch';
+    const goal = str(flags.goal);
     if (!goal) throw new Error('--goal is required');
 
     const spec = {
       goal,
-      docUrl: flags.doc ?? process.env.DEMO_DOC_URL,
+      docUrl: str(flags.doc) ?? process.env.DEMO_DOC_URL,
       // A goalCheck is a probe predicate, written by hand per goal. Without one, "done" is
       // just the model's opinion and prune/verify have no success condition to work from.
-      goalCheck: flags.check ? JSON.parse(flags.check) : { kind: 'none' },
+      goalCheck: str(flags.check) ? JSON.parse(flags.check) : { kind: 'none' },
     };
     if (spec.goalCheck.kind === 'none') {
       console.warn('[author] no --check given: "done" will be taken on the model\'s word.');
@@ -140,18 +157,18 @@ const commands = {
   async prune({ positional, flags }) {
     const path = positional[0];
     if (!path) throw new Error('usage: node author.js prune traces/<file>.json');
-    const trace = JSON.parse(await readFile(path, 'utf8'));
+    const trace = JSON.parse(await readFile(fromCwd(path), 'utf8'));
     const pruned = prune(trace);
     printPrune(trace, pruned);
 
     if (flags['skeleton-only']) return;
-    const id = flags.id ?? 'scratch';
+    const id = str(flags.id) ?? 'scratch';
     const lesson = await emit(pruned, { id, goal: trace.goal });
     console.log(`  wrote ${await saveLesson(id, lesson)}`);
   },
 
   async demo({ flags }) {
-    await fallbackDemo({ live: !!flags.live, docUrl: flags.doc, spec: SHALLOW_GOAL });
+    await fallbackDemo({ live: !!flags.live, docUrl: str(flags.doc), spec: SHALLOW_GOAL });
   },
 };
 
