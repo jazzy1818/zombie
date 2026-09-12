@@ -1,0 +1,207 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Browser Teacher · Paint workshop</title>
+  <style>
+    * { box-sizing: border-box; }
+    body { margin: 0; color: #e5eaf3; background: #10151e; font: 16px/1.5 system-ui, sans-serif; }
+    header { padding: 38px 6vw 24px; border-bottom: 1px solid #2a3546; }
+    .eyebrow { color: #8cbcff; font-size: 12px; letter-spacing: .16em; text-transform: uppercase; }
+    h1 { font-size: clamp(28px, 4vw, 44px); margin: 10px 0; letter-spacing: -.035em; }
+    header p { color: #aab8cc; margin: 0; max-width: 720px; }
+    main { max-width: 1280px; padding: 28px 6vw 70px; margin: auto; }
+    .actions { display: flex; flex-wrap: wrap; gap: 10px; margin-bottom: 28px; }
+    button { font: inherit; border: 1px solid #40516b; background: #233147; color: inherit;
+      border-radius: 7px; padding: 9px 15px; cursor: pointer; }
+    button:hover { background: #304564; }
+    button:focus-visible { outline: 3px solid #8cbcff; outline-offset: 3px; }
+    .primary { background: #397bd1; border-color: #6099e5; }
+    .grid { display: grid; grid-template-columns: 1.1fr 1fr; gap: 24px; }
+    .card { background: #19212e; border: 1px solid #2c394c; border-radius: 12px; padding: 24px; }
+    h2 { font-size: 18px; margin: 0 0 12px; }
+    p { color: #aab8cc; }
+    .toolbar { padding: 16px; display: flex; gap: 10px; background: #111a27; border-radius: 8px; }
+    .menu { margin-top: 12px; padding: 15px; background: #2b394d; border-radius: 8px; }
+    #scrollbox { height: 200px; overflow: auto; border: 1px solid #526781; border-radius: 8px; padding: 16px; }
+    .spacer { height: 210px; color: #7891ae; padding-top: 24px; font-size: 13px; }
+    #status { margin: 22px 0; padding: 14px 18px; color: #a8d3ff; border-left: 3px solid #4f9cf9; background: #15273a; }
+    #guidance-card { position: fixed; inset: 18px auto auto 50%; transform: translateX(-50%);
+      width: min(540px, calc(100vw - 36px)); margin: 0; padding: 16px 20px;
+      border: 1px solid #679adf; border-radius: 12px; color: #eef5ff; background: #162c48;
+      box-shadow: 0 8px 30px #0007; z-index: 2147483647; pointer-events: none; }
+    #guidance-card::backdrop { background: transparent; pointer-events: none; }
+    #guidance-card strong { display: block; color: #8cbcff; font-size: 12px; margin-bottom: 5px; }
+    #redirect-target { color: #8cbcff; display: inline-block; margin-top: 20px; }
+    #preview-result, #nested-result { color: #99d6b6; min-height: 24px; }
+    #fixed-target { position: fixed; bottom: 18px; right: 18px; z-index: 40; }
+    #offscreen-section { margin-top: 720px; }
+    dialog { padding: 32px; border-radius: 12px; border: 1px solid #40516b; background: #19212e; color: #e5eaf3; }
+    dialog::backdrop { background: #0008; }
+    input { font: inherit; width: 100%; margin-bottom: 14px; padding: 10px; }
+    body.shop { background: #f2eee7; color: #202c30; }
+    body.shop .card { background: white; border-color: #c9d3d1; }
+    body.shop .toolbar { background: #dde7e4; }
+    body.shop button { background: #245c4c; color: white; }
+    body.shop p { color: #536863; }
+    @media (max-width: 760px) { .grid { grid-template-columns: 1fr; } main { padding: 24px; } }
+  </style>
+</head>
+<body>
+  <header>
+    <div class="eyebrow">Browser Teacher / D · visual layer</div>
+    <h1>Paint workshop</h1>
+    <p>One visual engine, any supplied element. Try a highlight, scroll a container, or switch the page layout. The underlying controls stay interactive.</p>
+  </header>
+  <main>
+    <div class="actions">
+      <button class="primary" id="show-guidance">Highlight primary action</button>
+      <button id="show-scroll">Highlight nested target</button>
+      <button id="show-offscreen">Guide me down the page</button>
+      <button id="show-chain">Try a 3-step guide</button>
+      <button id="show-redirect">Try next-page cleanup</button>
+      <button id="show-wrong">Wrong-click pulse</button>
+      <button id="toggle-layout">Switch website layout</button>
+      <button id="clear-paint">Clear visuals</button>
+    </div>
+    <div class="grid">
+      <section class="card">
+        <h2>A normal website toolbar</h2>
+        <p>These are real controls. The paint layer never clicks them for you.</p>
+        <div class="toolbar">
+          <button id="target" class="primary" aria-label="Publish">Publish</button>
+          <button id="wrong-target" aria-label="Preview">Preview</button>
+          <button id="menu-toggle">Options</button>
+        </div>
+        <div class="menu" id="menu" hidden><button id="menu-target">Schedule publication</button></div>
+        <p id="click-count">Publish clicks: 0</p>
+        <div id="preview-result"></div>
+        <input id="focus-target" aria-label="Focus test" placeholder="Focus remains yours">
+        <div id="shadow-target-host"></div>
+      </section>
+      <section class="card">
+        <h2>A scrollable container</h2>
+        <p>Highlight tracks the live element and clips to the visible area.</p>
+        <div id="scrollbox">
+          <div class="spacer">Scroll inside this panel ↓</div>
+          <button id="nested-target">Confirm selection</button>
+          <div class="spacer">Keep scrolling to hide the target ↑</div>
+        </div>
+        <div id="nested-result"></div>
+      </section>
+    </div>
+    <div id="status" role="status">Ready. No resolver, lesson loader, or extension setup is required.</div>
+    <button id="open-dialog">Open modal fixture</button>
+    <button id="show-modal">Guide me in a modal</button>
+    <svg width="100" height="50" aria-label="SVG fixture"><rect id="svg-target" x="10" y="10" width="70" height="30" rx="5" fill="#4f9cf9" /></svg>
+    <section id="offscreen-section" class="card">
+      <h2>Below the fold</h2><button id="offscreen-target">Confirm at the bottom</button>
+      <div><a id="redirect-target" href="paint-harness.html?destination=1">Open the next page</a></div>
+    </section>
+  </main>
+  <button id="fixed-target">Fixed help button</button>
+  <dialog id="dialog"><h2>Modal target</h2><button id="dialog-target">Confirm in modal</button><button id="close-dialog">Close</button></dialog>
+  <aside id="guidance-card" popover="manual"><strong id="guidance-progress"></strong><span id="guidance-prompt"></span></aside>
+  <script type="module">
+    import '../extension/src/paint/index.js';
+    import { createGuidance } from '../extension/src/paint/guidance.js';
+    import { isRendered } from '../extension/src/paint/geometry.js';
+    const paint = window.__PAINT;
+    const target = document.querySelector('#target');
+    const status = document.querySelector('#status');
+    const card = document.querySelector('#guidance-card');
+    const dialog = document.querySelector('#dialog');
+    const shadow = document.querySelector('#shadow-target-host').attachShadow({ mode: 'open' });
+    shadow.innerHTML = '<button style="padding:10px 16px;font:inherit;border-radius:6px">Shadow-root control</button>';
+    window.publishClicks = 0;
+    target.addEventListener('click', () => {
+      window.publishClicks++;
+      document.querySelector('#click-count').textContent = `Publish clicks: ${window.publishClicks}`;
+    });
+    function hidePrompt() {
+      if (card.matches(':popover-open')) card.hidePopover();
+    }
+    // Demo activation adapter. A supplies its own semantic click/outcome adapter
+    // in the integrated extension. Wrong clicks never resolve this waiter.
+    function waitForActivation({ element, signal }) {
+      return new Promise((resolve, reject) => {
+        const cleanup = () => {
+          document.removeEventListener('click', click, true);
+          signal.removeEventListener('abort', abort);
+        };
+        function abort() { cleanup(); reject(new DOMException('Cancelled', 'AbortError')); }
+        function click(event) {
+          if (!event.isTrusted || !isRendered(element) || !event.composedPath().includes(element)) return;
+          cleanup();
+          hidePrompt();
+          resolve();
+        }
+        document.addEventListener('click', click, true);
+        signal.addEventListener('abort', abort, { once: true });
+        if (signal.aborted) abort();
+      });
+    }
+    const guidance = createGuidance({
+      paint,
+      resolve: selector => document.querySelector(selector),
+      waitForActivation,
+      onStep({ step, index, total, phase }) {
+        const progress = `Step ${index + 1} of ${total}`;
+        status.textContent = `${progress}: ${step.prompt}`;
+        document.querySelector('#guidance-progress').textContent = progress;
+        document.querySelector('#guidance-prompt').textContent = step.prompt;
+        // Raise after the animation so the prompt stays readable over the dimming
+        // and over a modal, without opening/focusing the website's dialog.
+        if (phase === 'waiting') { hidePrompt(); card.showPopover(); }
+      },
+      onComplete() { hidePrompt(); status.textContent = 'Done. You completed every step.'; },
+      onCancel(reason) {
+        hidePrompt();
+        status.textContent = reason === 'navigation' ? 'Guidance cleared because the page changed.' : 'Guidance cleared. Explore freely.';
+      },
+      onError(error) { hidePrompt(); status.textContent = error.message; },
+    });
+    const guide = (selector, prompt) => guidance.start([{ target: selector, prompt }]);
+    document.querySelector('#show-guidance').onclick = () => guide('#target', 'Click Publish. The guidance will disappear after your click.');
+    document.querySelector('#show-scroll').onclick = () => guide('#nested-target', 'Click Confirm selection in the scrollable panel.');
+    document.querySelector('#show-offscreen').onclick = () => guide('#offscreen-target', 'Click Confirm at the bottom.');
+    document.querySelector('#show-redirect').onclick = () => guide('#redirect-target', 'Click Open the next page. This guide ends when you leave.');
+    document.querySelector('#show-chain').onclick = () => guidance.start([
+      { target: '#wrong-target', prompt: 'Click Preview to check the draft.' },
+      { target: '#menu-toggle', prompt: 'Click Options to open the available actions.' },
+      { target: '#menu-target', prompt: 'Click Schedule publication to finish.' },
+    ]);
+    document.querySelector('#show-modal').onclick = () => {
+      const steps = [
+        { target: '#open-dialog', prompt: 'Click Open modal fixture to open the dialog yourself.' },
+        { target: '#dialog-target', prompt: 'Now click Confirm in modal to finish.' },
+      ];
+      return guidance.start(dialog.open ? steps.slice(1) : steps);
+    };
+    document.querySelector('#show-wrong').onclick = () => paint.flashWrong(document.querySelector('#wrong-target'));
+    document.querySelector('#clear-paint').onclick = () => {
+      guidance.cancel();
+      hidePrompt();
+      paint.clear(); paint.setCursorVisible(false);
+      status.textContent = 'Guidance cleared. Explore freely.';
+    };
+    document.querySelector('#toggle-layout').onclick = () => document.body.classList.toggle('shop');
+    document.querySelector('#wrong-target').onclick = () => { document.querySelector('#preview-result').textContent = 'Draft preview is ready.'; };
+    document.querySelector('#menu-toggle').onclick = () => { document.querySelector('#menu').hidden = false; };
+    document.querySelector('#menu-target').onclick = () => {
+      document.querySelector('#menu').hidden = true;
+      document.querySelector('#preview-result').textContent = 'Publication scheduled.';
+    };
+    document.querySelector('#nested-target').onclick = () => { document.querySelector('#nested-result').textContent = 'Selection confirmed.'; };
+    document.querySelector('#open-dialog').onclick = () => { if (!dialog.open) dialog.showModal(); };
+    document.querySelector('#dialog-target').onclick = () => dialog.close();
+    document.querySelector('#close-dialog').onclick = () => { guidance.cancel(); dialog.close(); };
+    dialog.addEventListener('cancel', () => guidance.cancel());
+    if (new URL(location.href).searchParams.has('destination')) {
+      status.textContent = 'You are on the next page. The previous guidance has been cleared.';
+    }
+    window.paintReady = true;
+  </script>
+</body>
+</html>

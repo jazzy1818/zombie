@@ -30,3 +30,28 @@ This file is for what we learn *during* the build.
 ## New findings
 
 _(append here — include the query you ran and the raw output)_
+
+### D visual layer: local browser validation
+
+- Paint is site-independent and consumes an Element or viewport rectangle.
+- The automated command `node docs/paint-tests.cjs` loads the real paint modules
+  in Chrome. Results: [paint-test-results.md](paint-test-results.md).
+- The screenshot checks confirmed a blue outline/ghost cursor over a normal
+  control and above a modal opened after initialization. Real clicks reached
+  those controls; no focus blur occurred during modal highlighting.
+- The plan's call to `findSync(target)` from paint cannot work with Contract 3's
+  Element/Rect-only input. Paint tracks the supplied element; replacement requires
+  A/the adapter to supply the new element. No resolver import is needed.
+- B's extension loader and the missing Contract 4 route for wrong-location
+  feedback need the checkpoint decisions recorded in
+  [paint-integration.md](paint-integration.md).
+- These are local fixture results, not new observations from Google Docs.
+
+### D follow-up review and user-requested corrections
+
+The full local paint review is recorded in [paint-review.md](paint-review.md).
+The regression suite now covers persistent dimming when a target leaves view,
+smooth scrolling, nested cursor sequencing, cancelled guidance, idle cursor
+anchoring and three positioned/contained layout cases. The recorded run has
+46 passing checks and zero page errors, including the later click-driven
+sequence, actual-pointer and navigation cleanup additions.
