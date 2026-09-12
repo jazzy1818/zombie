@@ -115,6 +115,7 @@
   transition: background 150ms ease;
 }
 .bt-bar-mic:hover { background: var(--bt-fill-hover); }
+.bt-bar-mic[hidden] { display: none; }   /* display: grid would otherwise win */
 
 .bt-mic-dot {
   width: 10px;
@@ -231,6 +232,14 @@
 .bt-close:hover,
 .bt-speak:hover { background: var(--bt-fill-hover); }
 .bt-progress[hidden] ~ .bt-speak { margin-inline-start: auto; }
+
+/* An explicit `display` beats the UA's [hidden] rule, so these need saying —
+   without them, `el.hidden = true` leaves the control on screen. */
+.bt-speak[hidden] { display: none; }
+
+/* The glyph must never be the pointer target, or the drag handle's control
+   check has to walk out of an SVG subtree to find the button. */
+.bt-speak svg { pointer-events: none; }
 
 /* Off: muted colour, slash shown, waves hidden. On: accent, waves, no slash. */
 .bt-speak { color: var(--bt-muted); }

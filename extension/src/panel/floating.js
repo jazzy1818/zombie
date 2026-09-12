@@ -36,6 +36,13 @@ export function makeFloating(el, { handle, resizer }) {
   function gesture(target, onMove) {
     target.addEventListener('pointerdown', e => {
       if (e.button !== 0) return;
+
+      // The header doubles as the drag handle and as a toolbar. Capturing the
+      // pointer retargets the following `click` to the capturing element, so
+      // starting a drag from a button swallows that button's click entirely.
+      // Let controls have their clicks; drag from the bare header instead.
+      if (e.target.closest?.('button, input, textarea, select, a')) return;
+
       e.preventDefault();       // no focus steal, no text selection
       e.stopPropagation();
 
