@@ -1,21 +1,5 @@
 #!/usr/bin/env node
-// [C] The CLI. Everything the pipeline does is reachable from here.
-//
-//   npm run capture-profile
-//       Open a long-lived Steel session, log into Google by hand through the interactive
-//       viewer, snapshot the auth to PROFILE_PATH. Do this once, ever.
-//
-//   npm run verify -- ../extension/lessons/styles-toc.json
-//       THE WORKHORSE. Replay a lesson in a fresh 1440×900 cloud Chrome. Run it constantly.
-//
-//   npm run author -- --goal "..." --id my-lesson
-//       explore → prune → emit → verify. Writes pipeline/out/<id>.json.
-//
-//   node author.js prune traces/<file>.json
-//       Offline prune + emit against a saved trace. No Steel, no cost, instant iteration.
-//
-//   npm run demo [-- --live]
-//       The live segment. Cached by default.
+// [C] The CLI. Run with no args for the command list.
 import { readFile, writeFile, mkdir } from 'node:fs/promises';
 import { createInterface } from 'node:readline/promises';
 import { resolve as resolvePath } from 'node:path';
@@ -48,18 +32,9 @@ function parseArgs(argv) {
   return { positional, flags };
 }
 
-/**
- * A flag given with no value parses as `true`. That is right for --live and --no-verify,
- * and wrong for anything expected to carry a string: `--doc $DEMO_DOC_URL` where the shell
- * expanded the variable to nothing leaves you with `--doc` and `flags.doc === true`, which
- * then beats the process.env fallback and fails much later with a useless message.
- */
+// A valueless flag parses as `true`, which would beat the process.env fallback.
 const str = v => (typeof v === 'string' && v.length ? v : undefined);
 
-/**
- * Paths a human types are relative to where they are standing, not to this file.
- * Defaults are relative to this file, because that is where they were written.
- */
 const fromCwd = p => resolvePath(process.cwd(), p);
 const fromHere = p => fileURLToPath(new URL(p, import.meta.url));
 
@@ -70,14 +45,8 @@ const commands = {
     console.log('\n  Done. explore/verify will use this automatically.\n');
   },
 
-  /**
-   * Open a cloud browser on the demo doc with the saved profile, print the interactive
-   * viewer URL, and hold it open until you press ENTER.
-   *
-   * Also prints what T0 needs: the real in-page viewport, and what the probe sees. Running
-   * the console queries HERE rather than in local Chrome is the point — this is the
-   * environment explore and verify actually use, so this is where the answers count.
-   */
+  // Hold a session open, and report the viewport / probe numbers from the environment
+  // explore and verify actually run in.
   async open({ flags }) {
     const docUrl = str(flags.doc) ?? process.env.DEMO_DOC_URL;
     const handle = await openAuthedSession();
@@ -98,12 +67,10 @@ const commands = {
         const obs = await handle.probe('observe');
         console.log(`  probe      ${obs.toolbar.length} toolbar, ${obs.menu.length} menu, ${obs.dialog.length} dialog visible`);
 
-        // The menubar question from findings-c.md, answered from real output.
         const file = obs.menu.find(c => c.name === 'File');
         console.log(`  menubar    ${file ? `"File" found via ${file.source}` : '"File" NOT FOUND — version-history s1 will not resolve'}`);
 
-        // Sanity check on the visibility filter. Docs holds ~200 menu items in the DOM;
-        // if this number is near that, the filter is broken and everything downstream lies.
+        // Near-equal counts mean the visibility filter is broken.
         const total = await handle.page.evaluate(
           () => document.querySelectorAll('[role="menuitem"]').length,
         );
@@ -121,11 +88,7 @@ const commands = {
     }
   },
 
-  /**
-   * List the profiles on the Steel account. Recovery path for a capture that logged in
-   * successfully but failed to write profile.json — the login lives on Steel's side and
-   * does not need redoing. Adopt one with:  node author.js adopt <profileId>
-   */
+  // Recovery for a capture that logged in but failed to write profile.json.
   async profiles() {
     const all = await listProfiles();
     if (!all.length) {
@@ -168,16 +131,13 @@ const commands = {
     const spec = {
       goal,
       docUrl: str(flags.doc) ?? process.env.DEMO_DOC_URL,
-      // A goalCheck is a probe predicate, written by hand per goal. Without one, "done" is
-      // just the model's opinion and prune/verify have no success condition to work from.
       goalCheck: str(flags.check) ? JSON.parse(flags.check) : { kind: 'none' },
     };
     if (spec.goalCheck.kind === 'none') {
       console.warn('[author] no --check given: "done" will be taken on the model\'s word.');
     }
 
-    // Two retries, fresh session each time. Never emit from a trace that didn't reach the
-    // goal — a lesson built from a dead end teaches the dead end.
+    // Never emit from a trace that didn't reach the goal — it would teach the dead end.
     let trace;
     for (let attempt = 1; attempt <= 3; attempt++) {
       const handle = await openAuthedSession();
@@ -231,11 +191,7 @@ async function saveTrace(id, trace) {
   return name;
 }
 
-/**
- * Generated lessons go to pipeline/out/, NEVER to extension/lessons/. Copying one across
- * is a deliberate manual act after verify passes. Nothing the pipeline produces should be
- * able to overwrite the two hand-written lessons the demo depends on.
- */
+// out/, never extension/lessons/ — the pipeline must not overwrite the hand-written ones.
 async function saveLesson(id, lesson) {
   await mkdir(OUT, { recursive: true });
   const url = new URL(`${id}.json`, OUT);

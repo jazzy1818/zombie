@@ -1,15 +1,8 @@
-// [C] Canned pipeline run for the live demo segment, in case the network, Steel, or the
-// model is having a bad day at the worst possible moment. PLAN.md §14: keep the live task
-// trivially shallow (2–3 steps, ~40s).
+// [C] The live demo segment. Cached by default; --live generates for real, which takes
+// 2-4 minutes and will not fit inside a 5-minute demo.
 //
-// The default path is CACHED, and that is what runs on stage. A real Steel cloud browser
-// really is driving a real Google Doc on screen, at real speed, and the real emitted JSON
-// is printed at the end. The only thing cached is the model's decisions. That is a fair
-// thing to show and a fair thing to say out loud — say it.
-//
-// --live runs explore → prune → emit for real. §14's timing warning applies: a full lesson
-// takes 2–4 minutes to generate, which kills a 5-minute demo. Keep the task shallow, or
-// kick it off at the START of the demo and return to it as a callback.
+// Cached still drives a real cloud browser through a real Doc — only the model's
+// decisions are replayed. Say that out loud on stage.
 import { readFile, writeFile, mkdir } from 'node:fs/promises';
 import { openAuthedSession, closeSession } from './session.js';
 import { explore } from './explore.js';
@@ -21,13 +14,10 @@ const CACHE_DIR = new URL('./cache/', import.meta.url);
 export const SHALLOW_GOAL = {
   id: 'word-count',
   goal: 'Show the word count for this document',
-  // Deliberately 2 clicks: Tools → Word count. ~40 seconds, per §14.
+  // 2 clicks, ~40s: Tools → Word count.
   goalCheck: { kind: 'visible', name: 'Word count', scope: 'menu' },
 };
 
-/**
- * @param {{live?: boolean, spec?: object, docUrl?: string, dwellMs?: number}} opts
- */
 export async function fallbackDemo(opts = {}) {
   const {
     live = false,
@@ -54,8 +44,6 @@ export async function fallbackDemo(opts = {}) {
 
     const cached = await loadCache(spec.id);
 
-    // Replay the cached decisions at presentation pace. Every click is real; only the
-    // choice of which control to click was made earlier.
     await handle.page.goto(docUrl, { waitUntil: 'domcontentloaded' });
     await handle.page.waitForSelector('#docs-toolbar-wrapper', { timeout: 30_000 });
     await handle.page.waitForTimeout(1500);

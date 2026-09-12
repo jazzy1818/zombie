@@ -1,7 +1,4 @@
-// [C] Stage 1 — a session with a body. PLAN.md §10.
-// Steel session at 1440×900 with a saved profile (cookies + localStorage from a Google
-// account logged in by hand, once, ahead of time) injected. The browser wakes up past
-// the login wall. This is why auth isn't a problem.
+// [C] Stage 1 — Steel session at 1440×900 with a saved Google profile injected.
 import { readFile, writeFile } from 'node:fs/promises';
 import { createInterface } from 'node:readline/promises';
 import { Steel } from 'steel-sdk';
@@ -9,35 +6,16 @@ import { chromium } from 'playwright-core';
 import { VIEWPORT, STEEL_API_KEY, PROFILE_PATH } from './config.js';
 import { PROBE_SOURCE } from './dom-probe.js';
 
-const DEFAULT_TIMEOUT_MS = 300_000;   // 5 min. Steel bills per session-minute.
-const CAPTURE_TIMEOUT_MS = 900_000;   // 15 min — a human is typing a password in this one.
-
-/**
- * @typedef {object} Handle
- * @property {import('steel-sdk').Steel} steel
- * @property {object} session
- * @property {import('playwright-core').Browser} browser
- * @property {import('playwright-core').BrowserContext} context
- * @property {import('playwright-core').Page} page
- * @property {string} viewerUrl   paste into a browser to watch the session live
- * @property {(fn: string, ...args: any[]) => Promise<any>} probe
- */
+const DEFAULT_TIMEOUT_MS = 300_000;   // Steel bills per session-minute
+const CAPTURE_TIMEOUT_MS = 900_000;   // a human is typing a password in this one
 
 function client() {
   if (!STEEL_API_KEY) throw new Error('STEEL_API_KEY is not set (pipeline/.env)');
   return new Steel({ steelAPIKey: STEEL_API_KEY });
 }
 
-/**
- * Open a Steel session and attach Playwright over CDP.
- *
- * NOTE on auth mechanisms, because this is the easiest thing to get wrong:
- * Playwright's `storageState` is NOT usable here. Over connectOverCDP you must drive
- * `browser.contexts()[0]` — Steel's stealth config, proxy and live viewer are bound to
- * that existing context — and `storageState` only applies at `newContext()`. Steel's own
- * `profileId` (a snapshot of the whole Chrome user-data-dir) is the primary mechanism;
- * `sessionContext` (cookies + local/session storage) is the fallback.
- */
+// Auth rides on Steel's profileId, not Playwright's storageState: connectOverCDP forces
+// you onto browser.contexts()[0] and storageState only applies at newContext().
 export async function openSession(opts = {}) {
   const {
     profileId,
@@ -63,9 +41,6 @@ export async function openSession(opts = {}) {
   const context = browser.contexts()[0];
   const page = context.pages()[0] ?? await context.newPage();
 
-  // Context-level, so it survives navigation. If this turns out not to fire on the CDP
-  // default context, the fallback is page.evaluate(PROBE_SOURCE) after every navigation —
-  // ensureProbe() below covers that case automatically.
   if (injectProbe) await context.addInitScript(PROBE_SOURCE);
 
   const handle = {
@@ -78,18 +53,12 @@ export async function openSession(opts = {}) {
   return handle;
 }
 
-/**
- * The single highest-risk assumption C owns. `dimensions` sets the Steel browser WINDOW;
- * the page's layout width is a different number and may not follow. PLAN.md §3: the Docs
- * toolbar collapses controls into `More` as width shrinks, so a button present at 1440px
- * is ABSENT FROM THE DOM at 1000px. If this is wrong, every descriptor we author is
- * poisoned and it will look like a resolver bug.
- */
+// Steel's `dimensions` sets the browser window; the page's layout width may not follow.
+// Below 1400 the Docs toolbar collapses into More and authored descriptors go stale.
 async function assertViewport(page) {
   const [w, h] = await page.evaluate(() => [window.innerWidth, window.innerHeight]);
   if (w >= 1400) return;
 
-  // Fall back to a CDP metrics override rather than failing the run outright.
   const cdp = await page.context().newCDPSession(page);
   await cdp.send('Emulation.setDeviceMetricsOverride', {
     width: VIEWPORT.width, height: VIEWPORT.height, deviceScaleFactor: 1, mobile: false,
@@ -104,7 +73,7 @@ async function assertViewport(page) {
   console.warn(`[session] window was ${w}px; forced ${w2}px via Emulation override`);
 }
 
-/** Re-inject the probe if addInitScript didn't take. Cheap, idempotent, called per-use. */
+// Covers addInitScript not firing on the CDP default context.
 async function ensureProbe(page) {
   const ok = await page.evaluate(() => typeof window.__PROBE === 'object');
   if (!ok) await page.evaluate(PROBE_SOURCE);
@@ -118,13 +87,7 @@ async function callProbe(page, fn, args) {
   );
 }
 
-/**
- * Open a long-lived session for a human to log into Google by hand, then snapshot it.
- * Prints the interactive viewer URL and blocks on stdin.
- *
- * Use a THROWAWAY Google account. A cloud browser frequently trips "This browser or app
- * may not be secure" on a personal account, and that is a hard blocker for the pipeline.
- */
+// Use a throwaway Google account — cloud browsers trip "this browser may not be secure".
 export async function openCaptureSession() {
   const handle = await openSession({
     persistProfile: true,
@@ -142,14 +105,8 @@ export async function openCaptureSession() {
   return handle;
 }
 
-/**
- * Snapshot the live session's auth and write it to PROFILE_PATH.
- *
- * Order matters: sessionContext can ONLY be captured from a LIVE session, so it must be
- * fetched before release. The profile upload is asynchronous — the profile is UPLOADING
- * while the session runs and only READY after release, so we poll. Reusing a profileId
- * that is still uploading silently gives you a logged-out browser.
- */
+// sessionContext can only be read from a live session; the profile only finishes
+// uploading after release. Hence fetch → write → release → poll → rewrite.
 export async function saveProfile(handle, path = PROFILE_PATH) {
   const { steel, session } = handle;
 
@@ -169,15 +126,11 @@ export async function saveProfile(handle, path = PROFILE_PATH) {
     viewport: VIEWPORT,
   };
 
-  // Write BEFORE releasing. Everything after this point can fail — the profile upload can
-  // stall, the poll can time out — and none of it is worth making a human log in again.
-  // sessionContext in particular exists only in memory and only while the session is live.
+  // Write before releasing — nothing after this point is worth a second hand login.
   await writeFile(path, JSON.stringify(record, null, 2));
 
   await closeSession(handle);
 
-  // The upload only completes on release, so the poll has to come after it. If Steel's
-  // create response didn't carry a profile id, find the one this session just produced.
   if (!record.profileId) record.profileId = await findRecentProfile(steel, record.capturedAt);
 
   if (record.profileId) {
@@ -201,11 +154,7 @@ export async function saveProfile(handle, path = PROFILE_PATH) {
   return record;
 }
 
-/**
- * Recovery: find the profile a just-released session produced, when the create response
- * didn't name one. Also what `author.js profiles` uses to rescue a capture whose local
- * write failed — the login itself is on Steel's side and survives.
- */
+// For when Steel's create response doesn't name the profile it produced.
 export async function findRecentProfile(steel, since) {
   try {
     const res = await steel.profiles.list();
@@ -221,14 +170,13 @@ export async function findRecentProfile(steel, since) {
   }
 }
 
-/** List every profile on the account. Exposed so a failed capture is diagnosable. */
 export async function listProfiles() {
   const steel = client();
   const res = await steel.profiles.list();
   return Array.isArray(res) ? res : (res.data ?? res.profiles ?? []);
 }
 
-/** Write a profile.json by hand from a known profileId. The re-login escape hatch. */
+// Recover profile.json from a profile that uploaded but never got recorded locally.
 export async function adoptProfile(profileId, path = PROFILE_PATH) {
   const steel = client();
   const p = await steel.profiles.get(profileId);
@@ -267,13 +215,12 @@ export async function loadProfile(path = PROFILE_PATH) {
   }
 }
 
-/** Open a session using the saved profile. The normal entry point for explore/verify. */
 export async function openAuthedSession(opts = {}) {
   const { profileId, sessionContext } = await loadProfile();
   return openSession({ ...opts, profileId, sessionContext });
 }
 
-/** Always call this in a finally. A leaked session runs to its timeout and bills for it. */
+// Always in a finally — a leaked session runs to its timeout and bills for it.
 export async function closeSession(handle) {
   if (!handle) return;
   try { await handle.browser?.close(); } catch { /* already gone */ }

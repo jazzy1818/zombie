@@ -1,33 +1,8 @@
-// [C] Stage 5 — verification replay. The highest-value thing Steel does.
-// Fresh session, clean state, replay using ONLY the emitted descriptors — not the
-// original trace, the actual JSON you're about to ship.
-//
-//   completes → valid, ship
-//   fails     → descriptors too fragile, discard and re-run
-//
-// You can't test a lesson against a user's real account. Here you can test it a hundred
-// times against throwaway ones.
-//
-// Pointed at the two HAND-WRITTEN lessons this is also the machine check that closes the
-// open questions in docs/findings.md — which is why it gets built before explore.js. The
-// demo has to be safe before the agent loop exists; §16 makes live generation cut item #1.
+// [C] Stage 5 — replay a lesson in a fresh session using only its emitted descriptors.
+// Completes → ship. Fails → descriptors too fragile, re-run.
 import { openAuthedSession, closeSession } from './session.js';
 import { RESOLVE_TIMEOUT_MS, VERIFY_TIMEOUT_MS } from './config.js';
 
-/**
- * @typedef {object} StepReport
- * @property {string} id
- * @property {'ok'|'unresolved'|'verify-failed'|'skipped'} status
- * @property {string} [name]     the bare name we tried to resolve
- * @property {number} [count]    how many VISIBLE elements matched — >1 means nth mattered
- * @property {number} ms
- * @property {string} [note]
- */
-
-/**
- * Replay a Lesson against a fresh cloud browser.
- * @returns {Promise<{ok: boolean, steps: StepReport[], failedAt?: string, viewerUrl: string}>}
- */
 export async function verifyLesson(lesson, opts = {}) {
   const { docUrl = process.env.DEMO_DOC_URL, keepOpen = false } = opts;
   if (!docUrl) throw new Error('no doc URL — pass { docUrl } or set DEMO_DOC_URL');
@@ -36,25 +11,21 @@ export async function verifyLesson(lesson, opts = {}) {
   const steps = [];
   let failedAt;
 
-  // Up front, not just on failure — a replay takes long enough to open this and watch it.
   console.log(`\n  ${lesson.id} — watch: ${handle.viewerUrl}`);
 
   try {
     await handle.page.goto(docUrl, { waitUntil: 'domcontentloaded' });
     await handle.page.waitForSelector('#docs-toolbar-wrapper', { timeout: 30_000 });
-    // Docs finishes wiring its menus a beat after the toolbar paints.
-    await handle.page.waitForTimeout(1500);
+    await handle.page.waitForTimeout(1500);   // Docs wires its menus after the toolbar paints
 
     for (const step of lesson.steps) {
       const t0 = Date.now();
 
-      // target: null is an instruct-only step — "click on the title line". The document
-      // body is canvas-rendered, so there is no DOM element to resolve and nothing to
-      // replay. Not a failure; just outside what this can check.
+      // Instruct-only: the doc body is canvas, so there's nothing to resolve or replay.
       if (!step.target) {
         steps.push({
           id: step.id, status: 'skipped', ms: Date.now() - t0,
-          note: 'instruct-only (target: null) — canvas, nothing to resolve',
+          note: 'instruct-only (target: null)',
         });
         continue;
       }
@@ -62,18 +33,15 @@ export async function verifyLesson(lesson, opts = {}) {
       const hit = await pollResolve(handle, step.target, RESOLVE_TIMEOUT_MS);
       if (!hit) {
         steps.push({
-          id: step.id, status: 'unresolved', name: step.target.name,
-          ms: Date.now() - t0,
+          id: step.id, status: 'unresolved', name: step.target.name, ms: Date.now() - t0,
           note: `no visible match for ${JSON.stringify(step.target)}`,
         });
         failedAt = step.id;
-        break;                       // descriptors-too-fragile signal. Stop here.
+        break;
       }
 
-      // Click through Playwright, not el.click(). Docs listens on the capture phase and
-      // its menus dismiss on blur; a synthetic HTMLElement.click() skips the pointer
-      // sequence and can behave differently from the real user click the extension waits
-      // for. Replay the thing the user will actually do.
+      // Playwright, not el.click() — Docs listens on capture phase and its menus dismiss
+      // on blur, so the real pointer sequence matters.
       await handle.page.click(`[data-bt-id="${hit.id}"]`, { timeout: 5000 });
 
       if (step.verify && step.verify.kind !== 'none') {
@@ -92,8 +60,6 @@ export async function verifyLesson(lesson, opts = {}) {
       steps.push({
         id: step.id, status: 'ok', name: step.target.name,
         count: hit.count, ms: Date.now() - t0,
-        // A `none` verify only asserts resolution + a successful click. That's the honest
-        // limit of what `none` can check.
         ...(step.verify?.kind === 'none' ? { note: 'click only (verify: none)' } : {}),
       });
     }
@@ -130,7 +96,6 @@ async function pollCheck(handle, verify, timeoutMs) {
 
 const MARK = { ok: '  ok  ', unresolved: ' FAIL ', 'verify-failed': ' FAIL ', skipped: ' skip ' };
 
-/** Human-readable report. Returns true if the lesson is shippable. */
 export function printReport(lesson, report) {
   console.log(`\n  ${lesson.id} — ${lesson.goal}`);
   for (const s of report.steps) {

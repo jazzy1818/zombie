@@ -1,29 +1,13 @@
-// [C] Stage 4 — semantic emission. MUST emit exactly the extension/lessons/ format
-// (PLAN.md §5). The two hand-written lessons in extension/lessons/ are this emitter's
-// executable spec.
+// [C] Stage 4 — pruned trace → a Lesson matching PLAN.md §5.
 //
-// Record WHAT the thing was, never where. No coordinates, no screenshots — the cloud
-// browser's window differs from the user's.
-//
-// TWO HALVES, STRICTLY SEPARATED:
-//   4a. The mechanical skeleton NEVER calls the model. Descriptors are derived from the
-//       trace and then PROVEN against the observation that was live at click time.
-//   4b. The narration call NEVER touches a descriptor. It writes sentences.
-// That line is the answer to "where must emit not guess".
+// Two halves, kept apart on purpose: the skeleton never calls the model, and the
+// narration call never touches a descriptor.
 import { readFile } from 'node:fs/promises';
 import Anthropic from '@anthropic-ai/sdk';
 import { zodOutputFormat } from '@anthropic-ai/sdk/helpers/zod';
 import { z } from 'zod';
 
-// ---------------------------------------------------------------------------- 4a bare names
-
-/**
- * Raw label → the BARE name the schema wants (§5 authoring rules):
- *   "Paragraph styles", never "Paragraph styles►"
- *   "Find and replace",  never "Find and replaceCtrl+H"
- *   "Bold",              never "Bold (⌘B)"
- * Progressively gentler strips, so a name we over-trimmed can back off instead of failing.
- */
+// Progressively gentler strips, so an over-trimmed name can back off instead of failing.
 function stripLadder(raw, scope) {
   const t = String(raw).trim();
   if (scope === 'toolbar') {
@@ -41,19 +25,14 @@ function stripLadder(raw, scope) {
   ];
 }
 
-/** §8.1 match semantics, replayed offline against a recorded observation. */
 function matchesIn(pool, name, scope) {
   return pool.filter(c => scope === 'toolbar'
     ? c.name === name
     : c.raw === name || c.raw.startsWith(name));
 }
 
-/**
- * Derive `target` and PROVE it. The proof matters more than the regexes: we replay A's
- * matcher against step.pre — the exact visible set at the moment of the click — and count
- * what the extension WILL match. So `nth` counts visible matches only by construction,
- * under the same prefix semantics the resolver uses.
- */
+// Proven, not just derived: replay §8.1's matcher against step.pre, the visible set at
+// click time, so nth counts what the resolver will actually match.
 export function deriveTarget(step) {
   const { target } = step;
   const scope = target.scope === 'dialog' ? 'any' : target.scope;
@@ -79,17 +58,10 @@ export function deriveTarget(step) {
   );
 }
 
-// ---------------------------------------------------------------------------- 4a verify
-
 const SAFE_SELECTOR = /^(#[A-Za-z][\w-]*|\[aria-label="[^"]+"\])$/;
 
-/**
- * Decision table over step.delta, first match wins. Prefer outcome over click — that is
- * what gives alternate correct paths for free.
- */
+// Decision table over step.delta, first match wins.
 export function deriveVerify(step, nextStep) {
-  // The next step's target became visible because of this click — the strongest signal
-  // available, and the one the hand-written lessons use most.
   if (nextStep) {
     const want = nextStep.target;
     if (step.delta.appeared.some(c => c.raw === want.raw && c.scope === want.scope)) {
@@ -99,28 +71,22 @@ export function deriveVerify(step, nextStep) {
     }
   }
 
-  // A toolbar readout changed in place: Styles going "Normal text" → "Heading 1".
   const changed = step.delta.changed[0];
   if (changed) {
     const selector = `#docs-toolbar-wrapper [aria-label="${changed.name}"]`;
     return { kind: 'label', selector, match: changed.to };
   }
 
-  // Something new and addressable appeared — a dialog, a sidebar.
   const dialog = step.delta.appeared.find(c => c.scope === 'dialog');
   if (dialog) {
     const selector = `[aria-label="${dialog.raw}"]`;
     if (SAFE_SELECTOR.test(selector)) return { kind: 'dom', selector };
   }
 
-  // Deliberate. If the only distinguishing attribute would be a CSS class, we emit `none`
-  // instead: Docs classes are minified (gb_Je) and turn over between deploys. A `none`
-  // verify costs outcome-based alternate paths; a class selector costs the whole lesson
-  // next Tuesday. `none` is a legitimate answer and the emitter reaches for it freely.
+  // `none` over a CSS-class selector: Docs minifies classes and they turn over between
+  // deploys. Losing alternate-path detection beats losing the lesson.
   return { kind: 'none' };
 }
-
-// ---------------------------------------------------------------------------- 4a skeleton
 
 function deriveMode(i, total) {
   if (i === 0) return 'demo';                 // step 1 establishes the pattern
@@ -132,9 +98,7 @@ export function skeleton(kept) {
   return kept.map((step, i) => ({
     id: `s${i + 1}`,
     mode: deriveMode(i, kept.length),
-    // `target` is never null from the pipeline. Instruct-only steps ("click on the title
-    // line") are a human authoring move the agent cannot discover — the document body is
-    // canvas and has no DOM. Those stay in the hand-written lessons.
+    // Never null here — instruct-only steps need a human, the doc body is canvas.
     target: deriveTarget(step),
     action: 'click',
     verify: deriveVerify(step, kept[i + 1]),
@@ -148,8 +112,6 @@ export function skeleton(kept) {
     },
   }));
 }
-
-// ---------------------------------------------------------------------------- 4b narration
 
 const Narration = z.object({
   preamble: z.string(),
@@ -199,8 +161,6 @@ async function narrate(client, skel, meta, exemplars) {
     model: 'claude-opus-5',
     max_tokens: 8000,
     thinking: { type: 'adaptive' },
-    // Quality over latency here, unlike the explore loop. This is the writing the whole
-    // product is judged on.
     output_config: { effort: 'high', format: zodOutputFormat(Narration) },
     system: [
       { type: 'text', text: NARRATION_RULES },
@@ -216,24 +176,14 @@ async function narrate(client, skel, meta, exemplars) {
   return res.parsed_output;
 }
 
-// ---------------------------------------------------------------------------- the merge
-
-/**
- * @param {{kept: object[]}} pruned
- * @param {{id: string, goal: string, app?: string, client?: Anthropic}} meta
- * @returns {Promise<object>} a Lesson matching §5
- */
 export async function emit(pruned, meta) {
   const skel = skeleton(pruned.kept);
   const client = meta.client ?? new Anthropic();
   const exemplars = await loadExemplars();
   const prose = await narrate(client, skel, meta, exemplars);
 
-  // THE GUARD RAIL. Narration is zipped onto the skeleton by id, and we take ONLY
-  // intent / hints / wrongHints. The model has no write access to target, name, nth,
-  // scope, verify, mode, or step order. The model writes sentences; the trace writes
-  // descriptors. An unknown id, or a wrongHints key naming a control that was not visible
-  // at that step, is dropped silently.
+  // The model writes sentences; the trace writes descriptors. Only intent/hints/
+  // wrongHints are taken from prose — never target, verify, mode or order.
   const byId = new Map((prose?.steps ?? []).map(s => [s.id, s]));
 
   const steps = skel.map((s, i) => {
@@ -274,7 +224,6 @@ export async function emit(pruned, meta) {
   return lesson;
 }
 
-/** Re-validate our own output against §5 before anyone can ship it. */
 const Lesson = z.object({
   id: z.string().min(1),
   app: z.literal('google-docs'),
