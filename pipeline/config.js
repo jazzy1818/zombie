@@ -9,5 +9,10 @@ export const TARGET_URL = 'https://docs.google.com/document/d/*';
 export const MAX_AGENT_ACTIONS     = 15;   // hard cap; lost agents stay lost
 export const AGENT_STEP_TIMEOUT_MS = 8000;
 
+// Replay timings — verify.js reproduces what the extension does at teach time, so it
+// must wait exactly as long as the extension waits. Mirrored from constants.js §3.
+export const RESOLVE_TIMEOUT_MS = 2000;
+export const VERIFY_TIMEOUT_MS  = 3000;
+
 export const STEEL_API_KEY = process.env.STEEL_API_KEY;
 export const PROFILE_PATH  = process.env.PROFILE_PATH;  // saved cookies + localStorage

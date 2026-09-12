@@ -4,7 +4,16 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "author": "node author.js",
-    "verify": "node verify.js"
+    "capture-profile": "node --env-file=.env author.js capture-profile",
+    "author": "node --env-file=.env author.js run",
+    "verify": "node --env-file=.env author.js verify",
+    "prune": "node author.js prune",
+    "demo": "node --env-file=.env author.js demo"
+  },
+  "dependencies": {
+    "@anthropic-ai/sdk": "^0.125.0",
+    "playwright-core": "^1.63.0",
+    "steel-sdk": "^0.18.0",
+    "zod": "^4.6.2"
   }
 }

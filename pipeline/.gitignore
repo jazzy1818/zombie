@@ -1,0 +1,10 @@
+node_modules/
+
+# Secrets. A Steel API key or a Google session profile must never reach the remote.
+.env
+profile.json
+
+# Run artifacts. Traces are useful locally (prune/emit develop against them offline)
+# but they're big, machine-generated, and never reviewed.
+traces/
+out/
