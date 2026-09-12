@@ -1,0 +1,140 @@
+{
+  "id": "extension-practice",
+  "app": "universal",
+  "goal": "Practice highlights on a normal webpage",
+  "preamble": "You will click the real website controls. Try a wrong control, scroll away from a highlighted target, or press Stop at any time.",
+  "generalization": "Guidance points and waits; the user performs every website action.",
+  "steps": [
+    {
+      "id": "publish",
+      "mode": "guided",
+      "intent": "Click Publish. The highlight will clear as soon as you click it.",
+      "target": {
+        "name": "Publish"
+      },
+      "action": "click",
+      "verify": {
+        "kind": "none"
+      },
+      "hints": [
+        "Use the website control named in the instruction.",
+        "Look for Publish."
+      ]
+    },
+    {
+      "id": "nested",
+      "mode": "guided",
+      "intent": "Follow the smooth scroll, then click Confirm nested inside the scroll box.",
+      "target": {
+        "name": "Confirm nested"
+      },
+      "action": "click",
+      "verify": {
+        "kind": "none"
+      },
+      "hints": [
+        "Use the website control named in the instruction.",
+        "Look for Confirm nested."
+      ]
+    },
+    {
+      "id": "menu",
+      "mode": "guided",
+      "intent": "Click Options to open the website’s menu.",
+      "target": {
+        "name": "Options"
+      },
+      "action": "click",
+      "verify": {
+        "kind": "visible",
+        "name": "Schedule publication",
+        "scope": "menu"
+      },
+      "hints": [
+        "Use the website control named in the instruction.",
+        "Look for Options."
+      ]
+    },
+    {
+      "id": "schedule",
+      "mode": "guided",
+      "intent": "Click Schedule publication in the menu you just opened.",
+      "target": {
+        "name": "Schedule publication"
+      },
+      "action": "click",
+      "verify": {
+        "kind": "none"
+      },
+      "hints": [
+        "Use the website control named in the instruction.",
+        "Look for Schedule publication."
+      ]
+    },
+    {
+      "id": "modal",
+      "mode": "guided",
+      "intent": "Click Open confirmation yourself to open the dialog.",
+      "target": {
+        "name": "Open confirmation"
+      },
+      "action": "click",
+      "verify": {
+        "kind": "visible",
+        "name": "Confirm in modal"
+      },
+      "hints": [
+        "Use the website control named in the instruction.",
+        "Look for Open confirmation."
+      ]
+    },
+    {
+      "id": "confirm",
+      "mode": "guided",
+      "intent": "Click Confirm in modal. The website will close its dialog.",
+      "target": {
+        "name": "Confirm in modal"
+      },
+      "action": "click",
+      "verify": {
+        "kind": "none"
+      },
+      "hints": [
+        "Use the website control named in the instruction.",
+        "Look for Confirm in modal."
+      ]
+    },
+    {
+      "id": "bottom",
+      "mode": "guided",
+      "intent": "Follow the scroll down the page, then click Confirm at bottom.",
+      "target": {
+        "name": "Confirm at bottom"
+      },
+      "action": "click",
+      "verify": {
+        "kind": "none"
+      },
+      "hints": [
+        "Use the website control named in the instruction.",
+        "Look for Confirm at bottom."
+      ]
+    },
+    {
+      "id": "redirect",
+      "mode": "guided",
+      "intent": "Click Open next page. Navigation will clear the guidance rather than continue it on the destination.",
+      "target": {
+        "name": "Open next page"
+      },
+      "action": "click",
+      "verify": {
+        "kind": "none"
+      },
+      "hints": [
+        "Use the website control named in the instruction.",
+        "Look for Open next page."
+      ]
+    }
+  ]
+}

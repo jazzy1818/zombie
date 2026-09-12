@@ -1,235 +1,174 @@
-// [B] The lesson runner: narrate → branch on mode → verify → advance.
-//
-// Pure orchestration. Touches no DOM of its own — the host page goes through
-// window.__TEACH, the panel goes through the injected `ui` facade. That's what
-// lets this run end-to-end against the teach.js stub before A's resolver or D's
-// overlay exist.
+// [B+D] User-driven lesson orchestration. A resolves controls; D paints them.
+// Every async phase belongs to a run and can be stopped without advancing it.
 import { startHints } from './hints.js';
 
 const T = () => window.__TEACH;
-
-const sleep = ms => new Promise(r => setTimeout(r, ms));
-
-/**
- * How many times we'll disbelieve a correct click before giving up on verify
- * and advancing anyway.
- *
- * PLAN.md §15 lists "Styles button textContent doesn't expose current style" as
- * a live risk whose sanctioned fallback is `verify.kind: 'none'` — advance on
- * the click alone. This is that fallback, applied at runtime: a broken verify
- * hook must never trap the user on a step they've already done correctly.
- */
 const MAX_VERIFY_RETRIES = 2;
+export const ACTION = { CONTINUE: 'continue', DEMO_REST: 'demo-rest', QUIT: 'quit' };
+const REQUIRED = ['highlight', 'clear', 'moveCursor', 'demo', 'waitForClick', 'verify', 'flashCorrect', 'setCursorVisible'];
+const aborted = () => new DOMException('Lesson cancelled', 'AbortError');
 
-/** Breath after a wrong click. Long enough to read the correction, and it caps
- *  the loop rate so a misbehaving waitForClick can't spin the tab. */
-const RE_ARM_MS = 250;
+function check(signal) { if (signal?.aborted) throw aborted(); }
 
-/** Actions the panel can hand back while a step is waiting. */
-export const ACTION = {
-  CONTINUE: 'continue',   // "Got it →" on instruct-only steps
-  DEMO_REST: 'demo-rest', // "Just do it for me"
-  QUIT: 'quit',
-};
-
-const REQUIRED = [
-  'highlight', 'clear', 'moveCursor', 'demo',
-  'waitForClick', 'verify', 'flashCorrect', 'setCursorVisible',
-];
-
-/**
- * Contract 4 is replaced wholesale at Checkpoint 1 by A and D. If a method is
- * missing or misnamed, every call site fails somewhere deep in a step with a
- * useless stack. Check once, up front, and say exactly what's absent.
- */
-function assertTeach() {
-  const teach = window.__TEACH;
-  if (!teach) throw new Error('window.__TEACH is not defined — teach.js did not load.');
-  const missing = REQUIRED.filter(m => typeof teach[m] !== 'function');
-  if (missing.length) {
-    throw new Error(`window.__TEACH is missing: ${missing.join(', ')} (see PLAN.md §6)`);
-  }
+/** Race even legacy adapters against cancellation, and always observe failures. */
+function cancellable(promise, signal) {
+  return new Promise((resolve, reject) => {
+    const cancel = () => finish(reject, aborted());
+    const finish = (settle, value) => {
+      signal?.removeEventListener('abort', cancel);
+      settle(value);
+    };
+    Promise.resolve(promise).then(value => finish(resolve, value), error => finish(reject, error));
+    if (signal?.aborted) cancel();
+    else signal?.addEventListener('abort', cancel, { once: true });
+  });
 }
 
-/**
- * @param {object} opts
- * @param {number} opts.from  step index to start at — rehearsal shortcut, so you
- *                            don't sit through steps 1-2 to practise step 3.
- */
-export async function runLesson(lesson, ui, { from = 0 } = {}) {
-  assertTeach();
-  ui.lessonStarted(lesson);
+function pause(ms, signal) {
+  return new Promise((resolve, reject) => {
+    check(signal);
+    const cancel = () => { clearTimeout(timer); reject(aborted()); };
+    const timer = setTimeout(() => { signal?.removeEventListener('abort', cancel); resolve(); }, ms);
+    signal?.addEventListener('abort', cancel, { once: true });
+  });
+}
 
+export async function runLesson(lesson, ui, { from = 0, signal, isCurrent = () => true } = {}) {
+  const teach = T();
+  const missing = REQUIRED.filter(method => typeof teach?.[method] !== 'function');
+  if (missing.length) throw new Error('window.__TEACH is missing: ' + missing.join(', '));
+  check(signal);
+  const clearOnAbort = () => { if (isCurrent()) teach.clear(); };
+  signal?.addEventListener('abort', clearOnAbort, { once: true });
+  ui.lessonStarted(lesson);
   try {
     if (from === 0) {
-      const start = await ui.card({
-        kind: 'preamble',
-        title: lesson.goal,
-        body: lesson.preamble,
+      const start = await cancellable(ui.card({
+        kind: 'preamble', title: lesson.goal, body: lesson.preamble,
         actions: [{ label: 'Show me', value: ACTION.CONTINUE }, { label: 'Not now', value: ACTION.QUIT }],
-      });
+      }, { signal }), signal);
+      check(signal);
       if (start === ACTION.QUIT) return;
     }
-
-    for (let i = from; i < lesson.steps.length; i++) {
-      const outcome = await runStep(lesson.steps[i], i, lesson, ui);
-
+    let showWhere = false;
+    for (let index = from; index < lesson.steps.length; index++) {
+      check(signal);
+      let step = lesson.steps[index];
+      if (showWhere && step.target) step = { ...step, mode: 'demo' };
+      const outcome = await runStep(step, index, lesson, ui, signal);
+      check(signal);
       if (outcome === ACTION.QUIT) return;
       if (outcome === ACTION.DEMO_REST) {
-        await demoRemaining(lesson, i, ui);
-        break;
+        showWhere = true;
+        // Re-run this step with visual guidance. The user still activates it.
+        if (step.target) index--;
       }
     }
-
-    T().clear();
-    await ui.card({
-      kind: 'generalization',
-      title: 'What you actually learned',
-      body: lesson.generalization,
+    teach.clear();
+    await cancellable(ui.card({
+      kind: 'generalization', title: 'What you actually learned', body: lesson.generalization,
       actions: [{ label: 'Done', value: ACTION.CONTINUE }],
-    });
+    }, { signal }), signal);
   } finally {
-    T().clear();
-    T().setCursorVisible(true);
-    ui.lessonEnded();
+    signal?.removeEventListener('abort', clearOnAbort);
+    // A cancelled older run must never clear a newly started lesson.
+    if (isCurrent()) {
+      teach.clear();
+      teach.setCursorVisible(true);
+      ui.lessonEnded();
+    }
   }
 }
 
-async function runStep(step, index, lesson, ui) {
+async function runStep(step, index, lesson, ui, runSignal) {
+  check(runSignal);
+  const lifetime = new AbortController();
+  const cancel = () => lifetime.abort();
+  runSignal?.addEventListener('abort', cancel, { once: true });
+  const signal = lifetime.signal;
   ui.step(step, index, lesson.steps.length);
-
-  // The ghost cursor is the teacher's hand. On a `solo` step there is no
-  // teacher — that's the point of the step.
   T().setCursorVisible(step.mode !== 'solo');
-
   try {
-    if (!step.target) return await runInstructOnly(step, ui);
-    if (step.mode === 'demo') return await runDemo(step, ui);
-    return await runInteractive(step, ui);
+    // Arm footer actions before resolution, scrolling, demonstration or verify.
+    const action = ui.pendingAction({ signal });
+    const work = step.target ? runInteractive(step, ui, signal) : runInstructOnly(step, ui, signal);
+    return await cancellable(Promise.race([action, work]), signal);
   } finally {
-    T().setCursorVisible(true);
+    lifetime.abort();
+    runSignal?.removeEventListener('abort', cancel);
+    // Run-level cancellation already cleared the bridge. Avoid late cleanup
+    // from this step touching the next run's freshly mounted paint.
+    if (!runSignal?.aborted) {
+      T().clear();
+      T().setCursorVisible(true);
+    }
   }
 }
 
-/**
- * target: null — a canvas action Docs gives us no element for ("click the title
- * line, watch the Styles box"). We can't highlight it and we can't detect it.
- *
- * If the step has a real verify we poll that. If it doesn't (styles-toc s2),
- * there is genuinely nothing to wait on, so we ask the user to tell us they're
- * done. Safe here specifically because no menu is open on an instruct-only
- * step — the focus change can't dismiss anything.
- */
-async function runInstructOnly(step, ui) {
+async function runInstructOnly(step, ui, signal) {
   T().clear();
-
   if (step.verify && step.verify.kind !== 'none') {
-    const ok = await T().verify(step.verify);
-    if (ok) return null;
+    if (await cancellable(T().verify(step.verify), signal)) return null;
+    check(signal);
   }
-
-  return ui.actions([
+  // Keep the waiter installed by runStep; only replace its visible buttons.
+  ui.setActions([
     { label: 'Got it', value: ACTION.CONTINUE },
-    { label: 'Just do it for me', value: ACTION.DEMO_REST, subtle: true },
+    { label: 'Stop', value: ACTION.QUIT, subtle: true },
   ]);
+  return cancellable(new Promise(() => {}), signal);
 }
 
-async function runDemo(step, ui) {
-  await T().demo(step.target);
-  await T().verify(step.verify);
-  T().clear();
-  return null;
-}
-
-/**
- * guided and solo. The difference is one line — whether we show them where it
- * is — and that one line is the entire product.
- */
-async function runInteractive(step, ui) {
-  if (step.mode === 'guided') {
-    const found = await T().highlight(step.target);
-
-    // Resolver came back empty. Almost always means the user hasn't opened the
-    // menu the target lives in — which is exactly the state this step is
-    // waiting on, not an error. Degrade to a text hint and keep waiting.
-    // (PLAN.md §8.2 tier 5.)
-    if (!found) ui.hint(step.hints?.[0] || 'Have a look through the menus.');
-  } else {
-    T().clear();
-  }
-
+async function runInteractive(step, ui, signal) {
   let verifyFailures = 0;
-
   for (;;) {
-    const cancelHints = startHints(step, ui);
-
-    let result;
+    check(signal);
+    let cancelHints = startHints(step, ui, { signal });
     try {
-      // Race the page click against the panel's own buttons, so "just do it for
-      // me" still works while we're blocked waiting for a click that may never
-      // come.
-      result = await Promise.race([
-        T().waitForClick(step.target).then(r => ({ click: r })),
-        ui.pendingAction().then(a => ({ action: a })),
-      ]);
+      // The click is armed FIRST: even a click during scrolling is accepted,
+      // and native dialog/menu opening is always performed by the user's click.
+      let activated = false;
+      const click = waitForCorrect(step, signal, name => {
+        cancelHints();
+        ui.wrong(wrongMessage(step, name));
+        cancelHints = startHints(step, ui, { signal });
+      }).then(result => { activated = true; return result; });
+      const presentation = step.mode === 'demo' ? T().demo(step.target)
+        : step.mode === 'guided' ? T().highlight(step.target) : Promise.resolve(true);
+      const visual = Promise.resolve(presentation).then(found => {
+        if (found === false && !activated && !signal.aborted) ui.hint(step.hints?.[0] || 'Open the control described above.');
+        return found;
+      });
+      const result = await cancellable(Promise.all([click, visual]), signal);
+      check(signal);
+      if (result[0] === 'correct') {
+        // The bridge already removed effects in the click handler. Give page
+        // handlers/default actions a turn before resolving the following step.
+        cancelHints();
+        await pause(0, signal);
+        const ok = await cancellable(T().verify(step.verify), signal);
+        check(signal);
+        if (ok || ++verifyFailures > MAX_VERIFY_RETRIES) return null;
+        ui.hint("That's the right control — it just didn't take. Give it another go.");
+      }
     } finally {
       cancelHints();
     }
+  }
+}
 
-    if (result.action) return result.action;
-
-    if (result.click === 'correct') {
-      T().flashCorrect();
-      const ok = await T().verify(step.verify);
-      if (ok) {
-        T().clear();
-        return null;
-      }
-
-      // Right control, wrong outcome. Ask them to try once more — but only
-      // once. Past that, believe the click and move on: a verify hook that
-      // can't see a correct action is our bug, and making the user pay for it
-      // by trapping them on the step is worse than advancing optimistically.
-      if (++verifyFailures > MAX_VERIFY_RETRIES) {
-        console.warn(`[browser-teacher] ${step.id}: verify never passed, advancing on the click`);
-        T().clear();
-        return null;
-      }
-
-      ui.hint("That's the right control — it just didn't take. Give it another go.");
-      await sleep(RE_ARM_MS);
-      continue;
-    }
-
-    // Wrong click. This is a teaching moment, not a failure state: correct them
-    // and go straight back to waiting.
-    ui.wrong(wrongMessage(step, result.click?.wrong));
-    if (step.mode === 'guided') await T().highlight(step.target);
-    await sleep(RE_ARM_MS);
+async function waitForCorrect(step, signal, onWrong) {
+  for (;;) {
+    check(signal);
+    const result = await cancellable(T().waitForClick(step.target), signal);
+    check(signal);
+    if (result === 'correct') return result;
+    onWrong(result?.wrong);
+    // Re-arm immediately, even if the initial smooth scroll is still running.
   }
 }
 
 function wrongMessage(step, name) {
-  const specific = name && step.wrongHints?.[name];
-  if (specific) return specific;
-  if (name) return `That's ${name} — not quite. ${step.intent}`;
-  return `Not that one. ${step.intent}`;
-}
-
-/** "Just do it for me" — also the panic button if a step wedges on stage. */
-async function demoRemaining(lesson, from, ui) {
-  for (let i = from; i < lesson.steps.length; i++) {
-    const step = lesson.steps[i];
-    ui.step(step, i, lesson.steps.length);
-    T().setCursorVisible(true);
-
-    if (step.target) {
-      await T().demo(step.target);
-      await T().verify(step.verify);
-    } else {
-      // Nothing to click on the user's behalf — narrate it and move on.
-      await new Promise(r => setTimeout(r, 1200));
-    }
-  }
-  T().clear();
+  return (name && step.wrongHints?.[name]) || (name
+    ? "That's " + name + ' — not quite. ' + step.intent : 'Not that one. ' + step.intent);
 }

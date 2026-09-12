@@ -2,7 +2,8 @@
 
 Reviewed production paint modules, the workshop, browser checks and integration
 documentation. A separate read-only review reproduced additional geometry bugs
-in Chrome. All changes remain in D's `paint/` and `docs/` directories.
+in Chrome. This page records the original D-only review; the subsequent real
+extension integration is covered in [extension-integration.md](extension-integration.md).
 
 ## Findings fixed
 
@@ -42,11 +43,11 @@ settlement in its promise. These semantics are documented for A and B in
 
 ## Remaining integration scope
 
-- The shared teach adapter and A/B implementation are still the team's scaffold;
-  browser composition coverage uses a resolver double. Live Docs and a complete
-  installed extension have not been validated.
-- B still needs the supported extension module loader and the team decision on
-  forwarding a wrong-click location through Contract 4.
+- The separate loaded-extension suite exercises the real teach bridge, semantic
+  fallback and B's panel. A's resolver files still contain stubs; live Docs needs
+  a separate lesson rehearsal. See [extension integration](extension-integration.md).
+- B's supported module bootstrap is merged. The frozen Contract 4 still has no
+  public method for forwarding a wrong-click location.
 - Cross-frame targets and complex clipping surfaces remain adapter/browser-support
   boundaries listed in the integration guide. The tests do not claim all possible
   website layouts are supported.

@@ -5,6 +5,17 @@ import { watchNavigation } from './navigation.js';
 let surface = null;
 let stopNavigation = null;
 const disposers = new Set();
+const raisedListeners = new Set();
+
+// Other extension UI can stay readable above this passive rendering surface.
+export function onRaise(listener) {
+  raisedListeners.add(listener);
+  return () => raisedListeners.delete(listener);
+}
+
+function notifyRaised() {
+  for (const listener of raisedListeners) listener();
+}
 
 export function onUnmount(dispose) {
   disposers.add(dispose);
@@ -21,13 +32,16 @@ export function currentHost() {
 
 export function raiseHost() {
   const current = currentHost();
-  if (!current?.host.hasAttribute('popover')) return;
+  if (!current) return;
   // A page may have opened a dialog/popover after our host. Raise only when
   // starting new guidance, never each frame (which would churn the top layer).
   try {
-    if (current.host.matches(':popover-open')) current.host.hidePopover();
-    current.host.showPopover();
+    if (current.host.hasAttribute('popover')) {
+      if (current.host.matches(':popover-open')) current.host.hidePopover();
+      current.host.showPopover();
+    }
   } catch { /* The fixed-position fallback remains usable outside the top layer. */ }
+  notifyRaised();
 }
 
 export function mountHost() {
@@ -97,6 +111,7 @@ export function mountHost() {
     try { host.showPopover(); } catch { host.removeAttribute('popover'); }
   }
   surface = { host, root, scrim, spot, cursor, ripple, feedback };
+  notifyRaised();
   stopNavigation = watchNavigation(unmountHost);
   return surface;
 }

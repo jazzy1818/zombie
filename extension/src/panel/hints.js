@@ -16,7 +16,7 @@ import { IDLE_HINT_MS, HINT_ESCALATE_MS } from '../constants.js';
  * @param {object} step  the Step being waited on
  * @param {object} ui    panel facade, needs .hint(text)
  */
-export function startHints(step, ui) {
+export function startHints(step, ui, { signal } = {}) {
   const tiers = [];
 
   const [conceptual, spatial] = step.hints || [];
@@ -29,15 +29,20 @@ export function startHints(step, ui) {
     tiers.push(() => {
       ui.hint('Here it is.');
       window.__TEACH.setCursorVisible(true);
-      window.__TEACH.highlight(step.target);
+      Promise.resolve(window.__TEACH.highlight(step.target)).catch(error => {
+        if (!signal?.aborted && error?.name !== 'AbortError') console.warn('[browser-teacher] Hint could not be shown', error);
+      });
     });
   }
 
   const timers = tiers.map((fn, i) =>
-    setTimeout(fn, IDLE_HINT_MS + i * HINT_ESCALATE_MS),
+    setTimeout(() => { if (!signal?.aborted) fn(); }, IDLE_HINT_MS + i * HINT_ESCALATE_MS),
   );
 
-  return function cancel() {
+  function cancel() {
     timers.forEach(clearTimeout);
-  };
+    signal?.removeEventListener('abort', cancel);
+  }
+  signal?.addEventListener('abort', cancel, { once: true });
+  return cancel;
 }

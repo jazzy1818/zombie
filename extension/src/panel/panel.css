@@ -46,6 +46,9 @@
   color: var(--bt-text);
 }
 
+:host::backdrop { background: transparent !important; pointer-events: none !important; }
+.bt-window, .bt-bar { pointer-events: auto; }
+
 /* --------------------------------------------------------------- chat bar */
 
 .bt-bar {

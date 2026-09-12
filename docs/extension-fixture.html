@@ -1,0 +1,100 @@
+<!doctype html>
+<html lang="en">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Browser Teacher extension integration fixture</title>
+<style>
+  * { box-sizing: border-box; }
+  body { margin: 0; font: 18px/1.5 system-ui,sans-serif; color: #192536; background: #edf2f8; }
+  main { width: 760px; padding: 36px; }
+  h1 { font-size: 26px; margin: 0 0 10px; }
+  section { margin: 22px 0; padding: 20px; border: 1px solid #bcc9da; border-radius: 12px; background: white; }
+  button, a { font: inherit; padding: 10px 16px; margin: 6px; border: 1px solid #416d9a; border-radius: 6px; background: #f5f9fe; color: #113c69; }
+  a { display: inline-block; }
+  [hidden] { display: none !important; }
+  #scrollbox { height: 205px; overflow: auto; background: #ecf2f9; }
+  .nested-space { height: 620px; }
+  .page-space { height: 1500px; }
+  dialog { position: fixed; margin: 0; top: 130px; left: 80px; width: 620px; border: 2px solid #7086a0; border-radius: 12px; padding: 30px; }
+  dialog::backdrop { background: #12213666; }
+  #verify-state { min-height: 30px; }
+</style>
+<main>
+  <h1>Real extension integration fixture</h1>
+  <p>The extension loads through its manifest. This page provides ordinary website controls only.</p>
+  <section role="toolbar" aria-label="Publishing toolbar">
+    <button id="publish" aria-label="Publish">Publish</button>
+    <button id="preview" aria-label="Preview">Preview</button>
+    <button id="menu-open" aria-label="Options">Options</button>
+    <button id="modal-open" aria-label="Open confirmation">Open confirmation</button>
+  </section>
+  <div id="menu" role="menu" aria-label="Publication options" hidden>
+    <button id="schedule" role="menuitem" aria-label="Schedule publication">Schedule publication</button>
+  </div>
+  <section>
+    <p>Nested scroller</p>
+    <div id="scrollbox"><div class="nested-space"></div><button id="nested" aria-label="Confirm nested">Confirm nested</button><div style="height:100px"></div></div>
+  </section>
+  <section>
+    <button id="verify" aria-label="Start verification">Start verification</button>
+    <div id="verify-state" aria-live="polite">Idle</div>
+    <button id="duplicate-hidden" aria-label="Unique action" hidden>Hidden duplicate</button>
+    <button id="unique" aria-label="Unique action">Unique action</button>
+    <button id="ambiguous-one" aria-label="Ambiguous action">First ambiguous action</button>
+    <button id="ambiguous-two" aria-label="Ambiguous action">Second ambiguous action</button>
+    <button id="native-action">Native text action</button>
+    <label for="name-input">Display name</label><input id="name-input" type="text">
+    <div id="shadow-host"></div>
+  </section>
+  <section>
+    <a id="hash" href="#same-page" aria-label="Jump within page">Jump within page</a>
+    <button id="spa" aria-label="Open another route">Open another route</button>
+    <a id="redirect" href="/docs/extension-fixture.html?destination=1" aria-label="Open next page">Open next page</a>
+    <div id="same-page">Same-document anchor</div>
+  </section>
+  <details>
+    <summary>Manual practice with the loaded extension</summary>
+    <p>Load the repository's <code>extension</code> directory as an unpacked extension. Open DevTools, select the <strong>Browser Teacher</strong> console context, then run this recipe:</p>
+    <pre>fetch('/docs/extension-practice.json')
+  .then(response =&gt; response.json())
+  .then(lesson =&gt; __BT_DEV.runLesson(lesson));</pre>
+    <p>Follow the panel's instructions using the real website buttons. Stop or close the panel to cancel. A redirect clears the current lesson.</p>
+  </details>
+  <div class="page-space"></div>
+  <section><button id="bottom" aria-label="Confirm at bottom">Confirm at bottom</button></section>
+</main>
+<dialog id="dialog" aria-label="Confirmation dialog">
+  <h2>Confirm publication</h2>
+  <p>The user must open this dialog before the next target exists.</p>
+  <button id="modal-confirm" aria-label="Confirm in modal">Confirm in modal</button>
+  <button id="modal-close" aria-label="Close website dialog">Close website dialog</button>
+</dialog>
+<script>
+  window.fixture = { clicks: {}, trusted: [], verifyDelay: 0 };
+  document.addEventListener('click', event => {
+    if (event.target.closest?.('#browser-teacher-root')) return;
+    const button = event.composedPath().find(node => node instanceof Element && node.matches('button,a'));
+    if (!button) return;
+    fixture.clicks[button.id] = (fixture.clicks[button.id] || 0) + 1;
+    fixture.trusted.push({ id: button.id, trusted: event.isTrusted });
+  }, true);
+  document.querySelector('#menu-open').addEventListener('click', () => { document.querySelector('#menu').hidden = false; });
+  document.querySelector('#schedule').addEventListener('click', () => { document.querySelector('#menu').hidden = true; });
+  document.querySelector('#modal-open').addEventListener('click', () => { document.querySelector('#dialog').showModal(); });
+  document.querySelector('#modal-confirm').addEventListener('click', () => { document.querySelector('#dialog').close(); });
+  document.querySelector('#modal-close').addEventListener('click', () => { document.querySelector('#dialog').close(); });
+  document.querySelector('#verify').addEventListener('click', () => {
+    document.querySelector('#verify-state').textContent = 'Waiting';
+    if (fixture.verifyDelay >= 0) setTimeout(() => { document.querySelector('#verify-state').textContent = 'Verified'; }, fixture.verifyDelay);
+  });
+  document.querySelector('#spa').addEventListener('click', () => { history.pushState({}, '', '/docs/extension-fixture-route'); });
+  const shadow = document.querySelector('#shadow-host').attachShadow({ mode: 'open' });
+  shadow.innerHTML = `
+    <style>button{font:inherit;padding:10px;margin:6px}dialog{margin:0;position:fixed;top:150px;left:70px;width:600px;padding:25px}dialog::backdrop{background:#14233566}</style>
+    <button id="shadow-action" aria-label="Shadow action">Shadow action</button>
+    <button id="shadow-modal-open" aria-label="Open shadow modal">Open shadow modal</button>
+    <dialog id="shadow-dialog" aria-label="Shadow confirmation dialog"><p>Native dialog inside an open shadow root.</p><button id="shadow-modal-confirm" aria-label="Confirm shadow modal">Confirm shadow modal</button></dialog>`;
+  shadow.querySelector('#shadow-modal-open').addEventListener('click', () => shadow.querySelector('#shadow-dialog').showModal());
+  shadow.querySelector('#shadow-modal-confirm').addEventListener('click', () => shadow.querySelector('#shadow-dialog').close());
+</script>
+</html>

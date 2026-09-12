@@ -42,9 +42,9 @@ _(append here — include the query you ran and the raw output)_
 - The plan's call to `findSync(target)` from paint cannot work with Contract 3's
   Element/Rect-only input. Paint tracks the supplied element; replacement requires
   A/the adapter to supply the new element. No resolver import is needed.
-- B's extension loader and the missing Contract 4 route for wrong-location
-  feedback need the checkpoint decisions recorded in
-  [paint-integration.md](paint-integration.md).
+- B's module bootstrap is now merged. The real bridge, fallback target adapter
+  and loaded-extension verification are described in
+  [extension-integration.md](extension-integration.md).
 - These are local fixture results, not new observations from Google Docs.
 
 ### D follow-up review and user-requested corrections

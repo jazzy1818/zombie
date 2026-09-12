@@ -14,10 +14,12 @@
 import { PANEL_WIDTH, PANEL_SIDE, OVERLAY_Z } from '../constants.js';
 import { mountBar } from './launcher.js';
 import { makeFloating } from './floating.js';
-import { loadLesson, loadAll, matchLesson, LESSONS } from './lessons.js';
+import { loadLesson, loadAll, matchLesson, validateLesson, LESSONS } from './lessons.js';
 import { runLesson, ACTION } from './machine.js';
 import { createSpeech } from './speech.js';
 import { installDev } from './dev.js';
+import { onRaise } from '../paint/host.js';
+import { watchNavigation } from '../paint/navigation.js';
 
 const SPEAKER_SVG = `
   <svg viewBox="0 0 20 20" width="14" height="14" fill="none" aria-hidden="true">
@@ -51,13 +53,53 @@ export async function mountPanel() {
   const root = host.attachShadow({ mode: 'open' });
   await injectStyles(root);
 
-  // OVERLAY_Z is INT_MAX, so we can't outrank D's scrim by z-index alone —
-  // and since this window moves, D can't cut a hole for it either. Matching
-  // their z-index and being later in the DOM wins the tie, which keeps the
-  // narration readable while the page behind it is dimmed. raise() re-asserts
-  // it when a lesson starts, in case D mounted their host lazily after us.
+  // The paint scrim is a manual popover in the browser's top layer. Put this
+  // pointer-transparent surface above it, with only its controls interactive.
   host.style.setProperty('--bt-z', String(OVERLAY_Z));
-  const raise = () => document.documentElement.appendChild(host);
+  for (const [key, value] of Object.entries({
+    all: 'initial', position: 'fixed', inset: '0', width: '100%', height: '100%',
+    margin: '0', padding: '0', border: '0', overflow: 'visible',
+    'max-width': 'none', 'max-height': 'none', 'pointer-events': 'none',
+    background: 'transparent', 'z-index': String(OVERLAY_Z),
+    transform: 'none', filter: 'none', opacity: '1', visibility: 'visible',
+    'font-family': "'Google Sans', Roboto, -apple-system, BlinkMacSystemFont, sans-serif",
+    color: 'var(--bt-text)',
+  })) host.style.setProperty(key, value, 'important');
+  if (typeof host.showPopover === 'function') host.setAttribute('popover', 'manual');
+  const raise = () => {
+    // Popovers outside a native modal are visually above it but still inert.
+    // Moving our host inside the active dialog keeps Stop/Close operable.
+    const dialogs = [...document.querySelectorAll('dialog[open]')].filter(dialog => {
+      try { return dialog.matches(':modal'); } catch { return true; }
+    });
+    let focused = document.activeElement;
+    while (focused?.shadowRoot?.activeElement) focused = focused.shadowRoot.activeElement;
+    let focusedDialog = null;
+    for (let node = focused; node; node = node.parentElement || node.getRootNode()?.host) {
+      if (node.localName !== 'dialog' || !node.open) continue;
+      try { if (!node.matches(':modal')) continue; } catch { /* Legacy browser. */ }
+      focusedDialog = node;
+      break;
+    }
+    const parent = focusedDialog || dialogs.at(-1) || document.documentElement;
+    const modalRoot = parent.getRootNode();
+    if (modalRoot instanceof ShadowRoot) {
+      // Shadow-tree dialog open/close changes do not reach a document observer.
+      dialogChanges.observe(modalRoot, { subtree: true, childList: true, attributes: true, attributeFilter: ['open'] });
+    }
+    if (host.parentNode !== parent) parent.appendChild(host);
+    if (host.hasAttribute('popover')) {
+      try {
+        if (host.matches(':popover-open')) host.hidePopover();
+        host.showPopover();
+      } catch { /* Older documents keep the fixed-position fallback. */ }
+    }
+  };
+  onRaise(raise);
+  const dialogChanges = new MutationObserver(records => {
+    if (!host.isConnected || records.some(record => record.type === 'attributes' && record.target.tagName === 'DIALOG')) raise();
+  });
+  dialogChanges.observe(document.documentElement, { subtree: true, childList: true, attributes: true, attributeFilter: ['open'] });
 
   const win = document.createElement('section');
   win.className = 'bt-window';
@@ -98,6 +140,16 @@ export async function mountPanel() {
 
   const speech = createSpeech();
   const ui = createUI(els, raise, speech);
+  let currentRun = null;
+  const cancel = () => {
+    const previous = currentRun;
+    currentRun = null;
+    previous?.controller.abort();
+    previous?.stopNavigation();
+    window.__TEACH?.clear();
+    ui.reset();
+  };
+  ui.onCancel = cancel;
 
   const bar = mountBar(root, {
     onPrompt: start,
@@ -107,7 +159,7 @@ export async function mountPanel() {
   ui.bindBar(bar);
 
   noFocusSteal(els.close);
-  els.close.addEventListener('click', () => ui.reset());
+  els.close.addEventListener('click', cancel);
 
   if (!speech.supported) {
     els.speak.hidden = true;
@@ -133,24 +185,50 @@ export async function mountPanel() {
    * half-wired layers meeting for the first time — a thrown error must land
    * where someone can read it, not silently in the console behind the page.
    */
-  async function play(id, opts) {
+  async function session(work) {
+    cancel();
+    const controller = new AbortController();
+    const run = { controller, stopNavigation: () => {} };
+    currentRun = run;
+    run.stopNavigation = watchNavigation(cancel);
+    const active = () => currentRun === run && !controller.signal.aborted;
+    const options = { signal: controller.signal, isCurrent: () => currentRun === run };
+    let stopWaiting;
+    const cancelled = new Promise((_, reject) => {
+      stopWaiting = () => reject(new DOMException('Lesson cancelled', 'AbortError'));
+      controller.signal.addEventListener('abort', stopWaiting, { once: true });
+    });
+    ui.loading();
     try {
-      await runLesson(await loadLesson(id), ui, opts);
+      await Promise.race([work({ active, options }), cancelled]);
+      return { status: active() ? 'completed' : 'cancelled' };
     } catch (err) {
+      if (err?.name === 'AbortError' || !active()) return { status: 'cancelled' };
       console.error('[browser-teacher]', err);
       ui.fail(err);
+      return { status: 'error', message: err?.message || String(err) };
+    } finally {
+      controller.signal.removeEventListener('abort', stopWaiting);
+      run.stopNavigation();
+      if (currentRun === run) currentRun = null;
     }
   }
 
-  async function start(question) {
-    try {
+  function play(id, opts = {}) {
+    return session(async ({ active, options }) => {
+      const lesson = await loadLesson(id);
+      if (active()) await runLesson(lesson, ui, { ...opts, ...options });
+    });
+  }
+
+  function start(question) {
+    return session(async ({ active, options }) => {
       const { id, confident, ranked } = await matchLesson(question);
-      if (!confident) return ui.showPicker(question, ranked);
-      await play(id);
-    } catch (err) {
-      console.error('[browser-teacher]', err);
-      ui.fail(err);
-    }
+      if (!active()) return;
+      if (!confident) return ui.showPicker(question, ranked, { signal: options.signal });
+      const lesson = await loadLesson(id);
+      if (active()) await runLesson(lesson, ui, options);
+    });
   }
 
   ui.onPickLesson = id => play(id);
@@ -159,10 +237,15 @@ export async function mountPanel() {
   //   __BT_DEV.run('styles-toc', 3)
   if (window.__BT_DEV) {
     window.__BT_DEV.run = (id = 'styles-toc', step = 1) => play(id, { from: Math.max(0, step - 1) });
+    window.__BT_DEV.runLesson = (lesson, opts = {}) => session(async ({ active, options }) => {
+      validateLesson(lesson);
+      if (active()) await runLesson(lesson, ui, { ...opts, ...options });
+    });
     window.__BT_DEV.lessons = () => LESSONS.map(l => l.id);
   }
 
   ui.reset();
+  raise();
 }
 
 /* ------------------------------------------------------------------ styles */
@@ -195,10 +278,26 @@ function createUI(els, raise, speech) {
   let spoken = '';   // what's currently on screen, for the toggle-on case
 
   const fire = value => {
+    if (value === ACTION.QUIT) { ui.onCancel(); return; }
     const r = resolveAction;
     resolveAction = null;
     r?.(value);
   };
+
+  function waitAction({ signal } = {}) {
+    return new Promise((resolve, reject) => {
+      const abort = () => finish(reject, new DOMException('Lesson cancelled', 'AbortError'));
+      const finish = (settle, value) => {
+        signal?.removeEventListener('abort', abort);
+        if (resolveAction === answer) resolveAction = null;
+        settle(value);
+      };
+      const answer = value => finish(resolve, value);
+      resolveAction = answer;
+      if (signal?.aborted) abort();
+      else signal?.addEventListener('abort', abort, { once: true });
+    });
+  }
 
   function setOpen(open) {
     els.win.classList.toggle('is-open', open);
@@ -253,6 +352,7 @@ function createUI(els, raise, speech) {
 
   const ui = {
     onPickLesson: () => {},
+    onCancel: () => {},
 
     bindBar(b) { bar = b; },
 
@@ -260,7 +360,9 @@ function createUI(els, raise, speech) {
     sayCurrent() { speech.say(spoken); },
 
     reset() {
+      const pending = resolveAction;
       resolveAction = null;
+      pending?.(ACTION.QUIT);
       speech.stop();
       spoken = '';
       setOpen(false);
@@ -272,10 +374,11 @@ function createUI(els, raise, speech) {
     },
 
     /** Matcher wasn't confident. Ask rather than confidently teach the wrong thing. */
-    async showPicker(question, ranked) {
+    async showPicker(question, ranked, { signal } = {}) {
       raise();
       setOpen(true);
       const lessons = await loadAll();
+      if (signal?.aborted) return;
       // Best guess first — we weren't confident enough to commit, but we're not
       // clueless either, and the ordering is free.
       const order = ranked?.length ? ranked.map(r => r.id) : LESSONS.map(l => l.id);
@@ -304,13 +407,21 @@ function createUI(els, raise, speech) {
       setOpen(true);
     },
 
+    loading() {
+      raise();
+      bar?.setEnabled(false);
+      setOpen(true);
+      renderCard({ kind: 'loading', title: 'Browser Teacher', body: 'Preparing your lesson…' });
+      renderActions([{ label: 'Stop', value: ACTION.QUIT, subtle: true }]);
+    },
+
     lessonEnded() { ui.reset(); },
 
     /** A card that waits for one of its own buttons. */
-    card({ kind, title, body, actions }) {
+    card({ kind, title, body, actions }, options) {
       renderCard({ kind, title, body });
       renderActions(actions);
-      return new Promise(res => { resolveAction = res; });
+      return waitAction(options);
     },
 
     step(step, index, total) {
@@ -318,15 +429,17 @@ function createUI(els, raise, speech) {
       els.progress.textContent = `${index + 1} / ${total}`;
       renderCard({ kind: 'step', mode: step.mode, title: modeLabel(step.mode), body: step.intent });
       renderActions([
-        { label: 'Just do it for me', value: ACTION.DEMO_REST, subtle: true },
+        { label: 'Show me where', value: ACTION.DEMO_REST, subtle: true },
         { label: 'Stop', value: ACTION.QUIT, subtle: true },
       ]);
     },
 
     /** Actions with no new card — used by instruct-only steps. */
-    actions(list) {
+    setActions: renderActions,
+
+    actions(list, options) {
       renderActions(list);
-      return new Promise(res => { resolveAction = res; });
+      return waitAction(options);
     },
 
     hint(text) { appendNote('hint', text); },
@@ -347,16 +460,14 @@ function createUI(els, raise, speech) {
     },
 
     /** Resolves when a footer button is pressed. Raced against waitForClick. */
-    pendingAction() {
-      return new Promise(res => { resolveAction = res; });
-    },
+    pendingAction: waitAction,
   };
 
   return ui;
 }
 
 function modeLabel(mode) {
-  if (mode === 'demo') return 'Watch';
+  if (mode === 'demo') return 'Follow the guide';
   if (mode === 'solo') return 'Your turn — no hints';
   return 'Your turn';
 }

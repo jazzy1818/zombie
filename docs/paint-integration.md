@@ -11,10 +11,11 @@ For correct-click completion, click-driven modal steps and same-page chains, use
 the optional [guidance controller](paint-guidance.md). Its resolver and activation
 adapters are injected, and the public paint interface below stays unchanged.
 
-The detailed build sequence is in [paint-workflow.md](paint-workflow.md). Actual
-browser results are in [paint-test-results.md](paint-test-results.md). The current
-tests exercise real paint modules with a resolver double, not A's unfinished
-resolver. Shared `teach.js` is intentionally still the team's original stub.
+The detailed build sequence is in [paint-workflow.md](paint-workflow.md). Standalone
+browser results are in [paint-test-results.md](paint-test-results.md). The real
+extension now composes paint through `teach.js`; see
+[extension integration](extension-integration.md) for its adapter, panel lifecycle
+and loaded-extension tests. A's unfinished resolver files remain unchanged.
 
 ## Contract 3: unchanged public surface
 
@@ -105,7 +106,10 @@ target and judging the user's action.
 - Internal `unmountHost()` in `paint/host.js` cancels all work and removes the
   host. It is not an extra public Contract 3 method. Page exit invokes it.
 
-## Checkpoint integration sequence
+## Original checkpoint integration sequence
+
+This sequence records the initial handoff. The installed composition and current
+test procedure are in [extension integration](extension-integration.md).
 
 1. Run the standalone paint tests below before merging.
 2. Merge A's resolver and D's paint directory using the team's checkpoint policy.
@@ -143,10 +147,10 @@ flashCorrect: () => window.__PAINT.flashCorrect(),
 setCursorVisible: visible => window.__PAINT.setCursorVisible(visible),
 ```
 
-For demo mode, find -> spotlight -> move cursor -> dwell -> click animation ->
-real click. Immediately before the real click, the adapter should check the
-current run token and that the element is still connected/current. A/B's code,
-never paint, performs that click and verifies the outcome.
+The original plan's automated demo click has been superseded by the user's
+click-driven requirement. Demo mode points at the control and waits for the real
+user activation. A modal lesson has an opener step followed by an inner-control
+step. Neither paint nor the real teach adapter opens the modal on the user's behalf.
 
 For guided mode, register A's capture-phase click wait before potentially long
 animations so a fast user click is not missed. The panel sequences narration,
@@ -159,21 +163,17 @@ action to finish. Navigation aborts pending activation and visual work. It uses
 an abortable run lifetime so cleared/replaced steps cannot restart the cursor.
 Cursor motion remains an explicit call in the frozen paint interface.
 
-## Two shared-application issues to settle with B
+## Shared-application integration
 
-1. **Loading:** the current manifest lists `src/content.js` as a static content
-   script and includes `type: "module"`. The source entry point contains ES
-   imports. Chrome's content-script declaration does not offer a module type;
-   B should bundle the entry point to a classic script or provide a supported
-   bootstrap. This paint change does not modify B's manifest/build ownership.
-   See [Chrome content scripts](https://developer.chrome.com/docs/extensions/develop/concepts/content-scripts).
+1. **Loading:** B's merged bootstrap loads classic `content.js`, which dynamically
+   imports `main.js` in the extension isolated world. The manifest now supports
+   HTTP/HTTPS websites and exposes the imported module resources on those sites.
 2. **Wrong-location feedback:** Contract 3 exposes `flashWrong(box)`, but the
    frozen Contract 4 does not expose a wrong-flash method, and A returns only a
-   wrong label. Thus the current contracts support B's textual correction but
-   do not carry the wrong element/location through to D. Paint's method is
-   implemented and tested; do not invent coordinates from the label. Agree an
-   adapter extension at a future contract checkpoint if visual wrong-location
-   feedback is needed in the integrated product.
+   wrong label. The current teaching adapter has the actual wrong control from
+   the trusted capture event, so it calls paint with that Element and returns the
+   label to B. This preserves both public interfaces and avoids guessing a
+   location from a label. Keep that behavior when A takes over click resolution.
 
 ## Run and inspect locally
 
@@ -222,5 +222,6 @@ Smooth positioning follows [scrollIntoView](https://developer.mozilla.org/en-US/
   pinch zoom, fullscreen transitions and multiple concurrent teacher instances
   are not covered by this test suite. A closed shadow root requires A to already
   hold a reference to its target.
-- Full live-Docs lesson execution and installation of the complete extension
-  remain integration checks; the current A/B scaffolds are still unfinished.
+- Loaded-extension fixture coverage is documented separately in
+  [extension integration](extension-integration.md). Live Docs lesson execution
+  still needs rehearsal with verified lesson descriptors.

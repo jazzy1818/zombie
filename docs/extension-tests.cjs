@@ -1,0 +1,437 @@
+// Run with Playwright on NODE_PATH: node docs/extension-tests.cjs
+// CHROME_PATH must name Chromium/Chrome for Testing with unpacked-extension support.
+// The actual extension is loaded from its manifest in a separate persistent profile.
+// CDP is used only to enter its isolated JavaScript world and call the real dev
+// lesson hook. No resolver, teach, paint, page click or browser API is mocked.
+const { chromium } = require('playwright');
+const assert = require('node:assert/strict');
+const fs = require('node:fs/promises');
+const path = require('node:path');
+const http = require('node:http');
+
+const root = path.resolve(__dirname, '..');
+const artifacts = path.join(__dirname, '.paint-artifacts');
+const extensionPath = path.join(root, 'extension');
+const results = [];
+const runtimeErrors = [];
+let context;
+let browserVersion = 'not launched';
+let extensionId;
+const server = http.createServer(async (request, response) => {
+  try {
+    let pathname = decodeURIComponent(new URL(request.url, 'http://localhost').pathname);
+    if (pathname === '/docs/extension-fixture-route') pathname = '/docs/extension-fixture.html';
+    const file = path.resolve(root, `.${pathname}`);
+    if (!file.startsWith(root + path.sep)) { response.writeHead(403).end(); return; }
+    const body = await fs.readFile(file);
+    const type = { '.html': 'text/html', '.js': 'text/javascript', '.css': 'text/css', '.json': 'application/json' }[path.extname(file)] || 'text/plain';
+    response.writeHead(200, { 'Content-Type': type, 'Cache-Control': 'no-store' }); response.end(body);
+  } catch { response.writeHead(404).end('Not found'); }
+});
+const pause = ms => new Promise(resolve => setTimeout(resolve, ms));
+
+async function report() {
+  const passed = results.filter(result => result.passed).length;
+  const lines = [
+    '# Loaded extension integration results', '',
+    `Run: ${new Date().toISOString()}`, '',
+    `Browser: ${browserVersion}`, '',
+    `Unpacked extension: ${extensionId || 'not detected'}`, '',
+    `Result: **${passed}/${results.length} checks passed**.`, '',
+    'The browser loaded the unchanged extension directory through the manifest content script, then its real module graph in the extension isolated world. Tests use the actual panel, teaching adapter, resolver/fallback and paint implementations. No lesson-success, click, resolver or browser API mocks are installed.', '',
+    ...results.map(result => `- ${result.passed ? 'PASS' : 'FAIL'}: ${result.name}${result.error ? ` — ${result.error.replace(/\n/g, ' ')}` : ''}`), '',
+    `Uncaught page or extension console errors: ${runtimeErrors.length}.`,
+    ...runtimeErrors.map(error => `- ${error.replace(/\n/g, ' ')}`), '',
+    'Scope: ordinary DOM controls on a local HTTP fixture, including native modal dialogs, open shadow roots, nested scrolling and same-origin navigation. This does not certify every website, cross-origin iframe, canvas application, browser version or live Google Docs lesson.', '',
+    'Screenshots and the disposable browser profile are saved under ignored `docs/.paint-artifacts/`.', '',
+    'Run with `node docs/extension-tests.cjs` after making Playwright available. Set `CHROME_PATH` to a Chromium or Chrome for Testing executable that supports unpacked extensions. Normal branded Chrome builds may ignore extension-loading flags.', '',
+  ];
+  await fs.writeFile(path.join(__dirname, 'extension-test-results.md'), lines.join('\n'));
+}
+
+(async () => {
+  await fs.mkdir(artifacts, { recursive: true });
+  await new Promise(resolve => server.listen(0, '127.0.0.1', resolve));
+  const url = `http://127.0.0.1:${server.address().port}/docs/extension-fixture.html`;
+  const profile = await fs.mkdtemp(path.join(artifacts, 'extension-profile-'));
+  context = await chromium.launchPersistentContext(profile, {
+    headless: true, channel: 'chromium',
+    ...(process.env.CHROME_PATH ? { executablePath: process.env.CHROME_PATH } : {}),
+    args: [`--disable-extensions-except=${extensionPath}`, `--load-extension=${extensionPath}`],
+    viewport: { width: 1440, height: 900 },
+  });
+  browserVersion = context.browser()?.version() || 'Chromium persistent context';
+  const page = context.pages()[0] || await context.newPage();
+  page.setDefaultTimeout(6000);
+  page.on('pageerror', error => runtimeErrors.push(`Page: ${error.message}`));
+  const cdp = await context.newCDPSession(page);
+  const contexts = new Map();
+  let world;
+  cdp.on('Runtime.executionContextCreated', ({ context: created }) => contexts.set(created.id, created));
+  cdp.on('Runtime.executionContextDestroyed', ({ executionContextId }) => contexts.delete(executionContextId));
+  cdp.on('Runtime.executionContextsCleared', () => { contexts.clear(); world = undefined; });
+  cdp.on('Runtime.consoleAPICalled', event => {
+    if (event.type !== 'error') return;
+    const description = event.args.map(arg => arg.value ?? arg.description ?? arg.type).join(' ');
+    runtimeErrors.push(`${contexts.get(event.executionContextId)?.name || 'Console'}: ${description}`);
+  });
+  await cdp.send('Runtime.enable');
+
+  async function evaluate(expression, contextId = world) {
+    assert.ok(contextId, 'Extension isolated execution context must exist');
+    const result = await cdp.send('Runtime.evaluate', { contextId, expression, returnByValue: true, awaitPromise: true });
+    if (result.exceptionDetails) throw new Error(result.exceptionDetails.exception?.description || result.exceptionDetails.text);
+    return result.result.value;
+  }
+  async function ready() {
+    const deadline = Date.now() + 12000;
+    while (Date.now() < deadline) {
+      for (const [id, candidate] of contexts) {
+        if (candidate.auxData?.isDefault) continue;
+        try {
+          const idValue = await evaluate(`typeof __BT_DEV !== 'undefined' && typeof __BT_DEV.runLesson === 'function' && typeof __TEACH?.highlight === 'function' && chrome.runtime.id`, id);
+          if (idValue) { world = id; extensionId = idValue; return; }
+        } catch { /* A navigating or initializing context may disappear. */ }
+      }
+      await pause(70);
+    }
+    throw new Error(`Real manifest extension did not become ready; execution contexts: ${JSON.stringify([...contexts.values()].map(value => ({ name: value.name, origin: value.origin, type: value.auxData?.type })))}`);
+  }
+  async function reset() {
+    await page.emulateMedia({ reducedMotion: 'no-preference' });
+    world = undefined;
+    await page.goto(url);
+    await ready();
+    await page.locator('#browser-teacher-root .bt-bar').waitFor();
+  }
+  async function test(name, run) {
+    const previousErrors = runtimeErrors.length;
+    try {
+      await reset();
+      await run();
+      assert.equal(runtimeErrors.length, previousErrors, `Unexpected console/page errors: ${runtimeErrors.slice(previousErrors).join('; ')}`);
+      results.push({ name, passed: true }); console.log(`PASS ${name}`);
+    } catch (error) {
+      results.push({ name, passed: false, error: error.message }); console.error(`FAIL ${name}: ${error.message}`);
+      await page.screenshot({ path: path.join(artifacts, `extension-failure-${results.length}.png`) }).catch(() => {});
+    }
+  }
+  const target = (name, scope) => ({ name, ...(scope ? { scope } : {}) });
+  const step = (name, options = {}) => ({ id: name.toLowerCase().replace(/[^a-z0-9]/g, '-'), mode: 'guided', intent: `Click ${name}.`, target: target(name), action: 'click', verify: { kind: 'none' }, hints: ['Use the named control.', `Find ${name}.`], ...options });
+  function lesson(steps) {
+    return { id: 'extension-integration', app: 'universal', goal: 'Practice real website controls', preamble: 'Use the real website controls when prompted.', generalization: 'You completed the website actions yourself.', steps };
+  }
+  async function begin(steps, { preamble = true } = {}) {
+    const value = lesson(steps);
+    await evaluate(`(() => { window.__integrationRun = __BT_DEV.runLesson(${JSON.stringify(value)}); return true; })()`);
+    if (preamble) await page.locator('#browser-teacher-root').getByRole('button', { name: 'Show me', exact: true }).click();
+  }
+  async function aligned(selector) {
+    await page.waitForFunction(selector => {
+      const element = document.querySelector(selector) || document.querySelector('#shadow-host')?.shadowRoot.querySelector(selector);
+      const spot = document.querySelector('[data-browser-teacher-paint]')?.shadowRoot.querySelector('.spot');
+      if (!element || !spot || spot.hidden) return false;
+      const a = element.getBoundingClientRect(), b = spot.getBoundingClientRect();
+      return Math.abs(a.left - 4 - b.left) < 2 && Math.abs(a.top - 4 - b.top) < 2;
+    }, selector);
+  }
+  async function cursorAligned(selector) {
+    await page.waitForFunction(selector => {
+      const element = document.querySelector(selector) || document.querySelector('#shadow-host')?.shadowRoot.querySelector(selector);
+      const cursor = document.querySelector('[data-browser-teacher-paint]')?.shadowRoot.querySelector('.cursor');
+      if (!element || !cursor || cursor.hidden) return false;
+      const r = element.getBoundingClientRect(), matrix = new DOMMatrix(getComputedStyle(cursor).transform);
+      return Math.abs(matrix.m41 - r.left - r.width / 2) < 2 && Math.abs(matrix.m42 - r.top - r.height / 2) < 2;
+    }, selector);
+  }
+  async function cleared() {
+    await page.waitForFunction(() => {
+      const paint = document.querySelector('[data-browser-teacher-paint]')?.shadowRoot;
+      return !paint || ['.spot', '.scrim', '.cursor', '.feedback', '.ripple'].every(selector => paint.querySelector(selector).hidden);
+    }, null, { timeout: 1200 });
+  }
+  const count = id => page.evaluate(id => fixture.clicks[id] || 0, id);
+  const progress = () => page.locator('#browser-teacher-root .bt-progress').textContent();
+  const panelButton = name => page.locator('#browser-teacher-root').getByRole('button', { name, exact: true });
+  async function stopped() {
+    await page.locator('#browser-teacher-root .bt-window.is-open').waitFor({ state: 'hidden', timeout: 1500 });
+    await cleared();
+  }
+  async function completed() {
+    await page.locator('#browser-teacher-root .bt-card-generalization').waitFor();
+    await cleared();
+  }
+  async function sampleFrames() {
+    await page.evaluate(() => {
+      window.integrationSamples = [];
+      window.integrationSampling = true;
+      function sample() {
+        const cursor = document.querySelector('[data-browser-teacher-paint]')?.shadowRoot.querySelector('.cursor');
+        const matrix = cursor ? new DOMMatrix(getComputedStyle(cursor).transform) : null;
+        integrationSamples.push({ time: performance.now(), scroll: scrollY, nested: document.querySelector('#scrollbox').scrollTop,
+          visible: !!cursor && !cursor.hidden, x: matrix?.m41, y: matrix?.m42 });
+        if (integrationSampling) requestAnimationFrame(sample);
+      }
+      requestAnimationFrame(sample);
+    });
+  }
+  async function samples() { return page.evaluate(() => { integrationSampling = false; return integrationSamples; }); }
+  async function panelPaintedAboveScrim() {
+    // Browser compositor paint ordering observes pixels' stacking without
+    // changing pointer-events, injecting styles, or replacing production APIs.
+    const snapshot = await cdp.send('DOMSnapshot.captureSnapshot', { computedStyles: [], includePaintOrder: true });
+    const orders = { panel: [], paint: [] };
+    for (const doc of snapshot.documents) {
+      for (let i = 0; i < doc.layout.nodeIndex.length; i++) {
+        const node = doc.layout.nodeIndex[i];
+        const attrs = doc.nodes.attributes[node] || [];
+        const attributes = {};
+        for (let a = 0; a < attrs.length; a += 2) attributes[snapshot.strings[attrs[a]]] = snapshot.strings[attrs[a + 1]];
+        const classes = (attributes.class || '').split(' ');
+        if (classes.includes('bt-card-body')) orders.panel.push(doc.layout.paintOrders[i]);
+        if (classes.includes('spot') || classes.includes('scrim')) orders.paint.push(doc.layout.paintOrders[i]);
+      }
+    }
+    assert.ok(orders.panel.length && orders.paint.length, `Expected actual panel/scrim in paint snapshot: ${JSON.stringify(orders)}`);
+    assert.ok(Math.min(...orders.panel) > Math.max(...orders.paint), `Panel must be painted above scrim: ${JSON.stringify(orders)}`);
+  }
+
+  await test('Manifest bootstrap loads real contracts in the extension isolated world', async () => {
+    assert.equal(await page.evaluate(() => typeof window.__TEACH), 'undefined');
+    assert.deepEqual(await evaluate('Object.keys(__TEACH).sort()'), ['highlight', 'clear', 'moveCursor', 'demo', 'waitForClick', 'verify', 'flashCorrect', 'setCursorVisible'].sort());
+    assert.deepEqual(await evaluate('Object.keys(__PAINT).sort()'), ['init', 'spotlight', 'clear', 'moveCursor', 'clickCursor', 'flashCorrect', 'flashWrong', 'setCursorVisible'].sort());
+    assert.equal(await page.locator('[data-browser-teacher-paint]').count(), 1);
+    assert.ok(extensionId);
+  });
+  await test('Guided lesson waits for a real correct click and clears every effect', async () => {
+    await begin([step('Publish', { target: target('Publish', 'toolbar') })]);
+    await cursorAligned('#publish');
+    await page.waitForTimeout(1800);
+    assert.equal(await count('publish'), 0);
+    assert.equal(await progress(), '1 / 1');
+    assert.equal(await page.locator('#browser-teacher-root .bt-card-generalization').count(), 0);
+    await page.locator('#publish').click();
+    await completed();
+    assert.equal(await count('publish'), 1);
+    assert.equal(await page.evaluate(() => fixture.trusted.every(click => click.trusted)), true);
+  });
+  await test('Synthetic page clicks do not advance the lesson', async () => {
+    await begin([step('Publish')]); await cursorAligned('#publish');
+    await page.evaluate(() => document.querySelector('#publish').click());
+    await page.waitForTimeout(300);
+    assert.equal(await page.locator('#browser-teacher-root .bt-card-generalization').count(), 0);
+    await aligned('#publish');
+    await page.locator('#publish').click(); await completed();
+  });
+  await test('A fast correct click during cursor animation is captured before the next step', async () => {
+    await begin([step('Publish'), step('Preview')]);
+    await page.locator('#publish').click();
+    await cursorAligned('#preview');
+    assert.equal(await count('publish'), 1);
+    assert.equal(await count('preview'), 0);
+    assert.equal(await progress(), '2 / 2');
+    await page.locator('#preview').click(); await completed();
+  });
+  await test('Wrong website clicks give correction while panel interactions are ignored', async () => {
+    await begin([step('Publish', { wrongHints: { Preview: 'Preview does not publish the document.' } })]);
+    await cursorAligned('#publish');
+    await page.locator('#browser-teacher-root .bt-card-body').click();
+    await page.waitForTimeout(120);
+    assert.equal(await page.locator('#browser-teacher-root .bt-note-wrong').count(), 0);
+    await page.locator('#preview').click();
+    await page.locator('#browser-teacher-root .bt-note-wrong').waitFor();
+    assert.match(await page.locator('#browser-teacher-root .bt-note-wrong').textContent(), /Preview does not publish/);
+    assert.equal(await count('publish'), 0);
+    await page.locator('#publish').click(); await completed();
+  });
+  await test('Ghost starts at the actual cursor for the first guided step', async () => {
+    await begin([step('Publish')], { preamble: false });
+    const box = await panelButton('Show me').boundingBox();
+    const origin = { x: box.x + box.width / 2, y: box.y + box.height / 2 };
+    await page.mouse.move(origin.x, origin.y);
+    await sampleFrames(); await page.mouse.click(origin.x, origin.y); await cursorAligned('#publish');
+    const visible = (await samples()).filter(sample => sample.visible);
+    assert.ok(visible.length >= 3);
+    assert.ok(Math.hypot(visible[0].x - origin.x, visible[0].y - origin.y) < 90, `Ghost origin differs from pointer: ${JSON.stringify({ origin, first: visible[0] })}`);
+    assert.ok(new Set(visible.map(sample => Math.round(sample.x))).size >= 3, 'Ghost must animate across multiple frames');
+  });
+  await test('Nested second step scrolls progressively and starts from the latest real pointer', async () => {
+    await begin([step('Publish'), step('Confirm nested')]); await cursorAligned('#publish');
+    await sampleFrames();
+    await page.locator('#publish').click();
+    await page.mouse.move(160, 120);
+    await cursorAligned('#nested');
+    const recorded = await samples();
+    const max = Math.max(...recorded.map(sample => sample.nested));
+    assert.ok(max > 100);
+    assert.ok(new Set(recorded.filter(sample => sample.nested > 1 && sample.nested < max - 1).map(sample => Math.round(sample.nested))).size >= 2, 'Nested scrolling must progress across frames');
+    const afterScroll = recorded.filter(sample => sample.visible && sample.nested > max - 2);
+    assert.ok(afterScroll.length >= 3);
+    assert.ok(Math.hypot(afterScroll[0].x - 160, afterScroll[0].y - 120) < 90, `Later ghost did not start at latest pointer: ${JSON.stringify(afterScroll[0])}`);
+    await page.locator('#nested').click(); await completed();
+  });
+  await test('Downpage target scrolls smoothly and reaches the actual button', async () => {
+    await sampleFrames(); await begin([step('Confirm at bottom')]); await cursorAligned('#bottom');
+    const recorded = await samples();
+    const max = Math.max(...recorded.map(sample => sample.scroll));
+    assert.ok(max > 1000);
+    assert.ok(new Set(recorded.filter(sample => sample.scroll > 1 && sample.scroll < max - 1).map(sample => Math.round(sample.scroll))).size >= 3, 'Page must visibly scroll, not jump');
+    await page.locator('#bottom').click(); await completed();
+  });
+  await test('Manually scrolling away retains the full grey effect and restores target tracking', async () => {
+    await begin([step('Publish')]); await cursorAligned('#publish');
+    await page.mouse.move(750, 200); await page.mouse.wheel(0, 1100);
+    await page.waitForFunction(() => {
+      const root = document.querySelector('[data-browser-teacher-paint]').shadowRoot;
+      return root.querySelector('.spot').hidden && !root.querySelector('.scrim').hidden && root.querySelector('.cursor').hidden;
+    });
+    await page.mouse.wheel(0, -3000); await aligned('#publish'); await cursorAligned('#publish');
+    await page.locator('#publish').click(); await completed();
+  });
+  await test('Reduced motion positions downpage guidance without a long cursor tween', async () => {
+    await page.emulateMedia({ reducedMotion: 'reduce' });
+    const started = Date.now();
+    await begin([step('Confirm at bottom')]); await cursorAligned('#bottom');
+    assert.ok(Date.now() - started < 1400, 'Reduced motion should settle without normal smooth scroll plus cursor animation');
+    await page.locator('#bottom').click(); await completed();
+  });
+  await test('Same-page menu chain requires opener then newly revealed item', async () => {
+    await begin([step('Options', { verify: { kind: 'visible', name: 'Schedule publication', scope: 'menu' } }), step('Schedule publication', { target: target('Schedule publication', 'menu') })]);
+    await cursorAligned('#menu-open');
+    assert.equal(await page.locator('#menu').isVisible(), false);
+    await page.waitForTimeout(350); assert.equal(await count('menu-open'), 0);
+    await page.locator('#menu-open').click(); await cursorAligned('#schedule');
+    assert.equal(await progress(), '2 / 2'); assert.equal(await count('schedule'), 0);
+    await page.locator('#schedule').click(); await completed();
+    assert.equal(await count('menu-open'), 1); assert.equal(await count('schedule'), 1);
+  });
+  await test('Native modal guidance requires two real clicks with readable panel above scrim', async () => {
+    await begin([step('Open confirmation', { verify: { kind: 'visible', name: 'Confirm in modal', scope: 'dialog' } }), step('Confirm in modal', { target: target('Confirm in modal', 'dialog') })]);
+    await cursorAligned('#modal-open');
+    assert.equal(await page.locator('#dialog').isVisible(), false);
+    await page.locator('#modal-open').click(); await cursorAligned('#modal-confirm');
+    assert.equal(await count('modal-confirm'), 0);
+    await panelPaintedAboveScrim();
+    await page.screenshot({ path: path.join(artifacts, 'extension-modal-guidance.png') });
+    await page.locator('#modal-confirm').click(); await completed();
+    assert.equal(await page.locator('#dialog').isVisible(), false);
+  });
+  await test('Panel remains above normal guidance and accepts Stop while a modal is open', async () => {
+    await begin([step('Open confirmation'), step('Confirm in modal')]);
+    await cursorAligned('#modal-open'); await panelPaintedAboveScrim();
+    await page.locator('#modal-open').click(); await cursorAligned('#modal-confirm');
+    await panelButton('Stop').click(); await stopped();
+    assert.equal(await count('modal-confirm'), 0);
+    assert.equal(await page.locator('#dialog').isVisible(), true, 'Stopping guidance should not perform the website action');
+  });
+  await test('Native modal inside an open shadow root keeps guidance and Stop accessible', async () => {
+    await begin([step('Open shadow modal'), step('Confirm shadow modal', { target: target('Confirm shadow modal', 'dialog') })]);
+    await cursorAligned('#shadow-modal-open');
+    await page.locator('#shadow-host').getByRole('button', { name: 'Open shadow modal', exact: true }).click();
+    await cursorAligned('#shadow-modal-confirm'); await panelPaintedAboveScrim();
+    await panelButton('Stop').click(); await stopped();
+    assert.equal(await count('shadow-modal-confirm'), 0);
+    assert.equal(await page.locator('#shadow-host #shadow-dialog').isVisible(), true);
+  });
+  await test('Stop aborts unresolved targets and prevents delayed effects', async () => {
+    await begin([step('Absent action')]);
+    await panelButton('Stop').click(); await stopped();
+    await page.waitForTimeout(2300); await cleared();
+    assert.equal(await page.locator('#browser-teacher-root .bt-window.is-open').count(), 0);
+  });
+  await test('Close aborts smooth scrolling without a delayed cursor or step', async () => {
+    await begin([step('Confirm at bottom'), step('Publish')]);
+    await page.waitForFunction(() => scrollY > 10);
+    await page.locator('#browser-teacher-root .bt-close').click(); await stopped();
+    await page.waitForTimeout(100);
+    const position = await page.evaluate(() => scrollY);
+    await page.waitForTimeout(850);
+    assert.ok(Math.abs((await page.evaluate(() => scrollY)) - position) < 2, 'Cancelled scroll must stay stopped');
+    await cleared(); assert.equal(await count('bottom'), 0);
+  });
+  await test('Correct click clears immediately during verification and Stop cancels verification', async () => {
+    await page.evaluate(() => { fixture.verifyDelay = -1; });
+    await begin([step('Start verification', { verify: { kind: 'label', selector: '#verify-state', match: 'Verified' } }), step('Publish')]);
+    await cursorAligned('#verify'); await page.locator('#verify').click(); await cleared();
+    assert.equal(await page.locator('#verify-state').textContent(), 'Waiting');
+    await panelButton('Stop').click(); await stopped();
+    await page.waitForTimeout(3200); await cleared(); assert.equal(await count('publish'), 0);
+    assert.equal(await page.locator('#browser-teacher-root .bt-window.is-open').count(), 0);
+  });
+  await test('Restart cancels stale resolution without closing or replacing the new step', async () => {
+    await begin([step('Absent action'), step('Preview')]);
+    await begin([step('Publish')]); await cursorAligned('#publish');
+    await page.waitForTimeout(2300); await aligned('#publish');
+    assert.equal(await progress(), '1 / 1');
+    assert.match(await page.locator('#browser-teacher-root .bt-card-body').textContent(), /Publish/);
+    await page.locator('#publish').click(); await completed(); assert.equal(await count('preview'), 0);
+  });
+  await test('Hidden duplicates are excluded and open shadow-root controls resolve', async () => {
+    await begin([step('Unique action'), step('Shadow action')]);
+    await cursorAligned('#unique'); await page.locator('#unique').click(); await cursorAligned('#shadow-action');
+    await page.locator('#shadow-host').getByRole('button', { name: 'Shadow action' }).click(); await completed();
+    assert.equal(await count('duplicate-hidden'), 0); assert.equal(await count('shadow-action'), 1);
+  });
+  await test('Native button text and associated input labels resolve without aria-label', async () => {
+    await begin([step('Native text action'), step('Display name')]);
+    await cursorAligned('#native-action'); await page.locator('#native-action').click();
+    await cursorAligned('#name-input'); await page.locator('label[for="name-input"]').click();
+    await completed();
+    assert.equal(await count('native-action'), 1);
+    assert.equal(await page.locator('#name-input').evaluate(element => element === document.activeElement), true);
+  });
+  await test('Ambiguous targets do not silently select the first matching control', async () => {
+    await begin([step('Ambiguous action')]);
+    await page.waitForTimeout(2300); await cleared();
+    assert.equal(await count('ambiguous-one'), 0); assert.equal(await count('ambiguous-two'), 0);
+    await page.locator('#ambiguous-one').click(); await page.waitForTimeout(250);
+    assert.equal(await page.locator('#browser-teacher-root .bt-card-generalization').count(), 0);
+    await panelButton('Stop').click(); await stopped();
+  });
+  await test('Explicit nth disambiguates visible matches', async () => {
+    await begin([step('Ambiguous action', { target: { name: 'Ambiguous action', nth: 1 } })]);
+    await cursorAligned('#ambiguous-two'); await page.locator('#ambiguous-two').click(); await completed();
+    assert.equal(await count('ambiguous-one'), 0); assert.equal(await count('ambiguous-two'), 1);
+  });
+  await test('Same-document hash links can continue a chain', async () => {
+    await begin([step('Jump within page'), step('Publish')]); await cursorAligned('#hash');
+    await page.locator('#hash').click(); await cursorAligned('#publish');
+    assert.equal(new URL(page.url()).hash, '#same-page');
+    await page.locator('#publish').click(); await completed();
+  });
+  await test('SPA path navigation cancels the run and clears pending next steps', async () => {
+    await begin([step('Open another route'), step('Publish')]); await cursorAligned('#spa');
+    await page.locator('#spa').click(); await stopped();
+    assert.match(new URL(page.url()).pathname, /extension-fixture-route$/);
+    await page.waitForTimeout(850); await cleared(); assert.equal(await count('publish'), 0);
+  });
+  await test('Real redirect starts the next document with no continuing lesson or effects', async () => {
+    await begin([step('Open next page'), step('Publish')]); await cursorAligned('#redirect');
+    await Promise.all([page.waitForURL('**?destination=1'), page.locator('#redirect').click()]);
+    await ready(); await page.locator('#browser-teacher-root .bt-bar').waitFor(); await stopped();
+    await page.waitForTimeout(850); await cleared();
+    assert.equal(await count('publish'), 0);
+    assert.equal(await page.locator('#browser-teacher-root .bt-card-step').count(), 0);
+  });
+  await test('Demo mode remains visual and requires the user to activate the website', async () => {
+    await begin([step('Publish', { mode: 'demo' })]); await cursorAligned('#publish');
+    await page.waitForTimeout(1700); assert.equal(await count('publish'), 0);
+    await page.locator('#publish').click(); await completed();
+  });
+  await test('Solo mode accepts a real action without revealing guidance', async () => {
+    await begin([step('Publish', { mode: 'solo' })]); await page.waitForTimeout(120); await cleared();
+    await page.locator('#publish').click(); await completed();
+  });
+
+  assert.equal(runtimeErrors.length, 0, 'No unexpected page or extension console errors');
+})().catch(error => {
+  console.error(error);
+  results.push({ name: 'Integration runner completed', passed: false, error: error.message });
+}).finally(async () => {
+  await context?.close();
+  await new Promise(resolve => server.close(resolve));
+  await report();
+  const passed = results.filter(result => result.passed).length;
+  console.log(`${passed}/${results.length} loaded extension checks passed`);
+  if (results.some(result => !result.passed)) process.exitCode = 1;
+});

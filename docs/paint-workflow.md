@@ -115,9 +115,10 @@ disappearance, same-frame constraints, integration examples, and B's loader
 check. Follow the checkpoint order: load resolver, paint, real teach adapter,
 panel; then run one guided step before the full lesson.
 
-The current manifest/entry point remains B's responsibility. A raw static
-content script with ES imports needs bundling or a supported module-loading
-bootstrap. All three interfaces must run in the same extension execution world.
+The merged classic content script dynamically imports `main.js`. All three
+interfaces run in the same extension isolated world. The subsequent real bridge
+and loaded-extension workflow are documented in
+[extension-integration.md](extension-integration.md).
 
 ## 8. Demo acceptance
 
