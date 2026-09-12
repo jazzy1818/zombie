@@ -91,13 +91,34 @@ export async function mountPanel() {
   noFocusSteal(els.close);
   els.close.addEventListener('click', () => ui.reset());
 
+  /**
+   * Every path into the runner goes through here. Checkpoint 1 is four
+   * half-wired layers meeting for the first time — a thrown error must land
+   * where someone can read it, not silently in the console behind the page.
+   */
+  async function play(id, opts) {
+    try {
+      await runLesson(await loadLesson(id), ui, opts);
+    } catch (err) {
+      console.error('[browser-teacher]', err);
+      ui.fail(err);
+    }
+  }
+
   async function start(question) {
     const { id, confident } = matchLesson(question);
     if (!confident) return ui.showPicker(question);
-    await runLesson(await loadLesson(id), ui);
+    await play(id);
   }
 
-  ui.onPickLesson = async id => runLesson(await loadLesson(id), ui);
+  ui.onPickLesson = id => play(id);
+
+  // Rehearsal: skip straight to the step you're practising.
+  //   __BT_DEV.run('styles-toc', 3)
+  if (window.__BT_DEV) {
+    window.__BT_DEV.run = (id = 'styles-toc', step = 1) => play(id, { from: Math.max(0, step - 1) });
+    window.__BT_DEV.lessons = () => LESSONS.map(l => l.id);
+  }
 
   ui.reset();
 }
@@ -252,6 +273,20 @@ function createUI(els, raise) {
 
     hint(text) { appendNote('hint', text); },
     wrong(text) { appendNote('wrong', text); },
+
+    /** Something threw. Show it rather than dying quietly behind the page. */
+    fail(err) {
+      raise();
+      setOpen(true);
+      els.progress.hidden = true;
+      renderCard({
+        kind: 'error',
+        title: 'That broke',
+        body: err?.message || String(err),
+      });
+      renderActions([{ label: 'Close', value: ACTION.QUIT }]);
+      resolveAction = () => ui.reset();
+    },
 
     /** Resolves when a footer button is pressed. Raced against waitForClick. */
     pendingAction() {

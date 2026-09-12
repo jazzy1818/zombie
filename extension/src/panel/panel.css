@@ -310,6 +310,13 @@
 /* A solo step is the one where we deliberately stop helping. Say so. */
 .bt-mode-solo .bt-card-title { color: var(--bt-muted); }
 
+.bt-card-error .bt-card-title { color: var(--bt-wrong); }
+.bt-card-error .bt-card-body {
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 13px;
+  line-height: 1.5;
+}
+
 /* ------------------------------------------------------------------ notes */
 
 .bt-note {
