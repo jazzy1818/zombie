@@ -160,24 +160,88 @@ export async function saveProfile(handle, path = PROFILE_PATH) {
     console.warn(`[session] could not capture sessionContext: ${err.message}`);
   }
 
-  await closeSession(handle);
-
-  const profileId = session.profileId ?? session.profile?.id ?? null;
-  if (profileId) await waitForProfile(steel, profileId);
-
   const record = {
-    profileId,
+    profileId: session.profileId ?? session.profile?.id ?? null,
+    profileStatus: 'unconfirmed',
+    sessionId: session.id,
     sessionContext,
     capturedAt: new Date().toISOString(),
     viewport: VIEWPORT,
   };
+
+  // Write BEFORE releasing. Everything after this point can fail — the profile upload can
+  // stall, the poll can time out — and none of it is worth making a human log in again.
+  // sessionContext in particular exists only in memory and only while the session is live.
   await writeFile(path, JSON.stringify(record, null, 2));
+
+  await closeSession(handle);
+
+  // The upload only completes on release, so the poll has to come after it. If Steel's
+  // create response didn't carry a profile id, find the one this session just produced.
+  if (!record.profileId) record.profileId = await findRecentProfile(steel, record.capturedAt);
+
+  if (record.profileId) {
+    try {
+      await waitForProfile(steel, record.profileId);
+      record.profileStatus = 'READY';
+    } catch (err) {
+      record.profileStatus = `unconfirmed (${err.message})`;
+      console.warn(`[session] ${err.message}`);
+    }
+    await writeFile(path, JSON.stringify(record, null, 2));
+  }
+
   console.log(`\n  Saved profile to ${path}`);
-  console.log(`    profileId:      ${profileId ?? '(none — will fall back to sessionContext)'}`);
+  console.log(`    profileId:      ${record.profileId ?? '(none — falling back to sessionContext)'}`);
+  console.log(`    status:         ${record.profileStatus}`);
   console.log(`    sessionContext: ${sessionContext ? 'captured' : 'MISSING'}`);
-  if (!profileId && !sessionContext) {
+  if (!record.profileId && !sessionContext) {
     throw new Error('captured neither a profileId nor a sessionContext — auth will not persist');
   }
+  return record;
+}
+
+/**
+ * Recovery: find the profile a just-released session produced, when the create response
+ * didn't name one. Also what `author.js profiles` uses to rescue a capture whose local
+ * write failed — the login itself is on Steel's side and survives.
+ */
+export async function findRecentProfile(steel, since) {
+  try {
+    const res = await steel.profiles.list();
+    const all = Array.isArray(res) ? res : (res.data ?? res.profiles ?? []);
+    const cutoff = since ? new Date(since).getTime() - 600_000 : 0;
+    const recent = all
+      .filter(p => new Date(p.createdAt ?? p.created_at ?? 0).getTime() >= cutoff)
+      .sort((a, b) => new Date(b.createdAt ?? b.created_at ?? 0) - new Date(a.createdAt ?? a.created_at ?? 0));
+    return recent[0]?.id ?? null;
+  } catch (err) {
+    console.warn(`[session] could not list profiles: ${err.message}`);
+    return null;
+  }
+}
+
+/** List every profile on the account. Exposed so a failed capture is diagnosable. */
+export async function listProfiles() {
+  const steel = client();
+  const res = await steel.profiles.list();
+  return Array.isArray(res) ? res : (res.data ?? res.profiles ?? []);
+}
+
+/** Write a profile.json by hand from a known profileId. The re-login escape hatch. */
+export async function adoptProfile(profileId, path = PROFILE_PATH) {
+  const steel = client();
+  const p = await steel.profiles.get(profileId);
+  const record = {
+    profileId,
+    profileStatus: String(p.status ?? 'unknown').toUpperCase(),
+    sessionContext: null,
+    capturedAt: new Date().toISOString(),
+    viewport: VIEWPORT,
+    adopted: true,
+  };
+  await writeFile(path, JSON.stringify(record, null, 2));
+  console.log(`\n  Wrote ${path} using profile ${profileId} (status ${record.profileStatus})\n`);
   return record;
 }
 

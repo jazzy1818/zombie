@@ -17,7 +17,10 @@
 //   npm run demo [-- --live]
 //       The live segment. Cached by default.
 import { readFile, writeFile, mkdir } from 'node:fs/promises';
-import { openAuthedSession, openCaptureSession, saveProfile, closeSession } from './session.js';
+import {
+  openAuthedSession, openCaptureSession, saveProfile, closeSession,
+  listProfiles, adoptProfile,
+} from './session.js';
 import { explore } from './explore.js';
 import { prune, printPrune } from './prune.js';
 import { emit } from './emit.js';
@@ -47,6 +50,31 @@ const commands = {
     const handle = await openCaptureSession();
     await saveProfile(handle);
     console.log('\n  Done. explore/verify will use this automatically.\n');
+  },
+
+  /**
+   * List the profiles on the Steel account. Recovery path for a capture that logged in
+   * successfully but failed to write profile.json — the login lives on Steel's side and
+   * does not need redoing. Adopt one with:  node author.js adopt <profileId>
+   */
+  async profiles() {
+    const all = await listProfiles();
+    if (!all.length) {
+      console.log('\n  No profiles on this account. The login did not persist — re-run capture-profile.\n');
+      return;
+    }
+    console.log('');
+    for (const p of all) {
+      const created = p.createdAt ?? p.created_at ?? '?';
+      console.log(`  ${p.id}   ${String(p.status ?? '?').padEnd(10)} ${created}   ${p.name ?? ''}`);
+    }
+    console.log('\n  Adopt the newest READY one:  node author.js adopt <profileId>\n');
+  },
+
+  async adopt({ positional }) {
+    const id = positional[0];
+    if (!id) throw new Error('usage: node author.js adopt <profileId>  (list them with: node author.js profiles)');
+    await adoptProfile(id);
   },
 
   async verify({ positional, flags }) {
