@@ -12,11 +12,14 @@ import { PANEL_WIDTH, PANEL_SIDE } from '../constants.js';
 import { mountLauncher } from './launcher.js';
 import { loadLesson, loadAll, matchLesson, LESSONS } from './lessons.js';
 import { runLesson, ACTION } from './machine.js';
+import { installDev } from './dev.js';
 
 const HOST_ID = 'browser-teacher-root';
 
 export async function mountPanel() {
   if (document.getElementById(HOST_ID)) return;   // idempotent
+
+  installDev();   // inert until you call __BT_DEV.<scenario>() from the console
 
   const host = document.createElement('div');
   host.id = HOST_ID;
