@@ -13,7 +13,7 @@
   ],
   "web_accessible_resources": [
     {
-      "resources": ["lessons/*.json", "src/panel/panel.css"],
+      "resources": ["lessons/*.json", "src/*"],
       "matches": ["https://docs.google.com/*"]
     }
   ]
