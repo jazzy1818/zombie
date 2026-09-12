@@ -17,6 +17,7 @@
 //   npm run demo [-- --live]
 //       The live segment. Cached by default.
 import { readFile, writeFile, mkdir } from 'node:fs/promises';
+import { createInterface } from 'node:readline/promises';
 import { resolve as resolvePath } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import {
@@ -67,6 +68,57 @@ const commands = {
     const handle = await openCaptureSession();
     await saveProfile(handle);
     console.log('\n  Done. explore/verify will use this automatically.\n');
+  },
+
+  /**
+   * Open a cloud browser on the demo doc with the saved profile, print the interactive
+   * viewer URL, and hold it open until you press ENTER.
+   *
+   * Also prints what T0 needs: the real in-page viewport, and what the probe sees. Running
+   * the console queries HERE rather than in local Chrome is the point — this is the
+   * environment explore and verify actually use, so this is where the answers count.
+   */
+  async open({ flags }) {
+    const docUrl = str(flags.doc) ?? process.env.DEMO_DOC_URL;
+    const handle = await openAuthedSession();
+
+    try {
+      if (docUrl) {
+        await handle.page.goto(docUrl, { waitUntil: 'domcontentloaded' });
+        await handle.page.waitForSelector('#docs-toolbar-wrapper', { timeout: 30_000 });
+        await handle.page.waitForTimeout(1500);
+      } else {
+        console.warn('\n  no DEMO_DOC_URL — opening a blank browser');
+      }
+
+      const [w, h] = await handle.page.evaluate(() => [window.innerWidth, window.innerHeight]);
+      console.log(`\n  viewport   ${w}x${h}   ${w >= 1400 ? 'ok' : 'TOO NARROW — toolbar will be collapsed into More'}`);
+
+      if (docUrl) {
+        const obs = await handle.probe('observe');
+        console.log(`  probe      ${obs.toolbar.length} toolbar, ${obs.menu.length} menu, ${obs.dialog.length} dialog visible`);
+
+        // The menubar question from findings-c.md, answered from real output.
+        const file = obs.menu.find(c => c.name === 'File');
+        console.log(`  menubar    ${file ? `"File" found via ${file.source}` : '"File" NOT FOUND — version-history s1 will not resolve'}`);
+
+        // Sanity check on the visibility filter. Docs holds ~200 menu items in the DOM;
+        // if this number is near that, the filter is broken and everything downstream lies.
+        const total = await handle.page.evaluate(
+          () => document.querySelectorAll('[role="menuitem"]').length,
+        );
+        console.log(`  filter     ${obs.menu.length} visible of ${total} in the DOM`);
+      }
+
+      const url = handle.session.debugUrl ?? handle.viewerUrl;
+      console.log(`\n  Watch / drive it here:\n\n    ${url}${url.includes('?') ? '&' : '?'}interactive=true\n`);
+
+      const rl = createInterface({ input: process.stdin, output: process.stdout });
+      await rl.question('  Press ENTER to close the session... ');
+      rl.close();
+    } finally {
+      await closeSession(handle);
+    }
   },
 
   /**

@@ -36,6 +36,9 @@ export async function verifyLesson(lesson, opts = {}) {
   const steps = [];
   let failedAt;
 
+  // Up front, not just on failure — a replay takes long enough to open this and watch it.
+  console.log(`\n  ${lesson.id} — watch: ${handle.viewerUrl}`);
+
   try {
     await handle.page.goto(docUrl, { waitUntil: 'domcontentloaded' });
     await handle.page.waitForSelector('#docs-toolbar-wrapper', { timeout: 30_000 });
