@@ -13,6 +13,8 @@ export async function verifyLesson(lesson, opts = {}) {
 
   console.log(`\n  ${lesson.id} — watch: ${handle.viewerUrl}`);
 
+  let skipped = false;
+
   try {
     await handle.page.goto(docUrl, { waitUntil: 'domcontentloaded' });
     await handle.page.waitForSelector('#docs-toolbar-wrapper', { timeout: 30_000 });
@@ -22,10 +24,13 @@ export async function verifyLesson(lesson, opts = {}) {
       const t0 = Date.now();
 
       // Instruct-only: the doc body is canvas, so there's nothing to resolve or replay.
+      // The learner's click would also dismiss any open menu — this replay's won't, so
+      // every later step runs against state a real user would never be in.
       if (!step.target) {
+        skipped = true;
         steps.push({
           id: step.id, status: 'skipped', ms: Date.now() - t0,
-          note: 'instruct-only (target: null)',
+          note: 'instruct-only (target: null) — page state now diverges from a real user',
         });
         continue;
       }
@@ -35,6 +40,8 @@ export async function verifyLesson(lesson, opts = {}) {
         steps.push({
           id: step.id, status: 'unresolved', name: step.target.name, ms: Date.now() - t0,
           note: `no visible match for ${JSON.stringify(step.target)}`,
+          visible: await dumpScope(handle, step.target.scope),
+          afterSkip: skipped,
         });
         failedAt = step.id;
         break;
@@ -75,6 +82,17 @@ export async function verifyLesson(lesson, opts = {}) {
   };
 }
 
+// What the probe can actually see right now, so an unresolved step says why.
+async function dumpScope(handle, scope) {
+  try {
+    const obs = await handle.probe('observe');
+    const pool = scope && obs[scope] ? obs[scope] : [...obs.toolbar, ...obs.menu, ...obs.dialog];
+    return pool.map(c => c.raw);
+  } catch {
+    return [];
+  }
+}
+
 async function pollResolve(handle, target, timeoutMs) {
   const start = Date.now();
   do {
@@ -102,6 +120,16 @@ export function printReport(lesson, report) {
     const nth = s.count > 1 ? `  (${s.count} visible matches — nth matters)` : '';
     console.log(`   [${MARK[s.status]}] ${s.id.padEnd(4)} ${(s.name ?? '').padEnd(28)} ${String(s.ms).padStart(5)}ms${nth}`);
     if (s.note) console.log(`            ${s.note}`);
+    if (s.afterSkip) {
+      console.log('            a step was skipped earlier — the page may be in a state a learner never reaches');
+    }
+    if (s.visible?.length) {
+      console.log(`            visible in that scope (${s.visible.length}):`);
+      for (const v of s.visible.slice(0, 25)) console.log(`              ${JSON.stringify(v)}`);
+      if (s.visible.length > 25) console.log(`              … ${s.visible.length - 25} more`);
+    } else if (s.visible) {
+      console.log('            nothing visible in that scope at all');
+    }
   }
   console.log(report.ok
     ? `\n  PASS — replays clean in a fresh 1440×900 cloud Chrome.\n`
