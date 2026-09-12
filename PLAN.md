@@ -1074,3 +1074,91 @@ Matching runs over the lesson's own prose — goal, preamble, intents, hints. It
 originating question is the single best piece of matching text there is, and it's currently thrown
 away. An optional additive field (`questions: string[]`) would cost nothing and would need the
 team's agreement, since §5 is frozen.
+
+---
+
+## 18. Status handoff — [B]'s layer
+
+> Written by **B** at the end of a working session, for whoever picks this up next. Facts here were
+> verified from the repo at the time of writing; anything about **A**, **C** or **D**'s progress is
+> a snapshot and should be re-checked with `git log` before being relied on.
+
+### 18.1 Where things stood
+
+**B — `panel/`, `content.js`, `manifest.json`: complete and merged to `main`.** Every item on §12's
+checklist is built, plus a UI redesign and voice output that came later. It runs end to end in
+Chrome against the `teach.js` stub: chat bar, lesson matching, preamble, all four step modes, hint
+escalation, wrong-click correction, generalization, both escape hatches.
+
+**A — `resolve/`:** has landed `visible.js` (the `isVisible()` filter). Their implementation is
+better than §8.0's: the plan specifies `offsetParent === null`, which wrongly rejects **fixed-position**
+elements, and Docs menus and dialogs are commonly fixed. They use `checkVisibility()` with a
+shadow-and-slot-aware fallback. `resolver.js`, `click.js` and `verify.js` were still stubs.
+
+**C — `pipeline/`, `lessons/`:** both lessons exist. `version-history.json` is **B's draft, never
+validated against a live Doc** — see `docs/findings.md`. The pipeline files were still stubs.
+
+**D — `paint/`:** still stubs at last check, so nothing draws yet.
+
+**`teach.js` is still B's stub** — it answers `'correct'` 1.5s after every step. Checkpoint 1 hasn't
+happened.
+
+### 18.2 Decisions taken after the plan was written
+
+Don't undo these without reading the reasoning — each one cost a bug to find.
+
+| Decision | Why |
+|---|---|
+| `content.js` is a classic script that dynamically imports `src/main.js` | Chrome rejected `"type": "module"` content scripts. **The frozen §4 import order now lives in `src/main.js`**, verbatim. |
+| The UI floats; it never reflows the page | Narrowing Docs drops it under 1440px, collapsing toolbar buttons into `More`, and lessons then target elements that don't exist. Presents as a resolver bug. |
+| B's host matches `OVERLAY_Z` and relies on DOM order | `OVERLAY_Z` is INT_MAX so B can't outrank D's scrim, and a window that moves can't have a hole cut for it. **Depends on D mounting their host in `init()`, not lazily.** |
+| Drag ignores pointerdown on buttons | `setPointerCapture` retargets the following `click` to the capturing element, which silently swallowed every control in the window header. |
+| A failed `verify` advances after two retries | A broken verify hook must not trap a user on a step they've already done correctly. §15 already sanctions `verify.kind: 'none'` as the fallback. |
+| Matching indexes the lesson prose, not a keyword list | Hand-written keywords only ever catch phrasings the author thought of. C's prose describes each task in a user's own words and arrives free with every generated lesson. |
+| Lessons are discovered via `lessons/index.json` | A Chrome extension can't list a directory. See §17.1. |
+
+### 18.3 Outstanding, and owned by other people
+
+1. **[A]** `waitForClick` must ignore clicks whose `composedPath()` includes `#browser-teacher-root`,
+   or B's own controls register as wrong answers. One line — see `CHECKPOINT-1.md`.
+2. **[A + C]** A's wrong-click labels must match C's `wrongHints` keys exactly. A mismatch silently
+   degrades to a generic correction and nothing reports it.
+3. **[D]** Mount the paint host in `init()` at load — see the z-index row above.
+4. **[C]** Write `lessons/index.json`, and only add an id once its verification replay passes.
+5. **[C]** `Insert → Table of contents` is still unconfirmed and blocks `styles-toc` step s6.
+
+### 18.4 What was and wasn't actually verified
+
+**Verified in Node**, against the real lesson JSON: the runner across six scenarios including wrong
+clicks, resolver failure and verify failure; lesson validation against eight kinds of malformed
+input; the `__TEACH` contract guard; question matching across twenty phrasings (18 correct — the two
+failures are "add a table" / "insert a table", which in Docs means Insert → Table, a feature with no
+lesson).
+
+**Verified in Chrome by the human:** panel mounts, lessons run, drag, resize, voice toggle, glass.
+
+**Never run by anyone:** the error card, and the extension under any browser lacking
+`backdrop-filter` or speech APIs (fallbacks exist but are untested).
+
+> **The Node harnesses live in a session scratch directory and are gone.** They were worth having —
+> they caught an unbounded retry loop that OOM'd, two dead synonym paths, and a typo matcher that
+> couldn't see transpositions. Rebuilding them is a few dozen lines: fake `window.__TEACH`, fake the
+> `ui` facade, drive `runLesson` against the real JSON.
+
+### 18.5 Testing the awkward paths
+
+DevTools console, context switched from `top` to **Browser Teacher** (extension code runs in an
+isolated world, so these are invisible from the page context):
+
+```js
+__BT_DEV.hints()         // hold a step open — tiers at 8s / 16s / 24s
+__BT_DEV.wrong('Font')   // force a wrong click; two args exercises the generic fallback
+__BT_DEV.noResolve()     // highlight() fails — the "menu isn't open yet" path
+__BT_DEV.verifyFail()    // verify() never passes
+__BT_DEV.run('styles-toc', 3)   // jump to a step, for rehearsal
+__BT_DEV.off()
+```
+
+Hints only fire from **step 3** of `styles-toc` onward: step 1 demonstrates and step 2 has no target,
+so neither waits on a click. And while the stub answers after 1.5s, no hint can ever reach 8s without
+`__BT_DEV.hints()` — that stops being true the moment `teach.js` is real.
