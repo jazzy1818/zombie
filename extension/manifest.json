@@ -7,13 +7,12 @@
     {
       "matches": ["https://docs.google.com/document/d/*"],
       "js": ["src/content.js"],
-      "type": "module",
       "run_at": "document_idle"
     }
   ],
   "web_accessible_resources": [
     {
-      "resources": ["lessons/*.json", "src/panel/panel.css"],
+      "resources": ["lessons/*.json", "src/*", "src/*/*"],
       "matches": ["https://docs.google.com/*"]
     }
   ]

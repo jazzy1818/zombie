@@ -8,6 +8,9 @@ We generate them automatically from a natural-language question, using a cloud b
 **Read [PLAN.md](PLAN.md) before writing a line of code.** It is the spec, the schedule and the
 contracts. This file is just how to get moving.
 
+**[A] and [D]: read [CHECKPOINT-1.md](CHECKPOINT-1.md) before H3:30.** B's layer is built; that file
+is what it needs from yours, plus one structural change to where the frozen import order lives.
+
 ---
 
 ## Two halves that never talk at runtime

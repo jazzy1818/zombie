@@ -1,1 +1,420 @@
-/* [B] Panel styles. See constants.js for ACCENT / CORRECT / WRONG. */
+/* [B] Chat bar + floating lesson window.
+
+   Lives inside a shadow root, so nothing here leaks into Docs and Docs' global
+   CSS can't reach in — which it absolutely would.
+
+   Material: one continuous sheet of smoked glass, visionOS-style. Heavy blur, a
+   neutral dark tint, a bright rim along the top edge where light would catch,
+   and a wide soft shadow so it reads as floating well above the page. The whole
+   surface is the same material — the header and footer are not separate
+   chrome, they're the same glass with the faintest possible seams.
+
+   Light text on dark glass is deliberate: over a white document it's what gives
+   the narration enough contrast to stay readable while the page shows through.
+   The tint is carrying that contrast, so don't thin it much further. */
+
+:host {
+  --bt-accent: #8FC2FF;          /* lifted for legibility on dark glass */
+  --bt-correct: #7BE0A4;
+  --bt-wrong: #FF9A90;
+
+  --bt-text: rgba(255, 255, 255, 0.94);
+  --bt-muted: rgba(255, 255, 255, 0.58);
+
+  /* Thinner tint, heavier blur to compensate. The blur is what keeps text
+     legible once the fill gets this light — drop the blur and the narration
+     starts competing with whatever paragraph is behind it. */
+  --bt-glass: rgba(34, 36, 43, 0.38);
+  --bt-glass-bar: rgba(34, 36, 43, 0.34);
+  --bt-blur: blur(56px) saturate(180%) brightness(0.82);
+
+  --bt-rim: rgba(255, 255, 255, 0.20);
+  --bt-seam: rgba(255, 255, 255, 0.09);
+  --bt-fill: rgba(255, 255, 255, 0.13);
+  --bt-fill-hover: rgba(255, 255, 255, 0.20);
+
+  /* Depth, then the rim highlight along the top edge, then an inner darkening
+     at the base so the sheet has a little thickness to it. */
+  --bt-shadow:
+    0 32px 80px rgba(0, 0, 0, 0.38),
+    0 8px 24px rgba(0, 0, 0, 0.22),
+    inset 0 1px 0 rgba(255, 255, 255, 0.24),
+    inset 0 -1px 0 rgba(0, 0, 0, 0.18);
+
+  all: initial;
+  font-family: 'Google Sans', Roboto, -apple-system, BlinkMacSystemFont, sans-serif;
+  color: var(--bt-text);
+}
+
+/* --------------------------------------------------------------- chat bar */
+
+.bt-bar {
+  position: fixed;
+  bottom: 24px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: var(--bt-z, 2147483647);
+
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  width: min(560px, calc(100vw - 48px));
+  padding: 7px 7px 7px 18px;
+
+  background: var(--bt-glass-bar);
+  -webkit-backdrop-filter: var(--bt-blur);
+  backdrop-filter: var(--bt-blur);
+  border: 1px solid var(--bt-rim);
+  border-radius: 999px;
+  box-shadow: var(--bt-shadow);
+
+  transition: opacity 200ms ease;
+}
+
+.bt-bar-input {
+  flex: 1;
+  min-width: 0;
+  border: 0;
+  background: none;
+  outline: none;
+  font: inherit;
+  font-size: 15px;
+  color: var(--bt-text);
+}
+.bt-bar-input::placeholder { color: var(--bt-muted); }
+.bt-bar-input:disabled { color: var(--bt-muted); }
+
+/* Locked while a lesson runs. Visible, so it doesn't feel like the UI vanished,
+   but not focusable — a focused input mid-step would dismiss a Docs menu. */
+.bt-bar.is-locked { opacity: 0.4; }
+
+.bt-bar.is-error .bt-bar-input::placeholder { color: var(--bt-wrong); }
+
+/* Tinted glass, not solid fill — the colour sits in the sheet rather than
+   sitting on top of it. */
+.bt-bar-go {
+  flex: none;
+  padding: 9px 17px;
+  border: 1px solid rgba(143, 194, 255, 0.5);
+  border-radius: 999px;
+  background: rgba(79, 156, 249, 0.30);
+  color: #fff;
+  font: inherit;
+  font-size: 14px;
+  font-weight: 500;
+  cursor: pointer;
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.3);
+  transition: background 150ms ease, border-color 150ms ease;
+}
+.bt-bar-go:hover {
+  background: rgba(79, 156, 249, 0.44);
+  border-color: rgba(175, 212, 255, 0.7);
+}
+
+.bt-bar-mic {
+  flex: none;
+  display: grid;
+  place-items: center;
+  width: 34px;
+  height: 34px;
+  border: 1px solid rgba(255, 138, 128, 0.45);
+  border-radius: 50%;
+  background: rgba(234, 67, 53, 0.26);
+  cursor: pointer;
+  transition: background 150ms ease, border-color 150ms ease;
+}
+.bt-bar-mic:hover {
+  background: rgba(234, 67, 53, 0.4);
+  border-color: rgba(255, 168, 160, 0.65);
+}
+.bt-bar-mic[hidden] { display: none; }   /* display: grid would otherwise win */
+
+.bt-mic-dot {
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  background: rgba(255, 190, 184, 0.9);
+  transition: background 160ms ease;
+}
+
+/* The pulse is the only signal that the mic is actually open. Make it obvious —
+   the button goes properly hot rather than just tinted. */
+.bt-bar.is-listening { border-color: rgba(255, 154, 144, 0.6); }
+.bt-bar.is-listening .bt-bar-mic {
+  background: rgba(234, 67, 53, 0.6);
+  border-color: rgba(255, 180, 172, 0.85);
+}
+.bt-bar.is-listening .bt-mic-dot {
+  background: #fff;
+  animation: bt-pulse 1.1s ease-in-out infinite;
+}
+
+@keyframes bt-pulse {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(255, 154, 144, 0.5); }
+  50%      { box-shadow: 0 0 0 9px rgba(255, 154, 144, 0); }
+}
+
+/* --------------------------------------------------------- lesson window */
+
+/* position: fixed with explicit left/top, set by floating.js. It floats over
+   the document and never reflows it — narrowing Docs would collapse toolbar
+   buttons into `More` and break every lesson target (PLAN.md §3). */
+.bt-window {
+  position: fixed;
+  z-index: var(--bt-z, 2147483647);
+
+  display: none;
+  flex-direction: column;
+  overflow: hidden;
+
+  background: var(--bt-glass);
+  -webkit-backdrop-filter: var(--bt-blur);
+  backdrop-filter: var(--bt-blur);
+  border: 1px solid var(--bt-rim);
+  border-radius: 26px;
+  box-shadow: var(--bt-shadow);
+}
+
+.bt-window.is-open {
+  display: flex;
+  animation: bt-appear 260ms cubic-bezier(0.2, 0, 0, 1);
+}
+
+@keyframes bt-appear {
+  from { opacity: 0; transform: scale(0.96) translateY(8px); }
+  to   { opacity: 1; transform: none; }
+}
+
+/* Snappier while dragging — a transition here makes the window lag the cursor. */
+.bt-window.is-dragging {
+  animation: none;
+  box-shadow:
+    0 44px 110px rgba(0, 0, 0, 0.46),
+    inset 0 1px 0 rgba(255, 255, 255, 0.28);
+  user-select: none;
+}
+
+.bt-head {
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  padding: 14px 16px 12px 18px;
+  border-bottom: 1px solid var(--bt-seam);
+  cursor: grab;
+  touch-action: none;
+}
+.bt-window.is-dragging .bt-head { cursor: grabbing; }
+
+.bt-grip {
+  width: 11px;
+  height: 11px;
+  flex: none;
+  border-radius: 2px;
+  background-image: radial-gradient(currentColor 1px, transparent 1.2px);
+  background-size: 4px 4px;
+  color: rgba(255, 255, 255, 0.42);
+}
+
+.bt-title {
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  color: var(--bt-muted);
+}
+
+.bt-progress {
+  margin-inline-start: auto;
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+  color: var(--bt-muted);
+}
+
+.bt-close,
+.bt-speak {
+  display: grid;
+  place-items: center;
+  width: 24px;
+  height: 24px;
+  border: 0;
+  border-radius: 50%;
+  background: var(--bt-fill);
+  font-size: 15px;
+  line-height: 1;
+  color: var(--bt-text);
+  cursor: pointer;
+  transition: background 150ms ease, color 150ms ease;
+  flex: none;
+}
+.bt-close:hover,
+.bt-speak:hover { background: var(--bt-fill-hover); }
+.bt-progress[hidden] ~ .bt-speak { margin-inline-start: auto; }
+
+/* An explicit `display` beats the UA's [hidden] rule, so these need saying —
+   without them, `el.hidden = true` leaves the control on screen. */
+.bt-speak[hidden] { display: none; }
+
+/* The glyph must never be the pointer target, or the drag handle's control
+   check has to walk out of an SVG subtree to find the button. */
+.bt-speak svg { pointer-events: none; }
+
+/* Off: muted colour, slash shown, waves hidden. On: accent, waves, no slash. */
+.bt-speak { color: var(--bt-muted); }
+.bt-speak .bt-waves { display: none; }
+.bt-speak.is-on {
+  color: #16191d;
+  background: var(--bt-accent);
+}
+.bt-speak.is-on .bt-waves { display: block; }
+.bt-speak.is-on .bt-slash { display: none; }
+
+.bt-body {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  padding: 20px 18px;
+  scrollbar-width: thin;
+  scrollbar-color: rgba(255, 255, 255, 0.26) transparent;
+}
+.bt-body::-webkit-scrollbar { width: 8px; }
+.bt-body::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.24);
+  border-radius: 999px;
+}
+
+.bt-actions {
+  flex: none;
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+  padding: 12px 18px 16px;
+  border-top: 1px solid var(--bt-seam);
+}
+.bt-actions:empty { display: none; }
+
+/* Resize grip, bottom-right. */
+.bt-resize {
+  position: absolute;
+  right: 0;
+  bottom: 0;
+  width: 20px;
+  height: 20px;
+  cursor: nwse-resize;
+  touch-action: none;
+}
+.bt-resize::after {
+  content: '';
+  position: absolute;
+  right: 6px;
+  bottom: 6px;
+  width: 7px;
+  height: 7px;
+  border-right: 2px solid rgba(255, 255, 255, 0.4);
+  border-bottom: 2px solid rgba(255, 255, 255, 0.4);
+  border-radius: 0 0 2px 0;
+}
+
+/* ------------------------------------------------------------------ cards */
+
+.bt-card-title {
+  margin: 0 0 10px;
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.09em;
+  color: var(--bt-accent);
+}
+
+.bt-card-body {
+  margin: 0;
+  font-size: 15px;
+  line-height: 1.6;
+  /* Cheap insurance at this tint: holds the narration apart from a busy
+     paragraph showing through, without darkening the sheet. */
+  text-shadow: 0 1px 3px rgba(0, 0, 0, 0.35);
+}
+
+/* The preamble is the pitch in miniature and the generalization is the payoff
+   the presenter reads aloud (PLAN.md §14). Give them real weight. */
+.bt-card-preamble .bt-card-body,
+.bt-card-generalization .bt-card-body {
+  font-size: 17px;
+  line-height: 1.62;
+  letter-spacing: -0.005em;
+}
+
+.bt-card-generalization {
+  border-inline-start: 2px solid var(--bt-correct);
+  padding-inline-start: 14px;
+}
+.bt-card-generalization .bt-card-title { color: var(--bt-correct); }
+
+/* A solo step is the one where we deliberately stop helping. Say so. */
+.bt-mode-solo .bt-card-title { color: var(--bt-muted); }
+
+.bt-card-error .bt-card-title { color: var(--bt-wrong); }
+.bt-card-error .bt-card-body {
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+/* ------------------------------------------------------------------ notes */
+
+.bt-note {
+  margin: 15px 0 0;
+  padding: 11px 13px;
+  border-radius: 12px;
+  font-size: 14px;
+  line-height: 1.5;
+  border: 1px solid transparent;
+}
+
+.bt-note-hint {
+  background: rgba(143, 194, 255, 0.14);
+  border-color: rgba(143, 194, 255, 0.26);
+}
+
+.bt-note-wrong {
+  background: rgba(255, 154, 144, 0.15);
+  border-color: rgba(255, 154, 144, 0.3);
+}
+
+/* ---------------------------------------------------------------- buttons */
+
+.bt-btn {
+  padding: 11px 16px;
+  border: 1px solid var(--bt-rim);
+  border-radius: 999px;
+  background: var(--bt-fill);
+  color: var(--bt-text);
+  font: inherit;
+  font-size: 14px;
+  font-weight: 500;
+  cursor: pointer;
+  text-align: center;
+  transition: background 150ms ease;
+}
+.bt-btn:hover { background: var(--bt-fill-hover); }
+
+.bt-btn-subtle {
+  background: none;
+  border-color: transparent;
+  color: var(--bt-muted);
+  font-size: 13px;
+  padding: 7px 12px;
+}
+.bt-btn-subtle:hover { background: rgba(255, 255, 255, 0.1); }
+
+/* Safari and Firefox without backdrop-filter would render this as a nearly
+   transparent dark box with unreadable text. Fall back to a solid sheet. */
+@supports not ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
+  .bt-window { background: rgba(30, 32, 38, 0.94); }
+  .bt-bar { background: rgba(30, 32, 38, 0.94); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .bt-window.is-open { animation: none; }
+  .bt-bar { transition: none; }
+  .bt-bar.is-listening .bt-mic-dot { animation: none; }
+}
