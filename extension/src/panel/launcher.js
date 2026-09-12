@@ -14,7 +14,7 @@ const PTT_KEY = 'Alt';
  * @param {object} handlers
  * @param {(text: string) => void} handlers.onPrompt  a question arrived, either path
  */
-export function mountBar(root, { onPrompt }) {
+export function mountBar(root, { onPrompt, onListenStart }) {
   const bar = document.createElement('form');
   bar.className = 'bt-bar';
   bar.innerHTML = `
@@ -68,6 +68,7 @@ export function mountBar(root, { onPrompt }) {
 
   function startListening() {
     if (!enabled || listening || !voice.supported) return;
+    onListenStart?.();   // stop reading aloud, or the mic transcribes our own voice
     restore = input.value;
     input.value = '';
     setListening(true);

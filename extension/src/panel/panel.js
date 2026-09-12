@@ -16,7 +16,18 @@ import { mountBar } from './launcher.js';
 import { makeFloating } from './floating.js';
 import { loadLesson, loadAll, matchLesson, LESSONS } from './lessons.js';
 import { runLesson, ACTION } from './machine.js';
+import { createSpeech } from './speech.js';
 import { installDev } from './dev.js';
+
+const SPEAKER_SVG = `
+  <svg viewBox="0 0 20 20" width="14" height="14" fill="none" aria-hidden="true">
+    <path d="M4 8h2.6L10 5v10L6.6 12H4z" fill="currentColor"/>
+    <g class="bt-waves" stroke="currentColor" stroke-width="1.5" stroke-linecap="round">
+      <path d="M12.6 7.6a3.4 3.4 0 0 1 0 4.8"/>
+      <path d="M14.8 5.4a6.5 6.5 0 0 1 0 9.2"/>
+    </g>
+    <path class="bt-slash" d="M13 7l5 6" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+  </svg>`;
 
 const HOST_ID = 'browser-teacher-root';
 
@@ -55,6 +66,7 @@ export async function mountPanel() {
       <span class="bt-grip" aria-hidden="true"></span>
       <span class="bt-title">Browser Teacher</span>
       <span class="bt-progress" hidden></span>
+      <button class="bt-speak" type="button" aria-pressed="false">${SPEAKER_SVG}</button>
       <button class="bt-close" type="button" title="Close" aria-label="Close">×</button>
     </header>
     <div class="bt-body"></div>
@@ -69,6 +81,7 @@ export async function mountPanel() {
     body: win.querySelector('.bt-body'),
     actions: win.querySelector('.bt-actions'),
     progress: win.querySelector('.bt-progress'),
+    speak: win.querySelector('.bt-speak'),
     close: win.querySelector('.bt-close'),
     resize: win.querySelector('.bt-resize'),
   };
@@ -83,13 +96,37 @@ export async function mountPanel() {
     height: WIN_H,
   });
 
-  const ui = createUI(els, raise);
+  const speech = createSpeech();
+  const ui = createUI(els, raise, speech);
 
-  const bar = mountBar(root, { onPrompt: start });
+  const bar = mountBar(root, {
+    onPrompt: start,
+    // Stop talking the moment they start — otherwise the mic hears us.
+    onListenStart: () => speech.stop(),
+  });
   ui.bindBar(bar);
 
   noFocusSteal(els.close);
   els.close.addEventListener('click', () => ui.reset());
+
+  if (!speech.supported) {
+    els.speak.hidden = true;
+  } else {
+    const syncSpeakButton = () => {
+      els.speak.classList.toggle('is-on', speech.enabled);
+      els.speak.setAttribute('aria-pressed', String(speech.enabled));
+      els.speak.title = speech.enabled ? 'Reading aloud — click to mute' : 'Read the narration aloud';
+    };
+    syncSpeakButton();
+    noFocusSteal(els.speak);
+    els.speak.addEventListener('click', () => {
+      speech.toggle();
+      syncSpeakButton();
+      // Turning it on mid-lesson should read what's on screen now, not wait
+      // for the next step — otherwise it feels like the toggle did nothing.
+      if (speech.enabled) ui.sayCurrent();
+    });
+  }
 
   /**
    * Every path into the runner goes through here. Checkpoint 1 is four
@@ -147,9 +184,10 @@ function noFocusSteal(el) {
  * Everything machine.js is allowed to do to the UI. Passing this in rather than
  * importing the panel keeps the runner DOM-free and the imports acyclic.
  */
-function createUI(els, raise) {
+function createUI(els, raise, speech) {
   let resolveAction = null;
   let bar = null;
+  let spoken = '';   // what's currently on screen, for the toggle-on case
 
   const fire = value => {
     const r = resolveAction;
@@ -188,6 +226,11 @@ function createUI(els, raise) {
     p.textContent = body;
     card.appendChild(p);
     els.body.replaceChildren(card);
+
+    // Each new card replaces what's being said. Without the implicit cancel in
+    // say(), hints and steps would queue up and read minutes behind the screen.
+    spoken = body;
+    speech.say(body);
   }
 
   /** Hints and corrections append below the step, they don't replace it. */
@@ -199,6 +242,8 @@ function createUI(els, raise) {
     note.textContent = text;
     els.body.appendChild(note);
     els.body.scrollTop = els.body.scrollHeight;
+    spoken = text;
+    speech.say(text);
   }
 
   const ui = {
@@ -206,8 +251,13 @@ function createUI(els, raise) {
 
     bindBar(b) { bar = b; },
 
+    /** Re-read what's on screen — used when the toggle is switched on mid-lesson. */
+    sayCurrent() { speech.say(spoken); },
+
     reset() {
       resolveAction = null;
+      speech.stop();
+      spoken = '';
       setOpen(false);
       els.progress.hidden = true;
       els.body.replaceChildren();
