@@ -29,10 +29,11 @@ in for the import order is now `src/main.js`, not `content.js`.
 
 ### 1. `waitForClick` must ignore clicks on B's panel  ← the only real ask
 
-B's panel is a shadow host on `document.documentElement` with the id **`browser-teacher-root`**.
-Its buttons ("Got it", "Just do it for me", "Stop") are panel UI, not the user answering a step — but
-they're real clicks on the page, so your capture-phase listener will see them and report them as
-wrong answers.
+B's UI is a shadow host on `document.documentElement` with the id **`browser-teacher-root`**. It
+holds a chat bar at the bottom of the screen and a floating lesson window the user can drag and
+resize. Its controls ("Got it", "Just do it for me", "Stop", the window's drag handle) are UI, not
+the user answering a step — but they're real clicks on the page, so your capture-phase listener will
+see them and report them as wrong answers.
 
 One line, near the top of your click handler:
 
@@ -68,24 +69,24 @@ continuing to wait — PLAN.md §8.2 tier 5. Don't add retries on B's behalf; th
 
 ## D — `paint/`
 
-### 1. The scrim will cover B's panel — needs a decision, ~2 minutes
+### 1. Mount your host in `init()`, at load — not lazily
 
-Current z-indexes:
+B's UI is now a floating window the user can drag anywhere, plus a chat bar at the bottom. Both need
+to stay readable while your scrim dims the page behind them.
 
-| Layer | z-index |
-|---|---|
-| D's overlay (`OVERLAY_Z`) | 2147483647 |
-| B's launcher button | 2147483646 |
-| B's panel | 2147483645 |
+`OVERLAY_Z` is the maximum possible z-index, so B cannot outrank you by number — and because B's
+window *moves*, you can't cut a static hole for it either. So B matches your z-index and relies on
+being **later in the DOM**, which wins the tie.
 
-`OVERLAY_Z` is the maximum possible value, so B **cannot** go above it. As written, your full-viewport
-scrim at 55% black will dim the narration panel along with the page.
+That holds as long as your host is mounted in `init()` — which Contract 3 already specifies
+("Mount shadow host. Idempotent. Called once on load."). `src/main.js` imports `paint/index.js`
+before `panel/panel.js`, so you mount first and B lands after you.
 
-That's backwards: the panel is the one thing that must stay readable while everything else is dimmed.
+**It breaks if you mount the host lazily on the first `spotlight()` call**, because then you'd be
+appended after B and the scrim would dim the narration. B re-asserts its position when a lesson
+starts, which covers most of it, but mounting at load is the thing that makes it reliable.
 
-**Suggested fix (D's call):** inset the scrim on the panel side by `PANEL_WIDTH` from `constants.js`
-— `right: 340px` — so it dims the document and stops at the panel edge. Alternatively leave a
-transparent cut-out for that rect. Either is fine; B needs no change for either.
+Nothing else needed from you — no inset, no cut-out.
 
 ### 2. `pointer-events: none` on the overlay — B depends on it too
 

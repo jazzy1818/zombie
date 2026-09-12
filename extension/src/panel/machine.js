@@ -32,19 +32,46 @@ export const ACTION = {
   QUIT: 'quit',
 };
 
-export async function runLesson(lesson, ui) {
+const REQUIRED = [
+  'highlight', 'clear', 'moveCursor', 'demo',
+  'waitForClick', 'verify', 'flashCorrect', 'setCursorVisible',
+];
+
+/**
+ * Contract 4 is replaced wholesale at Checkpoint 1 by A and D. If a method is
+ * missing or misnamed, every call site fails somewhere deep in a step with a
+ * useless stack. Check once, up front, and say exactly what's absent.
+ */
+function assertTeach() {
+  const teach = window.__TEACH;
+  if (!teach) throw new Error('window.__TEACH is not defined — teach.js did not load.');
+  const missing = REQUIRED.filter(m => typeof teach[m] !== 'function');
+  if (missing.length) {
+    throw new Error(`window.__TEACH is missing: ${missing.join(', ')} (see PLAN.md §6)`);
+  }
+}
+
+/**
+ * @param {object} opts
+ * @param {number} opts.from  step index to start at — rehearsal shortcut, so you
+ *                            don't sit through steps 1-2 to practise step 3.
+ */
+export async function runLesson(lesson, ui, { from = 0 } = {}) {
+  assertTeach();
   ui.lessonStarted(lesson);
 
   try {
-    const start = await ui.card({
-      kind: 'preamble',
-      title: lesson.goal,
-      body: lesson.preamble,
-      actions: [{ label: 'Show me', value: ACTION.CONTINUE }, { label: 'Not now', value: ACTION.QUIT }],
-    });
-    if (start === ACTION.QUIT) return;
+    if (from === 0) {
+      const start = await ui.card({
+        kind: 'preamble',
+        title: lesson.goal,
+        body: lesson.preamble,
+        actions: [{ label: 'Show me', value: ACTION.CONTINUE }, { label: 'Not now', value: ACTION.QUIT }],
+      });
+      if (start === ACTION.QUIT) return;
+    }
 
-    for (let i = 0; i < lesson.steps.length; i++) {
+    for (let i = from; i < lesson.steps.length; i++) {
       const outcome = await runStep(lesson.steps[i], i, lesson, ui);
 
       if (outcome === ACTION.QUIT) return;
