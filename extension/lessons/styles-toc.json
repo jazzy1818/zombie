@@ -1,0 +1,123 @@
+{
+  "id": "styles-toc",
+  "app": "google-docs",
+  "goal": "Add an automatic table of contents",
+  "preamble": "A table of contents in Docs isn't something you write — it's something Docs builds for you, from your headings. So the real task is teaching Docs which lines are headings. That's what styles are for.",
+  "generalization": "You never touched the table of contents itself — it built itself from your headings. That's the whole point of styles: they describe what text *is*, not what it looks like. It's also why the outline pane on the left already works now, and why exporting to PDF will keep your structure.",
+  "steps": [
+    {
+      "id": "s1",
+      "mode": "demo",
+      "intent": "This box in the toolbar always shows the style of whatever line your cursor is on. Right now it says 'Normal text'. Watch it as I move around.",
+      "target": {
+        "scope": "toolbar",
+        "name": "Styles"
+      },
+      "action": "click",
+      "verify": {
+        "kind": "none"
+      },
+      "hints": [
+        "It's in the toolbar, left of the font name.",
+        "Top-left area of the toolbar."
+      ]
+    },
+    {
+      "id": "s2",
+      "mode": "guided",
+      "intent": "Click anywhere on the document's title line. You won't see anything change in the document — watch the Styles box instead.",
+      "target": null,
+      "action": "click",
+      "verify": {
+        "kind": "none"
+      },
+      "hints": [
+        "The very first line of the document.",
+        "Top of the page, the big line of text."
+      ]
+    },
+    {
+      "id": "s3",
+      "mode": "guided",
+      "intent": "Now open the Styles dropdown. This is where you tell Docs what kind of line this is.",
+      "target": {
+        "scope": "toolbar",
+        "name": "Styles"
+      },
+      "action": "click",
+      "verify": {
+        "kind": "visible",
+        "name": "Apply 'Heading 1'",
+        "scope": "menu"
+      },
+      "hints": [
+        "The box showing 'Normal text'.",
+        "Toolbar, just right of the undo/redo arrows."
+      ],
+      "wrongHints": {
+        "Font": "That's the typeface — it changes how text looks. We want to change what the text *is*.",
+        "Font size": "Size is cosmetic. Styles carry meaning, which is what a table of contents reads."
+      }
+    },
+    {
+      "id": "s4",
+      "mode": "guided",
+      "intent": "Choose Heading 1. You're telling Docs 'this line is a top-level section'.",
+      "target": {
+        "scope": "menu",
+        "name": "Apply 'Heading 1'"
+      },
+      "action": "click",
+      "verify": {
+        "kind": "label",
+        "selector": "#docs-toolbar-wrapper [aria-label=\"Styles\"]",
+        "match": "Heading 1"
+      },
+      "hints": [
+        "Look for the largest heading option.",
+        "Below 'Title' and 'Subtitle' in the list."
+      ],
+      "wrongHints": {
+        "Apply 'Title'": "Title works visually, but Docs treats it as the document name — it won't appear as a section in the contents."
+      }
+    },
+    {
+      "id": "s5",
+      "mode": "guided",
+      "intent": "Same thing for a section heading — put your cursor on one of the section lines and make it Heading 2. Heading 2 nests underneath Heading 1, which is how the contents gets its indentation.",
+      "target": {
+        "scope": "menu",
+        "name": "Apply 'Heading 2'"
+      },
+      "action": "click",
+      "verify": {
+        "kind": "label",
+        "selector": "#docs-toolbar-wrapper [aria-label=\"Styles\"]",
+        "match": "Heading 2"
+      },
+      "hints": [
+        "Open the Styles box again, one step down from Heading 1.",
+        "Directly below 'Heading 1' in the dropdown."
+      ]
+    },
+    {
+      "id": "s6",
+      "mode": "solo",
+      "intent": "Your turn, no highlight this time. Your headings are set — now insert the table of contents itself. Have a look through the menus.",
+      "target": {
+        "scope": "menu",
+        "name": "Table of contents"
+      },
+      "action": "click",
+      "verify": {
+        "kind": "visible",
+        "name": "Table of contents",
+        "scope": "menu"
+      },
+      "hints": [
+        "You're adding something new to the document — which menu handles that?",
+        "It's in the Insert menu, near the bottom."
+      ]
+    }
+  ]
+}

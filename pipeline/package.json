@@ -1,0 +1,10 @@
+{
+  "name": "browser-teacher-pipeline",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "author": "node author.js",
+    "verify": "node verify.js"
+  }
+}
