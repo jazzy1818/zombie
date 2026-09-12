@@ -63,6 +63,8 @@ export async function verifyLesson(lesson, opts = {}) {
             id: step.id, status: 'verify-failed', name: step.target.name,
             count: hit.count, ms: Date.now() - t0,
             note: `clicked, but ${JSON.stringify(step.verify)} never passed`,
+            visible: await dumpScope(handle, step.verify.scope ?? 'menu'),
+            afterSkip: skipped,
           });
           failedAt = step.id;
           break;
@@ -87,12 +89,12 @@ export async function verifyLesson(lesson, opts = {}) {
   };
 }
 
-// What the probe can actually see right now, so an unresolved step says why.
+// What the probe can actually see right now, so a failing step says why.
 async function dumpScope(handle, scope) {
   try {
     const obs = await handle.probe('observe');
     const pool = scope && obs[scope] ? obs[scope] : [...obs.toolbar, ...obs.menu, ...obs.dialog];
-    return pool.map(c => c.raw);
+    return pool.map(c => c.raw + (c.disabled ? '   [disabled]' : ''));
   } catch {
     return [];
   }
