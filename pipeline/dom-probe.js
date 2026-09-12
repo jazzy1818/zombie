@@ -12,6 +12,12 @@ export function installProbe() {
     return r.width > 0 && r.height > 0;
   }
 
+  // Docs ships its menubar disabled until the doc finishes loading. A disabled control is
+  // never a valid target, and resolve's retry window covers the wait.
+  function isEnabled(el) {
+    return el.getAttribute('aria-disabled') !== 'true';
+  }
+
   // toolbar: aria-label with the shortcut in parens, "Bold (⌘B)"
   function toolbarMatch(el, name) {
     const label = el.getAttribute('aria-label')
@@ -115,7 +121,8 @@ export function installProbe() {
   function resolve(target) {
     if (!target || !target.name) return null;
     for (const tier of tiers(target.scope)) {
-      const hits = qsa(tier.sel).filter(el => isVisible(el) && tier.match(el, target.name));
+      const hits = qsa(tier.sel)
+        .filter(el => isVisible(el) && isEnabled(el) && tier.match(el, target.name));
       if (!hits.length) continue;
       const el = hits[target.nth ?? 0];
       if (!el) continue;
@@ -140,6 +147,7 @@ export function installProbe() {
     resolve,
     check,
     isVisible,
+    isEnabled,
     bare,
     el: id => byId.get(Number(id)) ?? document.querySelector(`[data-bt-id="${id}"]`),
     // Escape hatch. explore/verify click through Playwright so Docs sees a real pointer

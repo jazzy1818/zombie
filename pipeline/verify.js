@@ -27,10 +27,15 @@ export async function verifyLesson(lesson, opts = {}) {
       // The learner's click would also dismiss any open menu — this replay's won't, so
       // every later step runs against state a real user would never be in.
       if (!step.target) {
+        // Escape is the closest stand-in for the learner's click: it dismisses whatever
+        // menu the previous step opened. It does NOT move the caret, so a later
+        // verify reading the current style can still diverge.
         skipped = true;
+        await handle.page.keyboard.press('Escape');
+        await handle.page.waitForTimeout(300);
         steps.push({
           id: step.id, status: 'skipped', ms: Date.now() - t0,
-          note: 'instruct-only (target: null) — page state now diverges from a real user',
+          note: 'instruct-only (target: null) — sent Escape; caret position not reproduced',
         });
         continue;
       }

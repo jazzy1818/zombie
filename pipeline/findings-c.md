@@ -76,3 +76,39 @@ console.log([...document.querySelectorAll('[role="menuitem"]')]
 ## Answers to hand to D
 
 _(paste the query and its raw output — D copies this into `docs/findings.md`)_
+
+### CONFIRMED — viewport is genuinely 1440 in the Steel session
+
+`assertViewport` neither threw nor warned across several `verify` runs, so `innerWidth`
+is ≥1400 without needing the `Emulation.setDeviceMetricsOverride` fallback. Risk retired.
+
+### CONFIRMED — Docs ships the menubar DISABLED until the doc loads
+
+`version-history` s1 resolved `File` to
+`<div role="menuitem" aria-disabled="true" class="goog-menuitem goog-menuitem-disabled goog-submenu">`
+and Playwright waited 5s for it to become clickable. **`isVisible()` alone is not enough —
+A needs an `aria-disabled` filter in `resolve/` too**, or the resolver will hand the panel
+a dead element during the first seconds after load. [A]
+
+### NEW — every toolbar dropdown exposes a second, richer aria-label
+
+Toolbar dump while the Styles menu was open:
+
+```
+"Zoom"            "Zoom list. 100% selected."            "Zoom"
+"Font size"       "Font size list. 11 selected."         "Font size"
+                  "Styles list. Normal text selected."
+```
+
+So each dropdown is an outer button (`"Styles"`) plus an inner list whose aria-label
+**states the current selection**: `"Styles list. Normal text selected."`
+
+Two consequences:
+
+1. The plain `"Styles"` button is **absent while its own menu is open**. Any step that
+   targets it must run with the menu closed.
+2. `"Styles list. <X> selected."` is a cleaner signal for s4/s5 than reading `textContent`
+   off the button. **But `Verify.kind: 'label'` reads `textContent`, not attributes**, and
+   §5 is frozen — so we cannot use it without a schema change. Worth raising with A: if
+   their `verify.js` reads the aria-label for `kind:'label'` as well as textContent, both
+   implementations get a much more reliable hook for free. [C + A]
