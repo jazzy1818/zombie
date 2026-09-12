@@ -143,9 +143,14 @@ export async function mountPanel() {
   }
 
   async function start(question) {
-    const { id, confident } = matchLesson(question);
-    if (!confident) return ui.showPicker(question);
-    await play(id);
+    try {
+      const { id, confident, ranked } = await matchLesson(question);
+      if (!confident) return ui.showPicker(question, ranked);
+      await play(id);
+    } catch (err) {
+      console.error('[browser-teacher]', err);
+      ui.fail(err);
+    }
   }
 
   ui.onPickLesson = id => play(id);
@@ -267,10 +272,13 @@ function createUI(els, raise, speech) {
     },
 
     /** Matcher wasn't confident. Ask rather than confidently teach the wrong thing. */
-    async showPicker(question) {
+    async showPicker(question, ranked) {
       raise();
       setOpen(true);
       const lessons = await loadAll();
+      // Best guess first — we weren't confident enough to commit, but we're not
+      // clueless either, and the ordering is free.
+      const order = ranked?.length ? ranked.map(r => r.id) : LESSONS.map(l => l.id);
       renderCard({
         kind: 'picker',
         title: 'I know two things so far',
@@ -279,7 +287,7 @@ function createUI(els, raise, speech) {
           : 'Which would you like?',
       });
       els.actions.replaceChildren();
-      for (const { id } of LESSONS) {
+      for (const id of order) {
         const b = document.createElement('button');
         b.type = 'button';
         b.className = 'bt-btn';
