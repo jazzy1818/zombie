@@ -5,11 +5,50 @@
 
 import { buildIndex, search, isConfident } from './search.js';
 
-/** Bundled lessons. Add an id here when C ships a new one. */
-export const LESSONS = [
-  { id: 'styles-toc' },
-  { id: 'version-history' },
-];
+/**
+ * Which lessons exist.
+ *
+ * A Chrome extension can't list a directory, so a batch that drops fifty
+ * generated lessons into extension/lessons/ would be completely invisible to
+ * us. C's emitter therefore also writes `lessons/index.json` and we read that.
+ *
+ * Accepted shapes, so a hand-edited file is hard to get wrong:
+ *   ["styles-toc", "version-history"]
+ *   { "lessons": ["styles-toc", ...] }
+ *   [{ "id": "styles-toc" }, ...]
+ *
+ * No index yet -> fall back to the two hand-written lessons, so nothing breaks
+ * before C's batch runner exists.
+ */
+const FALLBACK_IDS = ['styles-toc', 'version-history'];
+
+function readIndex(data) {
+  const raw = Array.isArray(data) ? data : data?.lessons;
+  if (!Array.isArray(raw)) return [];
+  return raw
+    .map(entry => (typeof entry === 'string' ? entry : entry?.id))
+    .filter(id => typeof id === 'string' && id);
+}
+
+let idsPromise = null;
+
+export function listLessons() {
+  idsPromise ??= (async () => {
+    try {
+      const res = await fetch(chrome.runtime.getURL('lessons/index.json'));
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      const ids = readIndex(await res.json());
+      if (!ids.length) throw new Error('index lists no lessons');
+      return ids;
+    } catch (err) {
+      console.info(
+        `[browser-teacher] lessons/index.json unavailable (${err.message}) — using the built-in list`,
+      );
+      return FALLBACK_IDS;
+    }
+  })();
+  return idsPromise;
+}
 
 /**
  * Vocabulary a lesson's own prose genuinely lacks — abbreviations, mostly.
@@ -92,8 +131,25 @@ export function validateLesson(lesson, id = lesson?.id) {
   return lesson;
 }
 
-export function loadAll() {
-  return Promise.all(LESSONS.map(l => loadLesson(l.id)));
+/**
+ * Every lesson we can actually run.
+ *
+ * Skips ones that fail to load or validate rather than rejecting, because a
+ * single bad file out of an overnight batch must not take the whole library
+ * down. The one the user explicitly asked for still throws — see loadLesson —
+ * so a direct failure is still visible rather than silently missing.
+ */
+export async function loadAll() {
+  const ids = await listLessons();
+  const results = await Promise.all(ids.map(async id => {
+    try {
+      return await loadLesson(id);
+    } catch (err) {
+      console.warn(`[browser-teacher] skipping lesson "${id}": ${err.message}`);
+      return null;
+    }
+  }));
+  return results.filter(Boolean);
 }
 
 let index = null;
@@ -122,7 +178,7 @@ export async function matchLesson(question) {
   const ranked = await scoreLessons(question);
   const best = ranked[0];
   return {
-    id: best?.id ?? LESSONS[0].id,
+    id: best?.id ?? FALLBACK_IDS[0],
     score: best?.score ?? 0,
     confident: isConfident(ranked),
     ranked,

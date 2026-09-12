@@ -11,6 +11,11 @@ contracts. This file is just how to get moving.
 **[A] and [D]: read [CHECKPOINT-1.md](CHECKPOINT-1.md) before H3:30.** B's layer is built; that file
 is what it needs from yours, plus one structural change to where the frozen import order lives.
 
+**[C]: read [PLAN.md §17](PLAN.md#17-addendum--overnight-batch-generation--open-items-for-c).** §10
+describes generating one lesson; §17 is what's missing to run a batch of questions overnight and
+wake up to a library. The one that blocks everything: the emitter must write `lessons/index.json`,
+because a Chrome extension can't list a directory and won't otherwise see a single generated lesson.
+
 ---
 
 ## Two halves that never talk at runtime

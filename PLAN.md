@@ -1006,3 +1006,71 @@ Drop **top-first** when behind:
 - **The `solo` step**
 
 Those three *are* the product. Everything else is decoration.
+
+---
+
+## 17. Addendum — overnight batch generation · open items for [C]
+
+> Added by **B** after building the extension side. Nothing here changes §5 or §6 — the contracts
+> are still frozen. These are the gaps between §10, which describes generating **one** lesson, and
+> the thing we actually want: **feed in a list of questions at night, wake up to a library.**
+
+§10's five stages are right and don't need changing. What's missing is the batch layer around them.
+
+### 17.1 `lessons/index.json` — settled, B's side is done
+
+**A Chrome extension cannot list a directory.** Fifty generated lessons dropped into
+`extension/lessons/` are invisible to the panel unless something enumerates them.
+
+So the emitter must also write **`extension/lessons/index.json`**. Any of these shapes is accepted:
+
+```json
+["styles-toc", "version-history"]
+{ "lessons": ["styles-toc", "version-history"] }
+[{ "id": "styles-toc" }, { "id": "version-history" }]
+```
+
+The panel reads it, and falls back to the two hand-written lessons if it's absent — so nothing
+breaks before the batch runner exists. **Only write an id into the index once its verification
+replay has passed.** The index is the contract for "this lesson is safe to teach."
+
+### 17.2 The batch runner doesn't exist
+
+`pipeline/package.json` declares `"author": "node author.js"` and **`author.js` was never created**
+— B's error when scaffolding. §12's checklist for C has no batch item either.
+
+Needed: a list of questions in, lessons + index out. §10 says the work "parallelises flatly", which
+is the whole reason overnight is viable, but nothing implements it and no concurrency is specified.
+Twenty lessons at once is four minutes; twenty in sequence is well over an hour.
+
+### 17.3 Unattended failure handling
+
+§10's "fails → discard and re-run" assumes a human watching one run. Overnight you need:
+
+- a retry limit per question, so one impossible question doesn't eat the night
+- a written report of which questions produced lessons and which didn't
+- **never leave a partial file in `lessons/`.** B's validator rejects malformed lessons loudly, and
+  `loadAll` skips a bad one rather than taking the library down — but not writing it is better
+
+### 17.4 Narration quality doesn't survive scale
+
+Stage 4 generates the `preamble` and `generalization`, and those carry the product's voice —
+*"a table of contents isn't something you write, it's built from your headings."* Nobody will
+proofread twenty of them at 3am.
+
+**Keep `styles-toc` hand-written for the demo.** Generated lessons prove breadth; the hero lesson
+carries the pitch and shouldn't be rolled fresh the night before.
+
+### 17.5 The authoring document's state matters
+
+`styles-toc` only works against a document that has a title and section headings **as plain text,
+ready to be styled**. A lesson generated against an empty throwaway doc can reference content the
+demo doc doesn't have. Nothing in §10 mentions the state of the document being explored, and this
+is the failure that works in the pipeline and dies on stage.
+
+### 17.6 Worth considering: store the question that produced the lesson
+
+Matching runs over the lesson's own prose — goal, preamble, intents, hints. It works, but the
+originating question is the single best piece of matching text there is, and it's currently thrown
+away. An optional additive field (`questions: string[]`) would cost nothing and would need the
+team's agreement, since §5 is frozen.
