@@ -14,7 +14,7 @@
 import { PANEL_WIDTH, PANEL_SIDE, OVERLAY_Z } from '../constants.js';
 import { mountBar } from './launcher.js';
 import { makeFloating } from './floating.js';
-import { loadLesson, loadAll, matchLesson, LESSONS } from './lessons.js';
+import { loadLesson, loadAll, matchLesson, listLessons } from './lessons.js';
 import { runLesson, ACTION } from './machine.js';
 import { createSpeech } from './speech.js';
 import { installDev } from './dev.js';
@@ -34,6 +34,7 @@ const HOST_ID = 'browser-teacher-root';
 const WIN_W = PANEL_WIDTH + 40;   // squarish; constants.js still sets the base
 const WIN_H = 380;
 const MARGIN = 28;
+const PICKER_LIMIT = 4;           // how many guesses to offer when unsure
 
 export async function mountPanel() {
   if (document.getElementById(HOST_ID)) return;   // idempotent
@@ -159,7 +160,7 @@ export async function mountPanel() {
   //   __BT_DEV.run('styles-toc', 3)
   if (window.__BT_DEV) {
     window.__BT_DEV.run = (id = 'styles-toc', step = 1) => play(id, { from: Math.max(0, step - 1) });
-    window.__BT_DEV.lessons = () => LESSONS.map(l => l.id);
+    window.__BT_DEV.lessons = () => listLessons();
   }
 
   ui.reset();
@@ -278,7 +279,10 @@ function createUI(els, raise, speech) {
       const lessons = await loadAll();
       // Best guess first — we weren't confident enough to commit, but we're not
       // clueless either, and the ordering is free.
-      const order = ranked?.length ? ranked.map(r => r.id) : LESSONS.map(l => l.id);
+      // Best guesses only. Once C's batch runs there could be fifty lessons,
+      // and a wall of buttons is a worse answer than four good ones.
+      const order = (ranked?.length ? ranked.map(r => r.id) : lessons.map(l => l.id))
+        .slice(0, PICKER_LIMIT);
       renderCard({
         kind: 'picker',
         title: 'I know two things so far',
