@@ -16,7 +16,7 @@
       "action": "click",
       "verify": {
         "kind": "visible",
-        "name": "Text(S)",
+        "name": "Text",
         "scope": "menu"
       },
       "hints": [
@@ -35,7 +35,7 @@
       "mode": "guided",
       "target": {
         "scope": "menu",
-        "name": "Text(S)"
+        "name": "Text"
       },
       "action": "click",
       "verify": {

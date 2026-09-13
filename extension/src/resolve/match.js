@@ -50,11 +50,19 @@ export function menuMatch(el, name) {
   // Docs glues shortcuts and submenu arrows directly to the label. A longer
   // semantic label starts with whitespace ("Table" vs "Table of contents")
   // and must not be treated as the same control.
-  const suffix = text.slice(radioExpected.length).trim();
+  const rest = text.slice(radioExpected.length);
+  const suffix = rest.trim();
   return /^[►▸▶›»]$/.test(suffix)
     || /^(?:Updated|New)\s*[►▸▶›»]?$/i.test(suffix)
     || /^(?:\(?\s*(?:Ctrl|Control|Alt|Option|Shift|Meta|Cmd|Command|⌘|⌥|⇧|F\d{1,2})(?:\b|[+⌘⌥⇧]).*\)?)$/i.test(suffix)
+    // Single-key accelerators, glued on with no separator: Docs ships "Text(S)",
+    // "Details(B)", "Add shortcut to Drive(,)". Without this the bare label matches
+    // nothing, and the accelerator ends up in the authored descriptor.
+    || /^\([^\s()]\)$/.test(suffix)
     // A count badge — "Issues 12", "Inbox 1,203". Kept in step with
     // teaching/resolution.js and pipeline/target-policy.js.
-    || /^\(?\d[\d,.\u202f\u00a0]*\+?k?\)?$/i.test(suffix);
+    //
+    // Whitespace-separated, or "Heading 1" swallows "Heading 10": the suffix "0"
+    // reads as a badge, the two collapse into one ambiguous match, and neither resolves.
+    || (/^\s/.test(rest) && /^\(?\d[\d,.\u202f\u00a0]*\+?k?\)?$/i.test(suffix));
 }

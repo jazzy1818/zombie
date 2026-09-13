@@ -9,14 +9,22 @@ export function matchesCandidate(candidate, name, scope) {
   const text = String(candidate.raw || '').trim();
   if (text === name) return true;
   if (!text.startsWith(name)) return false;
-  const suffix = text.slice(name.length).trim();
+  const rest = text.slice(name.length);
+  const suffix = rest.trim();
   return /^(?:(?:Updated|New)\s*)?[►▸▶›»]$/.test(suffix) || /^(?:Updated|New)$/.test(suffix)
     || /^(?:\(?\s*(?:Ctrl|Control|Alt|Option|Shift|Meta|Cmd|Command|⌘|⌥|⇧|F\d{1,2})(?:\b|[+⌘⌥⇧]).*\)?)$/i.test(suffix)
+    // Single-key accelerators, glued on with no separator: Docs ships "Text(S)",
+    // "Details(B)", "Add shortcut to Drive(,)". Without this the bare label matches
+    // nothing, and the accelerator ends up in the authored descriptor.
+    || /^\([^\s()]\)$/.test(suffix)
     // Outside Docs the trailing noise is a count badge rather than a shortcut:
     // GitHub's "Issues 12", Gmail's "Inbox 1,203". Same rule as matchesName in
     // the runtime resolver — if these drift, the pipeline authors a target the
     // extension cannot resolve.
-    || /^\(?\d[\d,.\u202f\u00a0]*\+?k?\)?$/i.test(suffix);
+    //
+    // Whitespace-separated, or "Heading 1" swallows "Heading 10": the suffix "0"
+    // reads as a badge, the two collapse into one ambiguous match, and neither resolves.
+    || (/^\s/.test(rest) && /^\(?\d[\d,.\u202f\u00a0]*\+?k?\)?$/i.test(suffix));
 }
 
 export function candidatePool(pool, name, scope, { actionable = true } = {}) {
