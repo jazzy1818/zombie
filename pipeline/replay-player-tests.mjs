@@ -120,9 +120,14 @@ test('new recording waits briefly, then automatically recovers from processing a
     await advanceToFailure(page, state, 1, 1);
     await page.clock.fastForward(1500);
     await untilWithClock(page, () => page.evaluate(() => document.querySelector('video').readyState >= 2), 'automatic retry loads actual video');
+    await untilWithClock(page, () => page.evaluate(() => document.querySelector('video').currentTime > 0.05), 'recovered recording autoplays without a second click');
     const video = await page.evaluate(() => ({ width: document.querySelector('video').videoWidth,
-      height: document.querySelector('video').videoHeight, state: document.body.dataset.playback }));
-    assert.deepEqual(video, { width: 64, height: 64, state: 'ready' });
+      height: document.querySelector('video').videoHeight, muted: document.querySelector('video').muted,
+      state: document.body.dataset.playback }));
+    assert.equal(video.width, 64);
+    assert.equal(video.height, 64);
+    assert.equal(video.muted, true);
+    assert.ok(['playing', 'ended'].includes(video.state));
     assert.equal(state.requests, 2);
     await page.clock.fastForward(60000);
     assert.equal(state.requests, 2, 'ready playback cancels retry/watchdog timers');

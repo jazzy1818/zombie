@@ -70,8 +70,11 @@ size equals its content viewport. If controls collapse into overflow, record tha
 as an application-layout difference.
 
 Type **How do I add an automatic table of contents?** in the chat bar and click
-**Teach me**. A confident match opens its preamble; an uncertain question shows
-up to four published lesson choices. Click **Show me** and follow the nine steps:
+**Teach me**. A question never starts a lesson on its own: the panel offers the
+lessons the question actually matched — up to four, best first — with **None of
+these** last when an authoring bridge is reachable. A question that matches
+nothing offers no lesson choices at all, only generation. Choose **Add an
+automatic table of contents**, then click **Show me** and follow the nine steps:
 
 1. Click the highlighted **Styles** opener yourself, including in demo mode.
 2. Click the document's title line, then **Got it** in the panel. Canvas text is
@@ -179,6 +182,25 @@ The page caches its library and search index. Confirm the new ID with
 and follow the lesson yourself. This final human run checks the teaching behavior
 that automated authoring replay alone cannot prove.
 
+## 4b. Sites other than Google Docs
+
+Lessons are scoped to the app they were written for. The `app` field normally
+identifies that app; `sites` can override its hosts. A lesson with neither field
+counts as a legacy Google Docs lesson and is not offered anywhere else. A
+loopback host is exempt, so the fixtures in this folder still see the whole
+library. On a page with nothing the resolver could point at — a canvas app, an
+app inside an iframe — the panel says so and locks the chat bar instead of
+accepting questions it cannot answer.
+
+Generation follows the page for other sites: a question asked on GitHub explores
+GitHub. Google Docs uses the configured prepared demo document by default; set
+`BT_PREFER_PAGE=1` to use the actual page when the cloud identity can access it.
+App-specific selectors live in `pipeline/apps.js`, and a host with no entry there
+gets a generic profile rather than failing.
+
+To add another app, or to work out why a page is refused, see
+[teaching a site that isn't Google Docs](new-sites.md).
+
 ## 5. Watch a lesson being generated
 
 Use the configured pipeline from section 4. Start its local bridge:
@@ -262,13 +284,34 @@ node --test --test-isolation=none pipeline/session-replay-tests.mjs
 node --test --test-isolation=none pipeline/replay-player-tests.mjs
 ```
 
+Site scoping and the teachable-page decision are pure logic and have their own
+suites, which need neither Playwright nor a browser:
+
+```powershell
+node docs/sites-tests.mjs
+node docs/support-tests.mjs
+node docs/apps-tests.mjs
+```
+
+The refusal path also has a fixture. Serve the repo and open
+`docs/unsupported-fixture.html`; each case below should mount the panel, refuse
+the page by name and lock the chat bar:
+
+| page | expected message |
+|---|---|
+| `?case=canvas` | draws its interface on a canvas |
+| `?case=framed` | inside an embedded frame |
+| `?case=unlabelled` | none of them are labelled |
+| `?case=bare` | can't find anything to point at |
+
 These runners start their own temporary local servers; they do not need port 8765.
 The loaded-extension runner uses a separate disposable browser profile. Set
 `CHROME_PATH` to a Chromium or Chrome for Testing executable with unpacked-extension
 support if needed; ordinary branded Chrome may ignore the test launch flags.
 
 The extension suite includes actual packaged-index discovery, typed-question
-selection, the uncertain-question picker, and trusted website clicks. A publication
+selection, the picker's keyword shortlist and its matchless case, and trusted
+website clicks. A publication
 check measures a local fixture replay, passes that evidence to the real publisher,
 and loads a temporary copy of the extension containing the new lesson. It then
 finds and completes that lesson through the question box. Production source files

@@ -5,8 +5,8 @@ import { checkAbort, delay } from './async.js';
 import { parentOf as parent, isEnabled, isStateReadout, roleOf, collapseNested } from '../resolve/eligibility.js';
 export { isEnabled, roleOf } from '../resolve/eligibility.js';
 
-const CONTROL = 'button, a[href], input:not([type="hidden"]), select, textarea, summary, [role], [aria-label], [aria-labelledby]';
-const ACTION_ROLES = new Set(['button', 'link', 'checkbox', 'radio', 'switch', 'tab', 'menuitem', 'menuitemcheckbox', 'menuitemradio', 'option', 'combobox', 'listbox', 'textbox', 'searchbox', 'slider', 'spinbutton', 'treeitem']);
+export const CONTROL = 'button, a[href], input:not([type="hidden"]), select, textarea, summary, [role], [aria-label], [aria-labelledby]';
+export const ACTION_ROLES = new Set(['button', 'link', 'checkbox', 'radio', 'switch', 'tab', 'menuitem', 'menuitemcheckbox', 'menuitemradio', 'option', 'combobox', 'listbox', 'textbox', 'searchbox', 'slider', 'spinbutton', 'treeitem']);
 const normalize = value => String(value || '').replace(/\s+/g, ' ').trim();
 const uiHost = element => element.id === 'browser-teacher-root'
   || element.getAttribute('data-browser-teacher') === 'ui'
@@ -66,7 +66,7 @@ export function queryDeep(selector, root = document) {
   return matches;
 }
 
-function withinScope(element, scope = 'any') {
+export function withinScope(element, scope = 'any') {
   if (scope === 'any') return true;
   for (let node = element; node; node = parent(node)) {
     const role = roleOf(node);
@@ -87,7 +87,12 @@ function matchesName(element, wanted) {
   if (!name.startsWith(expected)) return false;
   const suffix = name.slice(expected.length).trim();
   return /^(?:Updated|New)\s*[►▸▶›»]?$/i.test(suffix)
-    || /^(?:[►▸▶›»]|\(?\s*(?:Ctrl|Control|Alt|Option|Shift|Meta|Cmd|Command|⌘|⌥|⇧|F\d{1,2})(?:\b|[+⌘⌥⇧]).*\)?)$/i.test(suffix);
+    || /^(?:[►▸▶›»]|\(?\s*(?:Ctrl|Control|Alt|Option|Shift|Meta|Cmd|Command|⌘|⌥|⇧|F\d{1,2})(?:\b|[+⌘⌥⇧]).*\)?)$/i.test(suffix)
+    // Outside Docs the noise glued to a label is usually a count badge rather
+    // than a keyboard shortcut: GitHub's "Issues 12" tab, Gmail's "Inbox 1,203".
+    // Same problem, same fix — a lesson names the control, not the number, and
+    // the number changes between authoring the lesson and teaching it anyway.
+    || /^\(?\d[\d,.\u202f\u00a0]*\+?k?\)?$/i.test(suffix);
 }
 
 export function findTarget(target, resolver, { requireEnabled = true, allowReadouts = false } = {}) {

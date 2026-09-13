@@ -53,5 +53,8 @@ export function menuMatch(el, name) {
   const suffix = text.slice(radioExpected.length).trim();
   return /^[►▸▶›»]$/.test(suffix)
     || /^(?:Updated|New)\s*[►▸▶›»]?$/i.test(suffix)
-    || /^(?:\(?\s*(?:Ctrl|Control|Alt|Option|Shift|Meta|Cmd|Command|⌘|⌥|⇧|F\d{1,2})(?:\b|[+⌘⌥⇧]).*\)?)$/i.test(suffix);
+    || /^(?:\(?\s*(?:Ctrl|Control|Alt|Option|Shift|Meta|Cmd|Command|⌘|⌥|⇧|F\d{1,2})(?:\b|[+⌘⌥⇧]).*\)?)$/i.test(suffix)
+    // A count badge — "Issues 12", "Inbox 1,203". Kept in step with
+    // teaching/resolution.js and pipeline/target-policy.js.
+    || /^\(?\d[\d,.\u202f\u00a0]*\+?k?\)?$/i.test(suffix);
 }

@@ -348,7 +348,7 @@ async function report() {
     bridgeState.viewer = viewer;
     await ask(question);
     await panel().locator('.bt-card-picker').waitFor();
-    await panel().locator('.bt-actions .bt-btn', { hasText: 'Work it out for me' }).click();
+    await panel().locator('.bt-actions .bt-btn-generate').click();
     await watch().waitFor();
   }
   function liveViewer(url = VIEWER_URL, attempt = 1) {
@@ -459,10 +459,38 @@ async function report() {
     assert.ok(labels.includes('Work it out for me'), `expected a generate button, got ${JSON.stringify(labels)}`);
   });
 
-  await test('A matched question runs its lesson and never contacts the bridge', async () => {
+  await test('A partial match offers its shortlist and puts "None of these" last', async () => {
+    await ask('make my text bigger');
+    await panel().locator('.bt-card-picker').waitFor();
+    const labels = await actionLabels();
+    assert.equal(labels.at(-1), 'None of these', `the escape hatch belongs last, got ${JSON.stringify(labels)}`);
+    // The shortlist is what the question matched, not the library in order.
+    const shipped = JSON.parse(await fs.readFile(path.join(extensionPath, 'lessons', 'index.json'), 'utf8'));
+    assert.ok(labels.length - 1 < shipped.length, `expected a shortlist of ${shipped.length}, got ${JSON.stringify(labels)}`);
+  });
+
+  await test('"None of these" sends the original question to the cloud browser', async () => {
+    await ask('make my text bigger');
+    await panel().locator('.bt-card-picker').waitFor();
+    await panel().locator('.bt-actions .bt-btn', { hasText: 'None of these' }).click();
+    await until(() => bridgeState.generateCalls.length === 1, 'Choosing None of these must send the original question to authoring');
+    assert.equal(bridgeState.generateCalls.length, 1);
+    assert.equal(bridgeState.generateCalls[0].goal, 'make my text bigger');
+  });
+
+  await test('A question matching nothing offers no guesses, only generation', async () => {
+    await ask('how do I schedule a post for later');
+    await panel().locator('.bt-card-picker').waitFor();
+    const labels = await actionLabels();
+    assert.deepEqual(labels, ['Work it out for me'], `unmatched questions must not be padded with lessons, got ${JSON.stringify(labels)}`);
+  });
+
+  await test('A matched question is offered, and choosing it never contacts the bridge', async () => {
     await ask('how do I add a table of contents');
+    await panel().locator('.bt-card-picker').waitFor();
+    await panel().locator('.bt-actions .bt-btn:not(.bt-btn-generate)').first().click();
     await panel().locator('.bt-card-preamble').waitFor();
-    assert.equal(bridgeState.generateCalls.length, 0, 'a confident match must not reach the bridge');
+    assert.equal(bridgeState.generateCalls.length, 0, 'a lesson we already have must not reach the bridge');
   });
 
   await test('With no bridge running the panel degrades to the plain picker', async () => {
@@ -518,8 +546,13 @@ async function report() {
     await panel().locator('.bt-actions .bt-btn', { hasText: 'Stop' }).click();
     await panel().locator('.bt-bar input:not([disabled])').waitFor();
 
-    // Same session, same question. It is in the live index now.
+    // Same session, same question. It is in the live index now, so it comes
+    // back as a choice rather than another cloud run.
     await ask('how do I schedule a post for later');
+    await panel().locator('.bt-card-picker').waitFor({ timeout: 8000 });
+    const labels = await actionLabels();
+    assert.ok(labels.includes(GENERATED.goal), `expected the generated lesson on offer, got ${JSON.stringify(labels)}`);
+    await panel().locator('.bt-actions .bt-btn', { hasText: GENERATED.goal }).click();
     await panel().locator('.bt-card-preamble').waitFor({ timeout: 8000 });
     assert.equal(bridgeState.generateCalls.length, 1, 'the second ask must be served from the index');
   });
@@ -1196,8 +1229,10 @@ async function report() {
     await noViewer();
     await history().waitFor();
     await ask('how do I schedule a post for later');
-    await panel().locator('.bt-card-preamble').waitFor();
+    await panel().locator('.bt-card-picker').waitFor();
     assert.equal(await history().count(), 0, 'A fresh question must clear the old task history even when served from cache');
+    await panel().getByRole('button', { name: GENERATED.goal, exact: true }).click();
+    await panel().locator('.bt-card-preamble').waitFor();
     assert.equal(bridgeState.generateCalls.length, 1);
   });
 

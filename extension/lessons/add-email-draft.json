@@ -1,0 +1,75 @@
+{
+  "id": "add-email-draft",
+  "app": "google-docs",
+  "goal": "how to add an email draft",
+  "preamble": "An email draft in Docs isn't a note reminding you to write an email later. It's a small structured block — To, Subject, body — that Docs knows how to hand off to Gmail when you're done. So you're not typing an email into a document; you're placing a piece of scaffolding that Gmail will later recognise. That distinction is why you won't find it anywhere in the formatting tools.",
+  "generalization": "Building blocks are the pattern worth keeping: Docs has a handful of pre-shaped chunks — email drafts, meeting notes, product roadmaps — that carry structure Docs itself understands. Anything you could type by hand but Docs offers ready-made is usually a building block, and that means it does something extra once it's there. The email draft's Gmail button only exists because you inserted a block rather than typing three lines of text.",
+  "steps": [
+    {
+      "id": "s1",
+      "intent": "Nothing here is being formatted or edited — you're putting something into the document that wasn't there before. That's one menu's entire job, and it's the same menu you'd use for a table, an image, or a page break.",
+      "mode": "demo",
+      "target": {
+        "scope": "menu",
+        "name": "Insert"
+      },
+      "action": "click",
+      "verify": {
+        "kind": "visible",
+        "name": "Building blocks",
+        "scope": "menu"
+      },
+      "hints": [
+        "You're adding, not changing. Which menu is about things that don't exist in the document yet?",
+        "The Insert menu, in the menu bar along the top."
+      ],
+      "wrongHints": {
+        "Format": "Format changes text that already exists — bold, spacing, alignment. There's nothing here yet to format.",
+        "File": "File is about the document as a whole: sharing, printing, history. The email draft goes inside the document, not around it."
+      }
+    },
+    {
+      "id": "s2",
+      "intent": "The Insert menu is long, and most of it is single pieces — an image, a link, a line. An email draft is none of those; it's a ready-made arrangement of several fields at once. Docs keeps that whole category together under one name.",
+      "mode": "guided",
+      "target": {
+        "scope": "menu",
+        "name": "Building blocks"
+      },
+      "action": "click",
+      "verify": {
+        "kind": "visible",
+        "name": "Email draft",
+        "scope": "menu"
+      },
+      "hints": [
+        "You're not inserting one thing, you're inserting a small pre-built structure. Docs has a group for exactly that.",
+        "'Building blocks', in the upper half of the Insert menu, with an arrow showing a submenu."
+      ],
+      "wrongHints": {
+        "Table": "A table would give you rows and boxes, and you could arrange To and Subject inside one. But it would only ever be a table — Docs wouldn't know it was an email."
+      }
+    },
+    {
+      "id": "s3",
+      "intent": "Your turn, no highlight. The submenu that opened is a short list of the block types Docs knows how to build. Pick the one that matches what you actually want, and watch what appears — it won't be plain text, it will be a block with its own fields and a Gmail button at the edge.",
+      "mode": "solo",
+      "target": {
+        "scope": "menu",
+        "name": "Email draft"
+      },
+      "action": "click",
+      "verify": {
+        "kind": "dom",
+        "selector": "[aria-label=\"Styles list. Normal text selected.\"]"
+      },
+      "hints": [
+        "Only one of these building blocks is about correspondence rather than project planning.",
+        "Near the top of the submenu that just opened to the right."
+      ],
+      "wrongHints": {
+        "Meeting notes": "Also a building block, and also pre-structured — but it fills itself from a calendar event. The email draft is the one that connects to Gmail."
+      }
+    }
+  ]
+}

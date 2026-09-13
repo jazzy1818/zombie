@@ -107,38 +107,46 @@ test('local job metadata always remains unavailable', async () => {
   assert.equal(job.viewer.status, 'unavailable');
 });
 
-function jobFixture({ results = [{ ok: true }], openError, exploreError, verifyError, verifyOk = true, saveError } = {}) {
+function jobFixture({ results = [{ ok: true }], openError, exploreError, verifyError, verifyOk = true, saveError, anonymous = false } = {}) {
   const job = { id: 'viewer-test', state: 'running', progress: [] };
   const snapshots = [];
   const released = [];
+  const inputs = { open: [], explore: [], emit: [], verify: [] };
   let serial = 0;
   let explorations = 0;
   let saved = false;
   const snapshot = stage => snapshots.push({ stage, ...job.viewer, viewerUrl: job.viewerUrl });
-  async function open({ onViewer }) {
+  async function open(options) {
+    const { onViewer } = options;
+    inputs.open.push(options);
     snapshot('opening');
     if (openError) throw openError;
     const session = publicSession(`session-${++serial}`);
     const viewer = createSessionViewer(state => { onViewer(state); snapshot('viewer'); });
     viewer.ready(session);
     return {
-      viewer, session, browser: { close: async () => {} },
+      viewer, session, anonymous, browser: { close: async () => {} },
       steel: { sessions: { release: async id => { released.push(id); } } },
     };
   }
   const services = {
-    openAuthedSession: open,
-    openLocalSession: async () => { throw new Error('unexpected local opener'); },
+    openExploreSession: open,
     closeSession,
-    explore: async () => {
+    explore: async (_handle, options) => {
+      inputs.explore.push(options);
       snapshot('explore');
       if (exploreError) throw exploreError;
       return results[explorations++];
     },
     prune: trace => { snapshot('prune'); return trace; },
     uniqueId: async () => 'test-lesson',
-    emit: async () => { snapshot('emit'); return { id: 'test-lesson', steps: [{ id: 's1' }] }; },
+    emit: async (_pruned, options) => {
+      inputs.emit.push(options);
+      snapshot('emit');
+      return { id: 'test-lesson', app: options.app.id, steps: [{ id: 's1' }] };
+    },
     verifyLesson: async (_lesson, options) => {
+      inputs.verify.push(options);
       const handle = await open(options);
       try {
         snapshot('verify');
@@ -152,8 +160,29 @@ function jobFixture({ results = [{ ok: true }], openError, exploreError, verifyE
       saved = true;
     },
   };
-  return { job, snapshots, released, services, get saved() { return saved; } };
+  return { job, snapshots, released, inputs, services, get saved() { return saved; } };
 }
+
+test('bridge preserves selected app and auth mode through authoring and replay metadata', async () => {
+  for (const [docUrl, appId, auth] of [
+    ['https://github.com/example/repo', 'github', 'none'],
+    ['https://builder.example/dashboard', 'builder.example', 'required'],
+  ]) {
+    const fixture = jobFixture({ anonymous: auth === 'none' });
+    await runJob(fixture.job, { goal: 'fixture', docUrl, auth, verify: true }, fixture.services);
+    assert.equal(fixture.job.app, appId);
+    assert.equal(fixture.job.lesson.app, appId);
+    assert.equal(fixture.job.anonymous, auth === 'none');
+    assert.ok(fixture.inputs.open.every(options => options.app.id === appId && options.auth === auth));
+    assert.equal(fixture.inputs.explore[0].app.id, appId);
+    assert.equal(fixture.inputs.explore[0].docUrl, docUrl);
+    assert.equal(fixture.inputs.emit[0].app.id, appId);
+    assert.equal(fixture.inputs.verify[0].app.id, appId);
+    assert.equal(fixture.inputs.verify[0].auth, auth);
+    assert.equal(fixture.job.recordings.length, 2);
+    assert.equal(fixture.job.viewerUrl, null);
+  }
+});
 
 test('bridge retries and fresh verification expose distinct live browsers then clear links', async () => {
   const fixture = jobFixture({ results: [{ ok: false, reason: 'fixture retry' }, { ok: true }] });

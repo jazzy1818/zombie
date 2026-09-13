@@ -11,7 +11,9 @@ sequence below reflects the integrated extension and current lesson files.
    console context as shown in the testing guide. The normal button, nested scroller,
    menu, two-step modal and redirect exercise the real extension's panel and paint.
 3. On a prepared editable Google Doc, type **How do I add an automatic table of
-   contents?** in the chat bar and choose **Teach me**, then **Show me**.
+   contents?** in the chat bar and choose **Teach me**. The panel offers what the
+   question matched rather than starting anything; choose **Add an automatic table
+   of contents**, then **Show me**.
 4. The user clicks every highlighted control, including the first demonstration.
    At the document-title instruction, click the actual title line, then **Got it**.
 5. At s3, deliberately click Font once, then follow the correction. Continue through

@@ -26,12 +26,14 @@ and media decoding run normally.
 - `pagehide` cancels both the initial delay and a queued retry.
 - `pagehide` aborts an active manifest request and prevents later attempts.
 
-The ready state cancels startup timers. Existing playback controls remain active
-without the startup deadline interrupting an already playable recording.
+Playable media cancels startup timers and starts muted playback automatically.
+The merge validation checks that playback advances and that manual retry can
+recover. Existing playback controls remain active without the startup deadline
+interrupting an already playable recording.
 
 ## Offline backend checks
 
-**19/19 passed** across the session lifecycle and replay suites:
+**20/20 passed** across the session lifecycle and replay suites:
 
 ```powershell
 node --test --test-isolation=none pipeline/session-viewer-tests.mjs pipeline/session-replay-tests.mjs

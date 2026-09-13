@@ -99,7 +99,8 @@ fixture, and drives trusted browser input. It does not replace the resolver,
 teach bridge or paint with mocks. `__BT_DEV.runLesson(lesson)` supplies fixture
 lesson data through the same panel and runner used by bundled lessons. Additional
 checks read the actual packaged lesson index and launch the shipped lessons by
-typing into the real chat bar; an unknown question exercises the lesson picker.
+typing into the real chat bar and choosing from the picker every question lands
+on; a question matching nothing exercises the picker's empty case.
 One additional check collects success from a trusted local fixture replay, publishes
 that lesson with the real pipeline publisher into a temporary copy of the extension,
 and selects/completes it through the copied extension's normal question box. That
