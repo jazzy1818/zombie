@@ -49,7 +49,9 @@ export function installProbe() {
     if (!t.startsWith(name)) return false;
     const suffix = t.slice(name.length).trim();
     return /^(?:(?:Updated|New)\s*)?[►▸▶›»]$/.test(suffix) || /^(?:Updated|New)$/.test(suffix)
-      || /^(?:\(?\s*(?:Ctrl|Control|Alt|Option|Shift|Meta|Cmd|Command|⌘|⌥|⇧|F\d{1,2})(?:\b|[+⌘⌥⇧]).*\)?)$/i.test(suffix);
+      || /^(?:\(?\s*(?:Ctrl|Control|Alt|Option|Shift|Meta|Cmd|Command|⌘|⌥|⇧|F\d{1,2})(?:\b|[+⌘⌥⇧]).*\)?)$/i.test(suffix)
+      // A single-key accelerator, glued on: Docs ships "Text(S)", "Details(B)".
+      || /^\([^\s()]\)$/.test(suffix);
   }
 
   // Only visible elements get stamped, so a model addressing elements by id cannot

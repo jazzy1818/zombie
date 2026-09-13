@@ -1,7 +1,17 @@
 // Document exits and SPA route changes invalidate local element references.
 // Fragment-only scrolling is still the same page and keeps guidance active.
+
+// Editors own their own query string — Docs rewrites ?tab=t.0 as you work, with no
+// navigation behind it. Keying on `search` there made an ordinary click read as leaving
+// the page, which cancelled the lesson and closed the panel under the learner. The
+// document id is the identity that actually matters; moving to a different document
+// still changes it.
+const EDITOR_DOC = /^\/(document|spreadsheets|presentation|forms)\/d\/([^/]+)/;
+
 export function pageKey(value = location.href) {
   const url = new URL(value, location.href);
+  const doc = url.pathname.match(EDITOR_DOC);
+  if (doc) return `${url.origin}/${doc[1]}/d/${doc[2]}`;
   return `${url.origin}${url.pathname}${url.search}`;
 }
 

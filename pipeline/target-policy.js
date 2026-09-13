@@ -11,7 +11,11 @@ export function matchesCandidate(candidate, name, scope) {
   if (!text.startsWith(name)) return false;
   const suffix = text.slice(name.length).trim();
   return /^(?:(?:Updated|New)\s*)?[►▸▶›»]$/.test(suffix) || /^(?:Updated|New)$/.test(suffix)
-    || /^(?:\(?\s*(?:Ctrl|Control|Alt|Option|Shift|Meta|Cmd|Command|⌘|⌥|⇧|F\d{1,2})(?:\b|[+⌘⌥⇧]).*\)?)$/i.test(suffix);
+    || /^(?:\(?\s*(?:Ctrl|Control|Alt|Option|Shift|Meta|Cmd|Command|⌘|⌥|⇧|F\d{1,2})(?:\b|[+⌘⌥⇧]).*\)?)$/i.test(suffix)
+    // Single-key accelerators, glued on with no separator: Docs ships "Text(S)",
+    // "Details(B)", "Add shortcut to Drive(,)". Without this the bare label matches
+    // nothing, and the accelerator ends up in the authored descriptor.
+    || /^\([^\s()]\)$/.test(suffix);
 }
 
 export function candidatePool(pool, name, scope, { actionable = true } = {}) {

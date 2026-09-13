@@ -15,7 +15,7 @@ import { PANEL_WIDTH, PANEL_SIDE, OVERLAY_Z } from '../constants.js';
 import { mountBar } from './launcher.js';
 import { makeFloating } from './floating.js';
 import { loadLesson, loadAll, matchLesson, listLessons, validateLesson, addLesson } from './lessons.js';
-import { generateLesson, bridgeAvailable } from './generate.js';
+import { generateLesson, bridgeAvailable, cancelGeneration } from './generate.js';
 import { runLesson, ACTION } from './machine.js';
 import { createSpeech } from './speech.js';
 import { installDev } from './dev.js';
@@ -143,6 +143,15 @@ export async function mountPanel() {
   const speech = createSpeech();
   const ui = createUI(els, raise, speech);
   let currentRun = null;
+  let liveJobId = null;
+
+  // pagehide is the last thing that runs when the tab closes, and sendBeacon is the only
+  // request that survives it. Without this a closed tab leaves a cloud browser running
+  // until the bridge's reaper notices.
+  window.addEventListener('pagehide', () => {
+    if (liveJobId) cancelGeneration(liveJobId);
+  });
+
   const cancel = () => {
     const previous = currentRun;
     currentRun = null;
@@ -254,8 +263,11 @@ export async function mountPanel() {
       ui.generating(question);
       const lesson = await generateLesson(question, {
         signal: options.signal,
+        // A closing tab fires no abort, so the id is kept where pagehide can reach it.
+        onJob: id => { liveJobId = id; },
         onProgress: text => { if (active()) ui.generatingNote(text); },
       });
+      liveJobId = null;
       if (!active()) return;
       // Findable by search from here on, so asking again doesn't rebuild it.
       addLesson(lesson);

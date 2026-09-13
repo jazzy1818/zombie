@@ -87,7 +87,9 @@ function matchesName(element, wanted) {
   if (!name.startsWith(expected)) return false;
   const suffix = name.slice(expected.length).trim();
   return /^(?:Updated|New)\s*[►▸▶›»]?$/i.test(suffix)
-    || /^(?:[►▸▶›»]|\(?\s*(?:Ctrl|Control|Alt|Option|Shift|Meta|Cmd|Command|⌘|⌥|⇧|F\d{1,2})(?:\b|[+⌘⌥⇧]).*\)?)$/i.test(suffix);
+    || /^(?:[►▸▶›»]|\(?\s*(?:Ctrl|Control|Alt|Option|Shift|Meta|Cmd|Command|⌘|⌥|⇧|F\d{1,2})(?:\b|[+⌘⌥⇧]).*\)?)$/i.test(suffix)
+    // A single-key accelerator, glued on: Docs ships "Text(S)", "Details(B)".
+    || /^\([^\s()]\)$/.test(suffix);
 }
 
 export function findTarget(target, resolver, { requireEnabled = true, allowReadouts = false } = {}) {
