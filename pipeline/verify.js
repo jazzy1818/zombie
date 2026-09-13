@@ -65,6 +65,7 @@ export async function verifyLesson(lesson, opts = {}) {
           id: step.id, status: 'unresolved', name: step.target.name, ms: Date.now() - t0,
           note: `no visible match for ${JSON.stringify(step.target)}`,
           visible: await dumpScope(handle, step.target.scope),
+          roles: await roleCensus(handle),
           afterSkip: skipped,
         });
         failedAt = step.id;
@@ -83,6 +84,7 @@ export async function verifyLesson(lesson, opts = {}) {
             count: hit.count, ms: Date.now() - t0,
             note: `clicked, but ${JSON.stringify(step.verify)} never passed`,
             visible: await dumpScope(handle, step.verify.scope ?? 'menu'),
+            roles: await roleCensus(handle),
             afterSkip: skipped,
           });
           failedAt = step.id;
@@ -106,6 +108,26 @@ export async function verifyLesson(lesson, opts = {}) {
     ...(failedAt ? { failedAt } : {}),
     viewerUrl: handle.viewerUrl,
   };
+}
+
+// Visible elements by ARIA role. Separates "nothing opened" from "something opened but
+// the probe's tiers don't query that role".
+async function roleCensus(handle) {
+  try {
+    return await handle.page.evaluate(() => {
+      const counts = {};
+      for (const el of document.querySelectorAll('[role]')) {
+        if (el.offsetParent === null) continue;
+        const r = el.getBoundingClientRect();
+        if (r.width <= 0 || r.height <= 0) continue;
+        const role = el.getAttribute('role');
+        counts[role] = (counts[role] ?? 0) + 1;
+      }
+      return counts;
+    });
+  } catch {
+    return {};
+  }
 }
 
 // What the probe can actually see right now, so a failing step says why.
@@ -155,6 +177,10 @@ export function printReport(lesson, report) {
     if (s.note) console.log(`            ${s.note}`);
     if (s.afterSkip) {
       console.log('            a step was skipped earlier — the page may be in a state a learner never reaches');
+    }
+    if (s.roles && Object.keys(s.roles).length) {
+      const top = Object.entries(s.roles).sort((a, b) => b[1] - a[1]).slice(0, 12);
+      console.log(`            visible roles: ${top.map(([r, n]) => `${r}=${n}`).join('  ')}`);
     }
     if (s.visible?.length) {
       console.log(`            visible in that scope (${s.visible.length}):`);
