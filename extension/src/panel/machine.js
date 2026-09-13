@@ -130,7 +130,7 @@ async function runInstructOnly(step, ui, signal) {
   // Keep the waiter installed by runStep; only replace its visible buttons.
   ui.setActions([
     { label: 'Got it', value: ACTION.CONTINUE },
-    { label: 'Stop', value: ACTION.QUIT, subtle: true },
+    { label: 'Stop', value: ACTION.QUIT, subtle: true, forgetRecordings: true },
   ]);
   return cancellable(new Promise(() => {}), signal);
 }

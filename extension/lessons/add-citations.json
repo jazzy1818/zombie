@@ -1,0 +1,53 @@
+{
+  "id": "add-citations",
+  "app": "google-docs",
+  "goal": "how to add citations",
+  "preamble": "Adding a citation feels like typing: author, title, year, in the right order, with the right punctuation. It isn't. In Docs you fill in a small record for each source once, and Docs writes the in-text citation and the bibliography from that record — in MLA, APA or Chicago, and it can switch between them later without you retyping anything. So the task isn't writing a citation. It's opening the place where sources are kept.",
+  "generalization": "Anything Docs can generate for you lives behind a panel where you describe the thing rather than format it — headings for a table of contents, source records for a bibliography. When you find yourself about to type a fixed format by hand, that's the signal to go looking for the place that stores the underlying facts instead. The formatting is the last step, and it should be the machine's job.",
+  "steps": [
+    {
+      "id": "s1",
+      "intent": "Citations aren't text you're inserting and they aren't a way of styling text — they're a small piece of research machinery that works alongside the document. Tools is where Docs keeps that kind of thing: spelling, word count, translation, anything that examines or assists your writing rather than being part of it.",
+      "mode": "demo",
+      "target": {
+        "scope": "menu",
+        "name": "Tools"
+      },
+      "action": "click",
+      "verify": {
+        "kind": "visible",
+        "name": "Citations(K)",
+        "scope": "menu"
+      },
+      "hints": [
+        "You're not adding content and you're not changing how anything looks — you're reaching for an assistant that works on the document. Which menu collects those?",
+        "The menu bar, to the right of Format."
+      ],
+      "wrongHints": {
+        "Insert": "A fair guess — a bibliography does end up in the document. But Insert places finished objects; citations need a place to store the sources first, and that lives elsewhere.",
+        "Format": "Format changes the appearance of text you already have. A citation's format is decided by the citation style, which Docs applies for you once it knows the source.",
+        "Extensions": "That's for add-ons — tools Google didn't build in. Citations is built in, so it sits with the native tools."
+      }
+    },
+    {
+      "id": "s2",
+      "intent": "This opens a sidebar rather than inserting anything. That's the tell: a sidebar is a workspace that stays open beside your text, because you'll be adding sources one at a time and dropping citations in as you write.",
+      "mode": "guided",
+      "target": {
+        "scope": "menu",
+        "name": "Citations(K)"
+      },
+      "action": "click",
+      "verify": {
+        "kind": "none"
+      },
+      "hints": [
+        "Look for the entry that names the thing you're building, not the thing you're researching.",
+        "Middle of the Tools menu, below Compare documents."
+      ],
+      "wrongHints": {
+        "Word count": "That reads the document and reports on it. Citations adds something to it that you maintain over time."
+      }
+    }
+  ]
+}

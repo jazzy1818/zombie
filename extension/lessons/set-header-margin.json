@@ -1,0 +1,77 @@
+{
+  "id": "set-header-margin",
+  "app": "google-docs",
+  "goal": "how to set header margin",
+  "preamble": "A header looks like it belongs to the page body, but it doesn't. Docs treats the top of the sheet as two separate zones: the strip where the header lives, and the body text below it. The header margin is the distance from the paper's edge down to that strip — so you're not resizing a box, you're telling Docs where on the paper the header zone begins. That setting isn't in the toolbar, because it isn't text formatting.",
+  "generalization": "Margins in Docs are always measured from the edge of the paper, never from the text. The header margin and the top margin are two separate measurements taken from the same edge, which is why a header can sit above the body without pushing it anywhere. Anything that describes the shape of the page rather than the look of the words lives in a dialog, and a dialog only takes effect when you commit it.",
+  "steps": [
+    {
+      "id": "s1",
+      "intent": "You're not changing how any text looks — you're changing the geometry of the page itself. Format is where Docs keeps the settings that describe the shape of a document rather than the appearance of a word or a line, and headers are one of those page-level structures.",
+      "mode": "demo",
+      "target": {
+        "scope": "menu",
+        "name": "Format"
+      },
+      "action": "click",
+      "verify": {
+        "kind": "visible",
+        "name": "Headers & footers",
+        "scope": "menu"
+      },
+      "hints": [
+        "Nothing in the toolbar can do this, because no text is being restyled. Think about which menu holds the settings that apply to the page as a whole.",
+        "In the menu bar along the top, third from the left, between Insert and Tools."
+      ],
+      "wrongHints": {
+        "Insert": "Insert is for adding a header that isn't there yet. You already have one — you're adjusting where it sits, which is a formatting decision, not an addition.",
+        "File": "A fair guess: File holds Page setup, which does control the page margins. But the header has its own margin, separate from the body's, and it's kept with the header settings rather than the page ones.",
+        "View": "View changes how the document is displayed to you without altering the document. The header margin is a real property of the page, and it will show up in print and in a PDF."
+      }
+    },
+    {
+      "id": "s2",
+      "intent": "This one entry covers both strips at the top and bottom of the page, because Docs thinks of them as the same kind of thing: reserved space outside the body. Opening it gives you the numbers that define how deep that reserved space is.",
+      "mode": "guided",
+      "target": {
+        "scope": "menu",
+        "name": "Headers & footers"
+      },
+      "action": "click",
+      "verify": {
+        "kind": "visible",
+        "name": "Apply",
+        "scope": "dialog"
+      },
+      "hints": [
+        "You want the item that names the two zones outside the body text — the one at the top and its twin at the bottom.",
+        "Near the lower half of the Format menu, below the text and paragraph groupings."
+      ],
+      "wrongHints": {
+        "Line & paragraph spacing": "That controls gaps between lines of body text. The header margin is measured from the edge of the paper, not from anything you've typed.",
+        "Align & indent": "Indents move text inward from the margins that already exist. Here you're moving the margin itself.",
+        "Columns": "Columns divide the body horizontally. The header lives above the body entirely, so column settings never reach it."
+      }
+    },
+    {
+      "id": "s3",
+      "intent": "The dialog holds the header margin as an editable number — set it to the distance you want from the top edge of the paper. Nothing you type here touches the document until you commit it, which is what this button is for: a dialog is a draft of a change, not the change.",
+      "mode": "solo",
+      "target": {
+        "scope": "any",
+        "name": "Apply"
+      },
+      "action": "click",
+      "verify": {
+        "kind": "none"
+      },
+      "hints": [
+        "You've entered a value, but the page hasn't moved yet. The dialog is waiting for you to confirm that you meant it.",
+        "The button at the bottom right of the dialog, next to Cancel."
+      ],
+      "wrongHints": {
+        "Cancel": "Cancel closes the dialog and throws away the number you typed. It's the way out when you've changed your mind, not the way to finish."
+      }
+    }
+  ]
+}

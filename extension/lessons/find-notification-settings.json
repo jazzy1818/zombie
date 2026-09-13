@@ -1,0 +1,54 @@
+{
+  "id": "find-notification-settings",
+  "app": "google-docs",
+  "goal": "how to find notification settings",
+  "preamble": "You probably think of notifications as something you switch on or off once, somewhere in your account. In Docs they work the other way round: each document carries its own rules about when it should email you. So what you're really looking for isn't a global preference — it's a setting that belongs to this document, about the people working in it alongside you.",
+  "generalization": "Notification settings sit with the document, not with your account, because the thing being described is this document's activity — its comments, its edits, its collaborators. That's also why the Tools menu is the right place to look: File is about the document as an object, Format is about the text, and Tools is about the things Docs does around your writing — checking it, counting it, watching it, and telling you when someone else touches it.",
+  "steps": [
+    {
+      "id": "s1",
+      "intent": "Nothing you're about to change affects a single word on the page. You're setting a rule about when Docs should reach out to you about other people's activity here. That kind of thing — the work Docs does around your writing rather than to it — is gathered under Tools.",
+      "mode": "demo",
+      "target": {
+        "scope": "menu",
+        "name": "Tools"
+      },
+      "action": "click",
+      "verify": {
+        "kind": "visible",
+        "name": "Notification settings",
+        "scope": "menu"
+      },
+      "hints": [
+        "You're not editing text and you're not editing the file. You're configuring something Docs does on your behalf while you work.",
+        "In the menu bar along the top, between Format and Extensions."
+      ],
+      "wrongHints": {
+        "File": "A reasonable guess — File holds settings about the document as an object, like sharing and page setup. But notifications aren't a property of the file; they're about activity happening inside it while you're away.",
+        "Edit": "Edit acts on the content you've selected. Notifications never touch content.",
+        "Help": "Help explains how Docs works. You're not looking for an explanation, you're looking for a switch that belongs to this document."
+      }
+    },
+    {
+      "id": "s2",
+      "intent": "Open Notification settings. What opens is a short list of choices about comments and edits — who has to be involved before Docs emails you. Note that it applies to this document alone, which is why it lives here and not in a global preferences screen.",
+      "mode": "guided",
+      "target": {
+        "scope": "menu",
+        "name": "Notification settings"
+      },
+      "action": "click",
+      "verify": {
+        "kind": "dom",
+        "selector": "[aria-label=\"Close\"]"
+      },
+      "hints": [
+        "Most of this menu is about inspecting the document — spelling, word count, suggested edits. You want the one item that's about being told something later.",
+        "Partway down the Tools menu, in the group below the review and counting tools."
+      ],
+      "wrongHints": {
+        "Preferences": "Preferences sounds exactly right, but it's about how the editor behaves as you type — autocorrect, substitutions — and it applies everywhere, not to this document."
+      }
+    }
+  ]
+}

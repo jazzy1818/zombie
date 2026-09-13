@@ -1,0 +1,55 @@
+{
+  "id": "see-word-count",
+  "app": "google-docs",
+  "goal": "how to see the word count",
+  "preamble": "A word count isn't stored anywhere in your document, and it isn't a formatting choice. It's a measurement — Docs counts the words when you ask it to. So you're not looking for a setting you turned off, or a panel you closed. You're looking for the place where Docs keeps the things it can *do* to your text.",
+  "generalization": "The menu bar is sorted by what a command acts on. File is about the document as an object, Format is about how it looks, and Tools is the machinery Docs runs over your words — counting them, checking spelling, suggesting citations. When you can't find something, ask what kind of thing it is rather than where you last saw it, and the menu usually falls out of the answer.",
+  "steps": [
+    {
+      "id": "s1",
+      "intent": "Docs keeps a menu for the things it performs on your text rather than the things it stores about your document — spell checking, dictation, counting. A word count is one of those: something Docs works out by reading what you wrote. Open that menu.",
+      "mode": "demo",
+      "target": {
+        "scope": "menu",
+        "name": "Tools"
+      },
+      "action": "click",
+      "verify": {
+        "kind": "visible",
+        "name": "Word count",
+        "scope": "menu"
+      },
+      "hints": [
+        "Nothing about the document is changing here. Docs is going to read your text and report back — which menu holds the commands that inspect rather than edit?",
+        "The Tools menu, in the menu bar, between Format and Extensions."
+      ],
+      "wrongHints": {
+        "File": "File covers the document as a whole — its name, its history, printing it. The word count isn't a property of the file, it's something Docs works out from the text inside it.",
+        "Format": "Format changes how text looks. Counting words doesn't change anything, so it lives with the commands that read rather than alter.",
+        "View": "A reasonable guess, since you want to see something. But View controls how the document is displayed on screen — rulers, outline, print layout. The count is a calculation, not a display mode.",
+        "Insert": "Insert puts new things into the document. You're not adding a word count to the page, you're asking Docs to tell you one."
+      }
+    },
+    {
+      "id": "s2",
+      "intent": "Choose Word count. Docs tallies pages, words, characters and characters without spaces for the whole document — or, if you had text selected, for just that selection. The dialog also offers a checkbox to keep the count on screen as you type, which is worth knowing about if you write to a limit.",
+      "mode": "guided",
+      "target": {
+        "scope": "menu",
+        "name": "Word count"
+      },
+      "action": "click",
+      "verify": {
+        "kind": "dom",
+        "selector": "[aria-label=\"Cancel\"]"
+      },
+      "hints": [
+        "It says exactly what it is. Look among the commands that read your text rather than change it.",
+        "Near the top of the Tools menu, just under the spelling and grammar entry."
+      ],
+      "wrongHints": {
+        "Spelling and grammar": "Close in spirit — it also reads your text and reports on it — but it's checking for mistakes, not totalling anything."
+      }
+    }
+  ]
+}

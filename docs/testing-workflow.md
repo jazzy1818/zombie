@@ -2,9 +2,12 @@
 
 The merged extension contains the real resolver, teaching adapter, panel and paint.
 Use the local fixture to check extension behavior, then a prepared Google Doc to
-rehearse the demo lesson. Typing into **Teach me** searches saved lessons and may
-ask the running bridge to judge an uncertain match. Generating a new lesson
-requires choosing the generation or rejection action.
+rehearse the demo lesson. **Teach me** searches the published library for this
+site and offers what it matched — it never starts a lesson by itself. When no
+match is confident and the local authoring bridge is running, the bridge's model
+judges the question against the saved lessons first; **None of these** (or
+**Work it out for me** when nothing matched) generates a new lesson in a cloud
+browser.
 
 ## 1. Start the local page on Windows
 
@@ -70,14 +73,15 @@ size equals its content viewport. If controls collapse into overflow, record tha
 as an application-layout difference.
 
 Type **How do I add an automatic table of contents?** in the chat bar and click
-**Teach me**. A confident match opens its preamble, with a **No, I'm not talking about this**
-button that hands the question to the authoring bridge instead. An uncertain
-question is checked with the bridge's model when `npm run bridge` is running.
-Either way the panel offers only lessons that are actually related, or says it
-has none: a model that rules every saved lesson out stops the panel launching
-one, but it does not hide a near miss local search still believes in — the
-choice stays with you, next to **No, I'm not talking about this**. Click **Show me** and
-follow the nine steps:
+**Teach me**. A question never starts a lesson on its own: the panel offers the
+lessons the question actually matched — up to four, best first — with **None of
+these** last when an authoring bridge is reachable. An uncertain question is
+first checked with the bridge's model when `npm run bridge` is running: a lesson
+it names is offered alone; a "none" from it does not hide a near miss local
+search still believes in. A question that matches nothing offers no lesson
+choices at all, only generation. Choose **Add an automatic table of contents**;
+its preamble carries **No, I'm not talking about this**, which hands the original
+question to the bridge instead. Click **Show me** and follow the nine steps:
 
 1. Click the highlighted **Styles** opener yourself, including in demo mode.
 2. Click the document's title line, then **Got it** in the panel. Canvas text is
@@ -156,8 +160,8 @@ when the library has fewer useful matches.
 
 1. Reload Browser Teacher at `chrome://extensions`, then refresh the test Doc.
 2. Ask **change font size and color**. Expect two or three related font lessons
-   and **No, I'm not talking about this**. Unrelated date, image and version
-   lessons should be absent.
+   and **None of these**. Unrelated date, image and version lessons should be
+   absent.
 3. Choose a suggestion. Its preamble must retain the rejection button. Rejecting
    it sends the original question to generation, not the saved lesson's title.
 4. Ask **make my document have chapters**. A near-match picker should include the
@@ -171,9 +175,9 @@ when the library has fewer useful matches.
 
 Run `node --test docs/search-tests.cjs` from the repository root for the stable
 local ranking cases. `docs/generate-tests.cjs` checks the actual loaded extension
-with a stub bridge, including rejection, the three-suggestion cap and replacing
-old results. Its requests are routed to a temporary port, so your real bridge
-can keep running without receiving test requests.
+with a stub bridge, including rejection, the suggestion cap and replacing old
+results. It loads a disposable copy of the extension pointed at the stub, so
+your real bridge can keep running without receiving test requests.
 
 ## 4. Publish a newly generated lesson
 
@@ -257,7 +261,98 @@ The page caches its library and search index. Confirm the new ID with
 and follow the lesson yourself. This final human run checks the teaching behavior
 that automated authoring replay alone cannot prove.
 
-## 5. Run the automated regression suites
+## 4b. Sites other than Google Docs
+
+Lessons are scoped to the app they were written for. The `app` field normally
+identifies that app; `sites` can override its hosts. A lesson with neither field
+counts as a legacy Google Docs lesson and is not offered anywhere else. A
+loopback host is exempt, so the fixtures in this folder still see the whole
+library. On a page with nothing the resolver could point at — a canvas app, an
+app inside an iframe — the panel says so and locks the chat bar instead of
+accepting questions it cannot answer.
+
+Generation follows the page for other sites: a question asked on GitHub explores
+GitHub. Google Docs uses the configured prepared demo document by default; set
+`BT_PREFER_PAGE=1` to use the actual page when the cloud identity can access it.
+App-specific selectors live in `pipeline/apps.js`, and a host with no entry there
+gets a generic profile rather than failing.
+
+To add another app, or to work out why a page is refused, see
+[teaching a site that isn't Google Docs](new-sites.md).
+
+## 5. Watch a lesson being generated
+
+Use the configured pipeline from section 4. Start its local bridge:
+
+```powershell
+Set-Location C:\Storage\Repo\zombie\pipeline
+npm run bridge
+```
+
+If the bridge is already running an older version, let any active generation
+finish, stop that bridge with **Ctrl+C**, then run the command again. Reload
+Browser Teacher at `chrome://extensions` and refresh the website as well.
+
+1. Ask a question that is not already in your lesson library, then click
+   **Work it out for me**. A cached lesson does not start a cloud browser.
+2. Click the underlined **Opening a cloud browser…** row. A separate floating
+   **Cloud browser** window opens immediately; its waiting message changes to
+   Steel's live iframe when the session becomes available. The row then reads
+   **Watch cloud browser**.
+3. Watch the AI explore. Drag the window by its header or resize its bottom-right
+   corner. The embedded window is for viewing; it does not forward your clicks
+   or keystrokes to the browser the AI is controlling.
+4. Click **−** (Minimize cloud browser), or press **Escape** while the viewer has
+   keyboard focus. Its iframe unloads while lesson generation continues. Click
+   the status row again to resume watching the same active session.
+5. If the pipeline retries or verifies in a fresh browser, the open viewer
+   follows that session automatically. When a browser closes, its live stream
+   changes to a recording player. Use **Play**, **Pause**, or the timeline to
+   review what happened. The player waits briefly before loading and retries
+   automatically while Steel prepares the recording. **Retry** remains available
+   if processing takes longer than the automatic retry window.
+6. A **Watch recording** button appears near the chat bar (at the top edge in a
+   narrow window) and stays available
+   after generation succeeds or fails while you work through the lesson. Minimize
+   the viewer, then use this button to reopen it. With multiple attempts, the
+   **Session** selector lets you review earlier recordings or return to the live
+   browser. The generating panel's **Watch cloud browser** row always returns
+   to the current live attempt, even after you selected an earlier recording.
+   Viewing a recording does not start another cloud session. Clicking **Done**
+   closes the viewer and removes its recording button and history.
+7. If a newly created live browser is not ready, the viewer reconnects
+   automatically. **Retry live view** reconnects just the player; it does not
+   restart the AI's work. If playback still cannot start, use
+   **Open Steel player in a tab**. That
+   opens Steel's own player, whose interaction controls depend on Steel. A local
+   CDP run or a bridge that does not supply an embeddable URL shows an unavailable
+   message while generation can continue. Recordings also provide **Open session
+   in Steel** as a fallback to the dashboard's session preview.
+
+The replay button belongs to the current task on this webpage. **Done**, **Stop**, a new
+question or lesson, website navigation, or page refresh clears that local history.
+Close, Not now and viewer Minimize keep recordings already received. The
+bridge retains replay links in memory for 24 hours; restarting it expires those
+links. Steel's dashboard remains the place to find older recordings. The bridge
+uses the configured Steel key to fetch recording playlists and streams media
+through local routes; the extension receives no API key.
+
+The bridge's panel-generation path saves the lesson into the extension library
+and teaches it immediately. Its default skips automatic replay; the CLI authoring
+and verified-publication flow in section 4 remains available. Confirm the actual
+website outcome yourself. **Stop** ends the panel's wait, clears the viewer and
+recording history, and asks the bridge to cancel the active job and release its
+cloud browser. Closing the panel, replacing the task, and leaving the page also
+cancel active generation. Minimizing only hides the view. If a tab disappears
+before it can send cancellation, the bridge stops jobs after 60 seconds without
+a poll (checked every 10 seconds).
+
+The live embed uses Steel's documented `debugUrl` and `interactive=false` option.
+Completed-session playback uses Steel's HLS recording API with the packaged
+HLS.js player. See [Steel live session embeds](https://docs.steel.dev/overview/sessions-api/embed-sessions/live-sessions)
+and [past-session playback](https://docs.steel.dev/overview/sessions-api/embed-sessions/past-sessions).
+
+## 6. Run the automated regression suites
 
 From the repository root, with Node, Playwright and its Chromium installed:
 
@@ -266,7 +361,31 @@ node docs/paint-tests.cjs
 node docs/resolver-tests.cjs
 node docs/teaching-tests.cjs
 node docs/extension-tests.cjs
+node docs/generate-tests.cjs
+node --test --test-isolation=none pipeline/session-viewer-tests.mjs
+node --test --test-isolation=none pipeline/session-replay-tests.mjs
+node --test --test-isolation=none pipeline/replay-player-tests.mjs
 ```
+
+Site scoping and the teachable-page decision are pure logic and have their own
+suites, which need neither Playwright nor a browser:
+
+```powershell
+node docs/sites-tests.mjs
+node docs/support-tests.mjs
+node docs/apps-tests.mjs
+```
+
+The refusal path also has a fixture. Serve the repo and open
+`docs/unsupported-fixture.html`; each case below should mount the panel, refuse
+the page by name and lock the chat bar:
+
+| page | expected message |
+|---|---|
+| `?case=canvas` | draws its interface on a canvas |
+| `?case=framed` | inside an embedded frame |
+| `?case=unlabelled` | none of them are labelled |
+| `?case=bare` | can't find anything to point at |
 
 These runners start their own temporary local servers; they do not need port 8765.
 The loaded-extension runner uses a separate disposable browser profile. Set
@@ -274,7 +393,8 @@ The loaded-extension runner uses a separate disposable browser profile. Set
 support if needed; ordinary branded Chrome may ignore the test launch flags.
 
 The extension suite includes actual packaged-index discovery, typed-question
-selection, the uncertain-question picker, and trusted website clicks. A publication
+selection, the picker's keyword shortlist and its matchless case, and trusted
+website clicks. A publication
 check measures a local fixture replay, passes that evidence to the real publisher,
 and loads a temporary copy of the extension containing the new lesson. It then
 finds and completes that lesson through the question box. Production source files
@@ -287,6 +407,18 @@ Read the dated [paint](paint-test-results.md), [resolver](resolver-test-results.
 [teaching](teaching-test-results.md) and [extension](extension-test-results.md)
 reports for the actual run results. Local fixtures do not certify a live website,
 and none of these commands claims that a paid/cloud or signed-in live rehearsal ran.
+
+The [generation report](generate-test-results.md) covers the real extension with
+an ephemeral bridge stub and an inert Steel-player fixture, including viewer
+minimize/reopen, retries, completed-session history, cleanup, restricted page CSP and small viewports. It
+uses a disposable extension copy and leaves the running port-7777 bridge alone.
+The Node viewer and replay suites check session metadata, retained recordings,
+authenticated playlist rewriting, media streaming and cleanup without cloud
+or model calls. These checks do not prove live Steel video playback; use the
+manual generation steps above for that final end-to-end check.
+
+The [replay report](replay-test-results.md) records the separate successful
+read-only playback check against an existing completed Steel session.
 
 The pipeline also has a local browser suite. After installing its dependencies,
 run `npm test` from `pipeline/` (with `CHROME_PATH` set if needed). It checks observed

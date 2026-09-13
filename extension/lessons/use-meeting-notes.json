@@ -1,0 +1,75 @@
+{
+  "id": "use-meeting-notes",
+  "app": "google-docs",
+  "goal": "how to use meeting notes",
+  "preamble": "Most people make meeting notes by opening a blank page and typing the date, then the attendees, then a heading called Action items. Docs already knows how that document goes, and it also already knows who is in your meeting — your calendar told it. So the task isn't writing a layout. It's asking Docs for a structure it can fill in for you.",
+  "generalization": "Meeting notes aren't a template you picked, they're a building block: a small prefabricated chunk of document that arrives already wired to something else — in this case your calendar. The same menu holds email drafts and review trackers for the same reason. When you catch yourself rebuilding the same shape of document every week, the question to ask isn't \"what should I type\" but \"has Docs already got a block for this\".",
+  "steps": [
+    {
+      "id": "s1",
+      "intent": "Nothing on the page needs changing — you're putting something into the document that isn't there yet. In Docs, that distinction is the whole logic of the menu bar: one menu is for altering what exists, another is for bringing in new material.",
+      "mode": "demo",
+      "target": {
+        "scope": "menu",
+        "name": "Insert"
+      },
+      "action": "click",
+      "verify": {
+        "kind": "visible",
+        "name": "Building blocks",
+        "scope": "menu"
+      },
+      "hints": [
+        "You're not reformatting a line or changing a setting. You're adding something from outside the text you've written.",
+        "The menu bar along the top, fourth from the left."
+      ],
+      "wrongHints": {
+        "Format": "Format changes text that's already on the page — its size, spacing, alignment. There's no meeting notes text yet to format.",
+        "Tools": "A reasonable guess, since this feels like a feature rather than content. But Tools holds things that act on your document — spelling, word count, voice typing. Meeting notes are something you place into it."
+      }
+    },
+    {
+      "id": "s2",
+      "intent": "The Insert menu is mostly single objects: an image, a table, a line. Meeting notes are none of those — they're a small pre-assembled document section, several elements arriving together. Docs keeps that whole family in one submenu, and the name says exactly what they are.",
+      "mode": "guided",
+      "target": {
+        "scope": "menu",
+        "name": "Building blocks"
+      },
+      "action": "click",
+      "verify": {
+        "kind": "visible",
+        "name": "Meeting notes",
+        "scope": "menu"
+      },
+      "hints": [
+        "You're not after one element. You're after a ready-made arrangement of several, which Docs files under a group name of its own.",
+        "About a third of the way down the Insert menu, just under Smart chips."
+      ],
+      "wrongHints": {
+        "Table": "Meeting notes do look like a table when they land, and you could build one by hand. But you'd be making the shape yourself and filling in the attendees yourself — the building block arrives already filled.",
+        "Smart chips": "Close, and related: a calendar smart chip does link a document to a meeting. But a chip is a single reference dropped inline. You want the whole notes structure the chip could sit inside."
+      }
+    },
+    {
+      "id": "s3",
+      "intent": "Your turn. The submenu that just opened is a short list of prefabricated sections, each for a recurring kind of document. One of them is the one you came for — pick it and watch what Docs pulls in from your calendar without being asked.",
+      "mode": "solo",
+      "target": {
+        "scope": "menu",
+        "name": "Meeting notes"
+      },
+      "action": "click",
+      "verify": {
+        "kind": "none"
+      },
+      "hints": [
+        "Every item here is named after the job it does, so read them as jobs rather than as features.",
+        "First in the short list that just appeared to the right."
+      ],
+      "wrongHints": {
+        "Email draft": "Also a building block, and also pre-wired to another Google app — but it composes a message to send out, not a record of a meeting."
+      }
+    }
+  ]
+}

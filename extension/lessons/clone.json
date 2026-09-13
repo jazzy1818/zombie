@@ -1,0 +1,46 @@
+{
+  "id": "clone",
+  "app": "github",
+  "goal": "clone",
+  "preamble": "Cloning sounds like downloading, but it isn't. A download gives you the files as they are right now; a clone gives you the repository — every commit, every branch, the whole history — plus a live link back to where it came from. So what you're hunting for on this page isn't the code. It's an address: the string your machine needs in order to go and fetch the repository itself.",
+  "generalization": "The thing you copy off a repository page is never the code — it's a pointer to it. Which protocol you choose in that dropdown decides how your machine proves who it is when it talks to the server, and nothing else. HTTPS asks for credentials when it needs them and works from almost anywhere; SSH trades a one-time key setup for never being asked again. Same repository, same clone, different front door.",
+  "steps": [
+    {
+      "id": "s1",
+      "intent": "Everything else on this page is about reading the repository in the browser — files, branches, history. This one button is about taking it somewhere else. It's the only place GitHub hands out the repository's address rather than its contents.",
+      "mode": "demo",
+      "target": {
+        "scope": "any",
+        "name": "Code",
+        "nth": 1
+      },
+      "action": "click",
+      "verify": {
+        "kind": "visible",
+        "name": "HTTPS",
+        "scope": "any"
+      },
+      "hints": [
+        "You're not looking for a file or a branch. You want the handle that lets another program fetch this whole thing.",
+        "The green button above the file list, on the right-hand side."
+      ]
+    },
+    {
+      "id": "s2",
+      "intent": "The dropdown is offering you several ways to reach the same repository. HTTPS is the one that needs nothing set up in advance — your machine authenticates with a username and token when the server asks, and the URL works from behind most firewalls. Selecting it tells the panel which form of the address to show you.",
+      "mode": "guided",
+      "target": {
+        "scope": "any",
+        "name": "HTTPS"
+      },
+      "action": "click",
+      "verify": {
+        "kind": "none"
+      },
+      "hints": [
+        "Three of these are protocols — different ways your machine can talk to GitHub. Pick the one that requires no keys prepared ahead of time.",
+        "The first of the small tabs across the top of the dropdown, above the URL box."
+      ]
+    }
+  ]
+}

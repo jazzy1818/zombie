@@ -14,9 +14,13 @@
 import { PANEL_WIDTH, PANEL_SIDE, OVERLAY_Z } from '../constants.js';
 import { mountBar } from './launcher.js';
 import { makeFloating } from './floating.js';
-import { loadLesson, loadAll, matchLesson, listLessons, validateLesson, addLesson } from './lessons.js';
-import { relevant, SUGGESTION_LIMIT } from './search.js';
+import { loadLesson, loadHere, matchLesson, listLessons, validateLesson, addLesson } from './lessons.js';
+import { siteKey, siteLabel, lessonRunsHere, lessonSites } from '../sites.js';
+import { awaitSupport, probeSupport, explain } from './support.js';
+import { probe, check } from './probe.js';
+import { findTarget } from '../teaching/resolution.js';
 import { generateLesson, bridgeAvailable, matchRemote } from './generate.js';
+import { createCloudViewer } from './cloud-viewer.js';
 import { runLesson, ACTION } from './machine.js';
 import { createSpeech } from './speech.js';
 import { installDev } from './dev.js';
@@ -35,9 +39,15 @@ const SPEAKER_SVG = `
 
 const HOST_ID = 'browser-teacher-root';
 
+// Bumped whenever the panel's behaviour changes in a way a stale tab would
+// hide. __BT_DEV.here() reports it, so "did this tab pick up my reload?" is a
+// question with an answer rather than a guess.
+const BUILD = 'site-scoped-4';   // + bridge second opinion, reject on the preamble
+
 const WIN_W = PANEL_WIDTH + 40;   // squarish; constants.js still sets the base
 const WIN_H = 380;
 const MARGIN = 28;
+const PICKER_LIMIT = 4;           // how many guesses to offer when unsure
 
 export async function mountPanel() {
   if (document.getElementById(HOST_ID)) return;   // idempotent
@@ -141,15 +151,16 @@ export async function mountPanel() {
   });
 
   const speech = createSpeech();
-  const ui = createUI(els, raise, speech);
+  const viewer = createCloudViewer(root, raise);
+  const ui = createUI(els, raise, speech, viewer);
   let currentRun = null;
-  const cancel = () => {
+  const cancel = ({ replacing = false, forgetRecordings = false } = {}) => {
     const previous = currentRun;
     currentRun = null;
     previous?.controller.abort();
     previous?.stopNavigation();
     window.__TEACH?.clear();
-    ui.reset();
+    ui.reset({ restoreFocus: !replacing, forgetRecordings });
   };
   ui.onCancel = cancel;
 
@@ -188,13 +199,24 @@ export async function mountPanel() {
    * where someone can read it, not silently in the console behind the page.
    */
   async function session(work) {
-    cancel();
+    cancel({ replacing: true, forgetRecordings: true });
     const controller = new AbortController();
     const run = { controller, stopNavigation: () => {} };
     currentRun = run;
-    run.stopNavigation = watchNavigation(cancel);
+    run.stopNavigation = watchNavigation(() => cancel({ forgetRecordings: true }));
     const active = () => currentRun === run && !controller.signal.aborted;
-    const options = { signal: controller.signal, isCurrent: () => currentRun === run };
+    const options = {
+      signal: controller.signal,
+      isCurrent: () => currentRun === run,
+      // A lesson that walks the user through a route change has to say so
+      // before the first step, or the watcher above cancels it on the click it
+      // just asked for. Same-app moves only — leaving the app still ends it.
+      allowNavigation() {
+        if (currentRun !== run) return;
+        run.stopNavigation();
+        run.stopNavigation = watchNavigation(() => cancel({ forgetRecordings: true }), { site: true });
+      },
+    };
     let stopWaiting;
     const cancelled = new Promise((_, reject) => {
       stopWaiting = () => reject(new DOMException('Lesson cancelled', 'AbortError'));
@@ -205,7 +227,11 @@ export async function mountPanel() {
       await Promise.race([work({ active, options }), cancelled]);
       return { status: active() ? 'completed' : 'cancelled' };
     } catch (err) {
-      if (err?.name === 'AbortError' || !active()) return { status: 'cancelled' };
+      if (err?.name === 'AbortError') {
+        if (active()) cancel({ forgetRecordings: true });
+        return { status: 'cancelled' };
+      }
+      if (!active()) return { status: 'cancelled' };
       console.error('[browser-teacher]', err);
       ui.fail(err);
       return { status: 'error', message: err?.message || String(err) };
@@ -219,58 +245,68 @@ export async function mountPanel() {
   function play(id, opts = {}) {
     return session(async ({ active, options }) => {
       const lesson = await loadLesson(id);
+      if (!active()) return;
+      // Last line of defence. Every step of a lesson for another app points at
+      // a control that does not exist here, so it would spotlight nothing and
+      // sit there waiting for a click the user cannot make. Say so instead.
+      // __BT_DEV.run() bypasses this deliberately — see opts.anywhere.
+      if (!opts.anywhere && !lessonRunsHere(lesson)) {
+        ui.wrongApp(lesson);
+        return;
+      }
+      if (lesson.navigates) options.allowNavigation();
       if (active()) await runLesson(lesson, ui, { ...opts, ...options });
     });
   }
 
+  /**
+   * A question never launches a lesson by itself — it always comes back with
+   * choices. Even a strong match is a guess: "change the text colour" scores
+   * hard against the colour lesson, and starting it unasked is the panel
+   * deciding for the user, who then has to stop a lesson to say "not that one".
+   * Confirming costs one click; guessing wrong costs the user's trust in every
+   * later guess. `confident` still colours the wording — it just doesn't act.
+   *
+   * Local search is lexical and can only see shared words, which is how "add a
+   * header" once looked like the headings lesson. When it is not confident and
+   * an authoring bridge is running, the bridge's model reads the question
+   * against this site's lessons and says which one — if any — does what was
+   * asked. Its answer sharpens the picker; it never skips it.
+   */
   function start(question) {
     return session(async ({ active, options }) => {
-      const { id, confident, ranked } = await matchLesson(question);
+      let { confident, matches } = await matchLesson(question);
       if (!active()) return;
 
-      // Local search names the lesson only when the question matched one of
-      // its phrases or scored far above loose word overlap. That path never
-      // touches the network. The preamble still carries a "not this one"
-      // button, because a confident lexical match can still be wrong.
-      if (confident) return teach(id, question, { active, options });
-
-      // The ambiguous tail. If an authoring bridge is running, its model reads
-      // the question against every saved lesson and says which one — if any —
-      // actually does what was asked. Local search can only see shared words,
-      // which is how "add a header" once opened the headings lesson.
       const canGenerate = await bridgeAvailable();
       if (!active()) return;
 
-      if (canGenerate) {
+      if (!confident && canGenerate) {
         ui.checking(question);
-        const lessons = await loadAll();
-        const remote = await matchRemote(question, lessons.map(candidate), { signal: options.signal });
+        const here = await loadHere();
+        const remote = await matchRemote(question, here.map(candidate), { signal: options.signal });
         if (!active()) return;
-        if (remote?.id) return teach(remote.id, question, { active, options });
-        // The model ruled every lesson out. That is a good reason not to launch
-        // one, and a bad reason to pretend the library is empty: if local
-        // search still finds something in the same family, showing it beats
-        // "I don't know that one yet" — the user can see for themselves
-        // whether it is what they meant. Generation stays one click away. An
-        // unreachable or older bridge (remote === undefined) is not an answer
-        // either way, and falls through to the same picker below.
-        if (remote) {
-          return ui.showPicker(question, relevant(ranked), {
-            signal: options.signal, onGenerate: () => generate(question),
-            onReject: () => generate(question),
-          });
+        if (remote?.id) {
+          // The model named one: offer it alone, as the confident guess.
+          matches = [{ id: remote.id }];
+          confident = true;
         }
+        // remote === { id: null }: the model ruled every lesson out. That is a
+        // good reason not to call any of them confident, and a bad reason to
+        // pretend the library is empty — a near miss local search still
+        // believes in stays on offer, and the user rules it out themselves.
+        // remote === undefined: the bridge could not say; the local answer stands.
       }
 
-      // No model to ask. Offer only lessons that are actually about the
-      // question — an empty list is an honest answer — and, when a bridge is
-      // running, a way to say "none of these" and have it worked out.
-      // Deliberately a button rather than automatic: generation costs a cloud
-      // browser and a few minutes, a bad thing to spend on a typo mid-demo.
-      return ui.showPicker(question, relevant(ranked), {
+      // Offer the lessons the question actually matched — which is sometimes
+      // none of them — and, if an authoring bridge happens to be running,
+      // offer to go and learn it for real. Deliberately a button rather than
+      // automatic: generation costs a cloud browser and a few minutes, which
+      // is a bad thing to spend on a typo, mid-demo.
+      return ui.showPicker(question, matches, {
         signal: options.signal,
+        confident,
         onGenerate: canGenerate ? () => generate(question) : null,
-        onReject: () => generate(question),
       });
     });
   }
@@ -286,13 +322,20 @@ export async function mountPanel() {
   }
 
   /**
-   * Keep the original question available when a user rejects a proposed lesson,
-   * including one opened from the suggestions picker.
+   * Run a lesson chosen for a question. Its preamble carries "No, I'm not
+   * talking about this": a picked lesson is still a guess, and the escape
+   * hands the original question — not the lesson's title — to the bridge.
    */
   async function teach(id, question, { active, options }) {
     const lesson = await loadLesson(id);
     if (!active()) return;
-    const outcome = await runLesson(lesson, ui, { ...options, regenerate: true });
+    // Same guard as play(): a lesson for another app would spotlight nothing.
+    if (!lessonRunsHere(lesson)) {
+      ui.wrongApp(lesson);
+      return;
+    }
+    if (lesson.navigates) options.allowNavigation();
+    const outcome = await runLesson(lesson, ui, { ...options, regenerate: Boolean(question) });
     if (outcome === ACTION.REGENERATE && active()) return generate(question);
   }
 
@@ -300,7 +343,7 @@ export async function mountPanel() {
   function generate(question) {
     return session(async ({ active, options }) => {
       // Reached from a preamble's "not this one" button as well as the picker,
-      // so the bridge may not be there. Say so instead of throwing.
+      // so the bridge may have gone away since. Say so instead of throwing.
       if (!(await bridgeAvailable())) {
         if (active()) await ui.showPicker(question, [], { signal: options.signal, onGenerate: null });
         return;
@@ -309,11 +352,17 @@ export async function mountPanel() {
       ui.generating(question);
       const lesson = await generateLesson(question, {
         signal: options.signal,
+        // The page the user asked from IS the subject of the question. Without
+        // this the bridge falls back to its configured demo doc and explores
+        // Google Docs however the question was asked on GitHub.
+        docUrl: location.href,
         onProgress: text => { if (active()) ui.generatingNote(text); },
+        onJob: job => { if (active()) viewer.update(job); },
       });
       if (!active()) return;
       // Findable by search from here on, so asking again doesn't rebuild it.
       addLesson(lesson);
+      if (lesson.navigates) options.allowNavigation();
       await runLesson(lesson, ui, options);
     });
   }
@@ -323,7 +372,8 @@ export async function mountPanel() {
   // Rehearsal: skip straight to the step you're practising.
   //   __BT_DEV.run('styles-toc', 3)
   if (window.__BT_DEV) {
-    window.__BT_DEV.run = (id = 'styles-toc', step = 1) => play(id, { from: Math.max(0, step - 1) });
+    window.__BT_DEV.run = (id = 'styles-toc', step = 1) =>
+      play(id, { from: Math.max(0, step - 1), anywhere: true });
     window.__BT_DEV.runLesson = (lesson, opts = {}) =>
       session(async ({ active, options }) => {
         validateLesson(lesson);
@@ -333,10 +383,59 @@ export async function mountPanel() {
       });
 
     window.__BT_DEV.lessons = () => listLessons();
+
+    // Authoring a lesson for a site nobody has taught yet starts here — see
+    // panel/probe.js. Also the fastest way to tell a genuinely unteachable
+    // page from one that simply hadn't finished loading.
+    window.__BT_DEV.probe = filter => probe(filter);
+    window.__BT_DEV.check = target => check(target, t => findTarget(t));
+    window.__BT_DEV.support = () => probeSupport();
+
+    /**
+     * What the panel thinks about the page it is on.
+     *
+     * The first question to ask when the panel offers something unexpected:
+     * which site does it believe it is on, and which lessons did it consider?
+     * Reloading an unpacked extension does NOT update tabs that were already
+     * open, so an old content script serving the whole library on the wrong
+     * site is the likeliest cause of a lesson appearing where it should not.
+     * `build` being absent is the tell.
+     */
+    window.__BT_DEV.here = async () => {
+      const site = siteKey();
+      const here = await loadHere(site);
+      const report = { build: BUILD, site, label: siteLabel(site), teachable: probeSupport() };
+      report.lessons = here.map(l => ({ id: l.id, app: l.app ?? '(none)' }));
+      const all = await listLessons();
+      report.excluded = all.length - here.length;
+      console.log(`%c[bt] ${report.lessons.length} of ${all.length} lessons run on ${report.label}`,
+        'color:#4F9CF9;font-weight:bold');
+      console.table(report.lessons);
+      return report;
+    };
   }
 
   ui.reset();
   raise();
+
+  /**
+   * Decide whether this page is teachable at all, and say so if it isn't.
+   *
+   * Deliberately after everything above is wired: the probe is patient (a
+   * single-page app mounts its chrome well after document_idle) and the panel
+   * should be fully working by the time it answers, whichever way it answers.
+   */
+  async function checkPage() {
+    const report = await awaitSupport();
+    ui.setTeachable(report.ok, `Nothing on ${siteLabel()} I can point at`);
+    if (report.ok) {
+      ui.reset();
+      return;
+    }
+    console.info('[browser-teacher] not teachable here:', report);
+    ui.unsupported(report, { onRetry: checkPage });
+  }
+  checkPage();
 }
 
 /* ------------------------------------------------------------------ styles */
@@ -363,13 +462,18 @@ function noFocusSteal(el) {
  * Everything machine.js is allowed to do to the UI. Passing this in rather than
  * importing the panel keeps the runner DOM-free and the imports acyclic.
  */
-function createUI(els, raise, speech) {
+function createUI(els, raise, speech, viewer) {
   let resolveAction = null;
   let bar = null;
+  // A page we can't teach stays unteachable after the user closes the notice.
+  // Without this, reset() quietly re-arms the chat bar and every question
+  // from then on fails to find anything, with no explanation on screen.
+  let teachable = false;
+  let lockReason = '';
   let spoken = '';   // what's currently on screen, for the toggle-on case
 
-  const fire = value => {
-    if (value === ACTION.QUIT) { ui.onCancel(); return; }
+  const fire = (value, { forgetRecordings = false } = {}) => {
+    if (value === ACTION.QUIT) { ui.onCancel({ forgetRecordings }); return; }
     const r = resolveAction;
     resolveAction = null;
     r?.(value);
@@ -394,7 +498,7 @@ function createUI(els, raise, speech) {
     els.win.classList.toggle('is-open', open);
   }
 
-  function renderActions(actions = []) {
+  function renderActions(actions = [], { restoreFocus = true } = {}) {
     els.actions.replaceChildren();
     for (const a of actions) {
       const b = document.createElement('button');
@@ -402,9 +506,10 @@ function createUI(els, raise, speech) {
       b.className = a.subtle ? 'bt-btn bt-btn-subtle' : 'bt-btn';
       b.textContent = a.label;
       noFocusSteal(b);
-      b.addEventListener('click', () => fire(a.value));
+      b.addEventListener('click', () => fire(a.value, a));
       els.actions.appendChild(b);
     }
+    if (restoreFocus) viewer.restoreFocus();
   }
 
   function renderCard({ kind, mode, title, body }) {
@@ -450,7 +555,8 @@ function createUI(els, raise, speech) {
     /** Re-read what's on screen — used when the toggle is switched on mid-lesson. */
     sayCurrent() { speech.say(spoken); },
 
-    reset() {
+    reset({ restoreFocus = true, forgetRecordings = false } = {}) {
+      viewer.reset({ forgetRecordings });
       const pending = resolveAction;
       resolveAction = null;
       pending?.(ACTION.QUIT);
@@ -460,37 +566,117 @@ function createUI(els, raise, speech) {
       els.progress.hidden = true;
       els.body.replaceChildren();
       els.actions.replaceChildren();
-      bar?.setEnabled(true);
+      bar?.setEnabled(teachable, lockReason);
+      if (restoreFocus) viewer.restoreFocus();
       window.__TEACH?.clear();
     },
 
+    /** Set by the support probe; gates the chat bar from mount onwards. */
+    setTeachable(value, reason = '') {
+      teachable = Boolean(value);
+      lockReason = teachable ? '' : reason;
+      bar?.setEnabled(teachable, lockReason);
+    },
+
     /**
-     * Matcher wasn't confident. Ask rather than confidently teach the wrong
-     * thing — and only about lessons that are actually related. `ranked` is
-     * already filtered by the caller; an empty list means "I have nothing for
-     * this", which is a better answer than four unrelated guesses.
+     * A lesson that belongs to a different app.
+     *
+     * Should be unreachable — the picker only offers site-scoped lessons — so
+     * if this ever shows, something upstream is serving the wrong library and
+     * the message should make that obvious rather than blaming the user.
      */
-    async showPicker(question, ranked, { signal, onGenerate, onReject } = {}) {
+    wrongApp(lesson) {
       raise();
       setOpen(true);
-      const lessons = await loadAll();
+      const belongs = lessonSites(lesson).join(', ');
+      renderCard({
+        kind: 'unsupported',
+        title: 'That lesson is for a different app',
+        body: `"${lesson.goal}" was written for ${belongs}, and none of its steps exist on `
+          + `${siteLabel()}. Nothing has been changed. If you are seeing this from the picker, `
+          + 'reload the extension and hard-refresh this tab.',
+      });
+      renderActions([{ label: 'Close', value: ACTION.QUIT, subtle: true }]);
+    },
+
+    /**
+     * A page with nothing we could ever point at.
+     *
+     * Shown once, at mount, instead of leaving a chat bar that accepts
+     * questions and then silently fails to find anything for every one of
+     * them. Naming the obstacle matters more than the refusal does: "this app
+     * draws itself on a canvas" is something the user can act on, and
+     * "unsupported site" is not.
+     */
+    unsupported(report, { onRetry } = {}) {
+      raise();
+      setOpen(true);
+      bar?.setEnabled(false, lockReason);
+      els.progress.hidden = true;
+      renderCard({
+        kind: 'unsupported',
+        title: "I can't teach this page",
+        body: explain(report, siteLabel()),
+      });
+      els.actions.replaceChildren();
+      // Not renderActions(): every button it makes goes through fire(), and
+      // this one re-probes rather than answering a step that isn't running.
+      // An app that was still booting is the likeliest reason to be here.
+      if (onRetry) {
+        const again = document.createElement('button');
+        again.type = 'button';
+        again.className = 'bt-btn bt-btn-subtle';
+        again.textContent = 'Check again';
+        noFocusSteal(again);
+        again.addEventListener('click', onRetry);
+        els.actions.appendChild(again);
+      }
+    },
+
+    /**
+     * Where every question lands. Ask rather than assume — see start().
+     *
+     * `matches` is only the lessons the question actually earned, so it is
+     * frequently empty — a question about something we don't teach gets no
+     * choices at all, not the library in ranked order. A list of six unrelated
+     * lessons under "which did you mean?" is a worse answer than admitting we
+     * don't know it, and it buries the one control that can actually help.
+     *
+     * "None of these" therefore comes last, after whatever we did match: the
+     * user rules the guesses out, then spends the cloud browser.
+     */
+    async showPicker(question, matches, { signal, confident, onGenerate } = {}) {
+      raise();
+      setOpen(true);
+      const lessons = await loadHere();
       if (signal?.aborted) return;
-      // Keep the same cap as local search, including any future remote results.
-      const order = (ranked || [])
-        .map(r => r.id)
-        .filter(id => lessons.some(l => l.id === id))
-        .slice(0, SUGGESTION_LIMIT);
-      const none = order.length === 0;
+      // Best guesses only. Once C's batch runs there could be fifty lessons,
+      // and a wall of buttons is a worse answer than four good ones.
+      const found = (matches ?? []).slice(0, PICKER_LIMIT).map(m => m.id);
+      // Nothing matched and no bridge to go and learn it: a picker with no
+      // buttons is a dead end, so fall back to showing what we do teach.
+      const browsing = !found.length && !onGenerate;
+      // Belt and braces: `lessons` is already scoped to this site, so anything
+      // ranked that is not in it belongs to a different app and must not be
+      // offered. The ranking is built from the same scoped list, so this should
+      // never drop anything — but a lesson for the wrong app appearing in the
+      // picker is the single most confusing thing this panel can do, and the
+      // check costs nothing.
+      const here = new Set(lessons.map(l => l.id));
+      const offered = found.filter(id => here.has(id));
+      if (offered.length !== found.length) {
+        console.warn('[browser-teacher] dropped lessons ranked for another app:',
+          found.filter(id => !here.has(id)));
+      }
+      const order = browsing ? lessons.slice(0, PICKER_LIMIT).map(l => l.id) : offered;
+
       renderCard({
         kind: 'picker',
-        title: none ? "I don't know that one yet" : 'Did you mean one of these?',
-        body: none
-          ? onGenerate
-            ? `I have no lesson for "${question}". I can go and work it out.`
-            : `I have no lesson for "${question}", and the authoring bridge isn't running, so I can't work it out right now. Start it with "npm run bridge" in pipeline/ and ask again.`
-          : onGenerate
-            ? `I'm not sure "${question}" is one of these. Pick one, or tell me it's none of them and I'll work it out.`
-            : `I'm not sure "${question}" is one of these. Pick a lesson, or tell me none of them fit.`,
+        title: pickerTitle(offered.length),
+        // A site we have no lessons for at all is a different answer from a
+        // question we didn't recognise, and saying "here's what I do teach"
+        // over an empty list is the worst of both.
+        body: pickerBody(question, offered.length, Boolean(onGenerate), confident, lessons.length),
       });
       els.actions.replaceChildren();
 
@@ -504,22 +690,29 @@ function createUI(els, raise, speech) {
         els.actions.appendChild(b);
       }
 
-      if (none ? onGenerate : onReject) {
+      // Last, under the guesses it is offered instead of. Subtle only when
+      // there are guesses — with none, it is the only thing to do here.
+      if (onGenerate) {
         const b = document.createElement('button');
         b.type = 'button';
         // Its own class: this is not one of the published lessons, and anything
         // counting the choices on offer must be able to tell the difference.
-        // With nothing else on offer it is the one answer, so not subtle.
-        b.className = none ? 'bt-btn bt-btn-generate' : 'bt-btn bt-btn-reject bt-btn-subtle';
-        b.textContent = none ? 'Work it out for me' : "No, I'm not talking about this";
+        b.className = order.length ? 'bt-btn bt-btn-generate bt-btn-subtle' : 'bt-btn bt-btn-generate';
+        b.textContent = order.length ? 'None of these' : 'Work it out for me';
         noFocusSteal(b);
-        b.addEventListener('click', () => (none ? onGenerate : onReject)());
+        b.addEventListener('click', () => onGenerate());
         els.actions.appendChild(b);
       }
-
+      // Reachable on a site we have no lessons for with no bridge running:
+      // nothing matched, there is nothing to browse, and nothing to generate.
+      // A card with no buttons reads as a hang, so give the dead end a door.
+      if (!els.actions.children.length) {
+        renderActions([{ label: 'Close', value: ACTION.QUIT, subtle: true }]);
+      }
       // This card ends the session. Whether or not it has buttons, the user
-      // must be able to type the next question.
-      bar?.setEnabled(true);
+      // must be able to type the next question — subject to the support gate.
+      bar?.setEnabled(teachable, lockReason);
+      viewer.restoreFocus();
     },
 
     /**
@@ -537,11 +730,14 @@ function createUI(els, raise, speech) {
         title: 'Working it out',
         body: `I don't have a lesson for "${question}", so I'm opening a cloud browser and finding out. This takes a minute or two.`,
       });
-      renderActions([{ label: 'Stop', value: ACTION.QUIT, subtle: true }]);
+      viewer.begin(els.body);
+      renderActions([{ label: 'Stop', value: ACTION.QUIT, subtle: true, forgetRecordings: true }]);
     },
 
     /** One line of the agent's trail. Deliberately not spoken — it would never stop talking. */
     generatingNote(text) {
+      // The opening status already has its own clickable, persistent row.
+      if (/^Opening a cloud browser[.…]*$/i.test(text.trim())) return;
       let trail = els.body.querySelector('.bt-trail');
       if (!trail) {
         trail = document.createElement('ol');
@@ -556,7 +752,18 @@ function createUI(els, raise, speech) {
       els.body.scrollTop = els.body.scrollHeight;
     },
 
+    /** The bridge's model is deciding whether a saved lesson fits. A second or two. */
+    checking(question) {
+      raise();
+      bar?.setEnabled(false);
+      setOpen(true);
+      els.progress.hidden = true;
+      renderCard({ kind: 'loading', title: 'One moment', body: `Checking whether I already know how to do "${question}"…` });
+      renderActions([{ label: 'Stop', value: ACTION.QUIT, subtle: true }]);
+    },
+
     lessonStarted() {
+      viewer.lessonStarted();
       raise();          // stay above D's scrim
       bar?.setEnabled(false);
       setOpen(true);
@@ -567,25 +774,24 @@ function createUI(els, raise, speech) {
       bar?.setEnabled(false);
       setOpen(true);
       renderCard({ kind: 'loading', title: 'Browser Teacher', body: 'Preparing your lesson…' });
-      renderActions([{ label: 'Stop', value: ACTION.QUIT, subtle: true }]);
-    },
-
-    /** The bridge's model is deciding whether a saved lesson fits. A second or two. */
-    checking(question) {
-      raise();
-      bar?.setEnabled(false);
-      setOpen(true);
-      renderCard({ kind: 'loading', title: 'One moment', body: `Checking whether I already know how to do "${question}"…` });
-      renderActions([{ label: 'Stop', value: ACTION.QUIT, subtle: true }]);
+      // A replacement run transfers focus to its actual first card, rather
+      // than a temporary Stop button that will immediately be removed.
+      renderActions([{ label: 'Stop', value: ACTION.QUIT, subtle: true, forgetRecordings: true }], { restoreFocus: false });
     },
 
     lessonEnded() { ui.reset(); },
 
     /** A card that waits for one of its own buttons. */
-    card({ kind, title, body, actions }, options) {
+    async card({ kind, title, body, actions }, options) {
       renderCard({ kind, title, body });
       renderActions(actions);
-      return waitAction(options);
+      const action = await waitAction(options);
+      // Done ends this task, including its optional cloud recording history.
+      // Minimizing keeps history available until the task is done or stopped.
+      if (kind === 'generalization' && action === ACTION.CONTINUE && !options?.signal?.aborted) {
+        viewer.reset({ forgetRecordings: true });
+      }
+      return action;
     },
 
     step(step, index, total) {
@@ -594,7 +800,7 @@ function createUI(els, raise, speech) {
       renderCard({ kind: 'step', mode: step.mode, title: modeLabel(step.mode), body: step.intent });
       renderActions([
         { label: 'Show me where', value: ACTION.DEMO_REST, subtle: true },
-        { label: 'Stop', value: ACTION.QUIT, subtle: true },
+        { label: 'Stop', value: ACTION.QUIT, subtle: true, forgetRecordings: true },
       ]);
     },
 
@@ -614,6 +820,7 @@ function createUI(els, raise, speech) {
 
     /** Something threw. Show it rather than dying quietly behind the page. */
     fail(err) {
+      viewer.lessonStarted();
       raise();
       setOpen(true);
       els.progress.hidden = true;
@@ -631,6 +838,39 @@ function createUI(els, raise, speech) {
   };
 
   return ui;
+}
+
+function pickerTitle(found) {
+  if (!found) return "I don't know that one yet";
+  return found === 1 ? 'Is this the one?' : 'Is it one of these?';
+}
+
+/**
+ * Picker copy. Saying the wrong one here is how the panel loses the user:
+ * hedging over a strong match reads as incompetence, and sounding certain over
+ * three weak ones reads as a lie.
+ */
+function pickerBody(question, found, canGenerate, confident, known = 1) {
+  if (!question) return 'Which would you like?';
+  const escape = canGenerate ? " Or say none of these and I'll go and work it out." : '';
+  if (!found) {
+    // No lessons for this site at all. Blaming the question would be a lie,
+    // and offering "here's what I do teach" over an empty library is worse.
+    if (!known) {
+      return canGenerate
+        ? `I don't have any lessons for ${siteLabel()} yet. I can open a cloud browser and work this one out.`
+        : `I don't have any lessons for ${siteLabel()} yet, and there's no authoring bridge running to build one.`;
+    }
+    return canGenerate
+      ? `I have no lesson for "${question}". I can open a cloud browser and work it out.`
+      : `I have no lesson for "${question}". Here's what I do teach.`;
+  }
+  if (confident) {
+    return found === 1
+      ? `This looks like what you meant by "${question}".${escape}`
+      : `One of these looks like what you meant by "${question}".${escape}`;
+  }
+  return `I'm not certain what you meant by "${question}" — pick the closest.${escape}`;
 }
 
 function modeLabel(mode) {

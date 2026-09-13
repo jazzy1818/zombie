@@ -7,6 +7,7 @@ import Anthropic from '@anthropic-ai/sdk';
 import { zodOutputFormat } from '@anthropic-ai/sdk/helpers/zod';
 import { z } from 'zod';
 import { candidatePool, canonicalTarget, isStateName } from './target-policy.js';
+import { appFor, appById } from './apps.js';
 
 // A trailing keyboard-shortcut run. A chord begins at a modifier word followed
 // by "+" (Ctrl+, Alt+…) or a lone glyph (⌘⌥⇧⌃), and the run reaches the end
@@ -31,8 +32,12 @@ function stripLadder(raw, scope) {
     return [t.replace(/\s*\([^)]*\)\s*$/, '').trim(), t];
   }
   const noArrow = t.replace(/[▶▸►‣]\s*$/, '').trim();
-  // "Page elementsUpdated" — Docs appends promo badges to menu labels.
-  const noBadge = noArrow.replace(/(?:Updated|New)$/, '').trim();
+  // "Page elementsUpdated" — Docs appends promo badges to menu labels. Outside
+  // Docs the equivalent is a count: "Issues 12", "Inbox 1,203".
+  const noBadge = noArrow
+    .replace(/(?:Updated|New)$/, '')
+    .replace(/\s+\(?\d[\d,.\u202f\u00a0]*\+?k?\)?$/i, '')
+    .trim();
   const noShortcut = stripShortcut(noBadge);
   const noAccel = noShortcut.replace(/\s*\([A-Za-z0-9]{1,3}\)\s*$/, '').trim();
   // Cleanest first, then gentler fallbacks. deriveTarget skips any that a
@@ -75,10 +80,13 @@ export function deriveTarget(step) {
   );
 }
 
-const SAFE_SELECTOR = /^(#[A-Za-z][\w-]*|\[aria-label="[^"]+"\])$/;
+// An id, an aria-label, or a role scope followed by an aria-label. Deliberately
+// narrow: a verify selector is written into shipped lesson data and evaluated
+// against a live page, so anything it cannot express is better lost than guessed.
+const SAFE_SELECTOR = /^(#[A-Za-z][\w-]*|\[role="[a-z]+"\]|\[aria-label="[^"]+"\])(\s\[aria-label="[^"]+"\])?$/;
 
 // Decision table over step.delta, first match wins.
-export function deriveVerify(step, nextStep) {
+export function deriveVerify(step, nextStep, app) {
   if (nextStep) {
     const want = nextStep.target;
     if (step.delta.appeared.some(c => c.raw === want.raw && c.scope === want.scope)) {
@@ -96,7 +104,15 @@ export function deriveVerify(step, nextStep) {
       const selector = `[aria-label="${changed.to}"]`;
       if (SAFE_SELECTOR.test(selector)) return { kind: 'dom', selector };
     } else {
-      return { kind: 'label', selector: `#docs-toolbar-wrapper [aria-label="${changed.name}"]`, match: changed.to };
+      // Scoped to wherever this app keeps its toolbar, because a bare
+      // [aria-label] can collide with a sidebar or a dialog that happens to
+      // reuse the name. An app with no toolbar root falls back to the bare
+      // label, which is still far better than losing the check.
+      const root = app?.toolbarRoot;
+      const selector = root
+        ? `${root} [aria-label="${changed.name}"]`
+        : `[aria-label="${changed.name}"]`;
+      if (SAFE_SELECTOR.test(selector)) return { kind: 'label', selector, match: changed.to };
     }
   }
 
@@ -196,6 +212,11 @@ function deriveMode(i, total) {
   return 'guided';
 }
 
+/**
+ * @param {object} meta  `app` — the explored app, for app-scoped verify
+ *                       selectors; `goal` — what was asked, which decides
+ *                       whether the last step is a free choice.
+ */
 export function skeleton(kept, meta = {}) {
   return kept.map((step, i) => {
     // Never null here — instruct-only steps need a human, the doc body is canvas.
@@ -210,7 +231,7 @@ export function skeleton(kept, meta = {}) {
       // Whatever changed on a free choice named the value that was chosen
       // ("Font list. Georgia selected."), so it cannot be the outcome a
       // different, equally correct choice has to produce.
-      verify: free ? { kind: 'none' } : deriveVerify(step, kept[i + 1]),
+      verify: free ? { kind: 'none' } : deriveVerify(step, kept[i + 1], meta.app),
       _trace: {
         reasoning: step.action.reasoning,
         expectation: step.action.expectation,
@@ -301,7 +322,12 @@ async function narrate(client, skel, meta, exemplars) {
 }
 
 export async function emit(pruned, meta) {
-  const skel = skeleton(pruned.kept, meta);
+  // The trace records which app it explored; a caller may name one instead.
+  // Falling back to Docs keeps every pre-existing call site working.
+  const app = meta.app
+    ?? appById(pruned.app ?? meta.appId)
+    ?? appFor(pruned.url ?? meta.url ?? 'https://docs.google.com/');
+  const skel = skeleton(pruned.kept, { ...meta, app });
   const client = meta.client ?? new Anthropic();
   const exemplars = await loadExemplars();
   const prose = await narrate(client, skel, meta, exemplars);
@@ -344,20 +370,38 @@ export async function emit(pruned, meta) {
 
   const lesson = {
     id: meta.id,
-    app: meta.app ?? 'google-docs',
+    // What the extension scopes on: a lesson is only offered on the app it
+    // was authored against. See extension/src/sites.js.
+    app: app.id,
     goal: meta.goal,
     preamble: prose?.preamble ?? '',
     generalization: prose?.generalization ?? '',
     steps,
   };
 
+  // A path that crossed a route change has to declare it, or the panel treats
+  // the navigation as the learner leaving and cancels on the very click it
+  // just asked for. See watchNavigation in extension/src/paint/navigation.js.
+  if (navigates(pruned.kept)) lesson.navigates = true;
+
   validate(lesson);
   return lesson;
 }
 
+/** Did any step's click change the page's route? */
+function navigates(kept) {
+  const key = url => {
+    try { const u = new URL(url); return `${u.origin}${u.pathname}${u.search}`; } catch { return url; }
+  };
+  return kept.some(step => step.pre?.url && step.post?.url && key(step.pre.url) !== key(step.post.url));
+}
+
 const Lesson = z.object({
   id: z.string().min(1),
-  app: z.literal('google-docs'),
+  // Was z.literal('google-docs'), which made a lesson for any other app
+  // unemittable. Any non-empty app id now; the value comes from apps.js, not
+  // from the model, so it cannot be a hallucinated string.
+  app: z.string().min(1),
   goal: z.string().min(1),
   preamble: z.string(),
   generalization: z.string(),
@@ -382,9 +426,10 @@ const Lesson = z.object({
       z.object({ kind: z.literal('visible'), name: z.string(), scope: z.string().optional() }),
       z.object({ kind: z.literal('none') }),
     ]),
-    hints: z.tuple([z.string(), z.string()]),
+      hints: z.tuple([z.string(), z.string()]),
     wrongHints: z.record(z.string(), z.string()).optional(),
   })).min(1),
+  navigates: z.boolean().optional(),
 });
 
 export function validate(lesson) {
