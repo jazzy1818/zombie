@@ -133,7 +133,7 @@
       "action": "click",
       "verify": {
         "kind": "visible",
-        "name": "Table of contents",
+        "name": "Page elements",
         "scope": "menu"
       },
       "hints": [
@@ -144,7 +144,26 @@
     {
       "id": "s8",
       "mode": "solo",
-      "intent": "There it is, at the bottom. Click it and watch what Docs builds from the headings you set.",
+      "intent": "It isn't in the top level of this menu. A table of contents isn't really content — it's a piece of page furniture, like a header or a page number. Look for the group that holds those.",
+      "target": {
+        "scope": "menu",
+        "name": "Page elements"
+      },
+      "action": "click",
+      "verify": {
+        "kind": "visible",
+        "name": "Table of contents",
+        "scope": "menu"
+      },
+      "hints": [
+        "Docs groups the things that structure a page rather than fill it.",
+        "'Page elements', about two-thirds of the way down the Insert menu."
+      ]
+    },
+    {
+      "id": "s9",
+      "mode": "solo",
+      "intent": "There it is. Click it, and watch Docs build the whole thing out of the headings you set.",
       "target": {
         "scope": "menu",
         "name": "Table of contents"
@@ -154,8 +173,8 @@
         "kind": "none"
       },
       "hints": [
-        "Near the bottom of the list — the last few entries are whole-document things.",
-        "Bottom of the Insert menu."
+        "The thing you came here for.",
+        "In the submenu that just opened."
       ]
     }
   ]
