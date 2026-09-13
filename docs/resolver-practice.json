@@ -1,0 +1,72 @@
+{
+  "id": "resolver-practice",
+  "app": "google-docs-fixture",
+  "goal": "Exercise Part A target resolution inside the merged extension",
+  "preamble": "This practice runs on a Google Docs-shaped page served from the repo. Every target is resolved by Part A's resolver through the real teaching bridge. Try clicking Font during the Styles step to see the wrong-click path.",
+  "generalization": "Part A resolved only visible controls, stripped platform shortcuts from toolbar labels, collapsed the nested Font size pair to one control, recognised the live Heading 1► row by its lesson-facing name, and verified outcomes from the toolbar readout and the document.",
+  "steps": [
+    {
+      "id": "nested-font-size",
+      "mode": "guided",
+      "intent": "Click Font size. The toolbar contains two nested elements with that exact label, so the resolver must pick one stable control rather than fail as ambiguous.",
+      "target": { "scope": "toolbar", "name": "Font size" },
+      "action": "click",
+      "verify": { "kind": "label", "selector": "#resolver-font-size-state", "match": "Font size selected" },
+      "hints": [
+        "Use the number field that controls text size.",
+        "It is in the toolbar, immediately to the right of Arial."
+      ],
+      "wrongHints": {
+        "Font": "That is the typeface control. Use the number field immediately to its right.",
+        "Bold": "Bold is a formatting toggle. Use the number field to the left of it."
+      }
+    },
+    {
+      "id": "open-styles",
+      "mode": "guided",
+      "intent": "Open the Styles dropdown. Its caption shows the current paragraph style, but the control is found by its aria-label.",
+      "target": { "scope": "toolbar", "name": "Styles" },
+      "action": "click",
+      "verify": { "kind": "visible", "scope": "menu", "name": "Apply 'Heading 1'" },
+      "hints": [
+        "Open the control that changes what a paragraph is, not how it looks.",
+        "It is the first control on the left of the toolbar, showing 'Normal text'."
+      ],
+      "wrongHints": {
+        "Font": "That is the typeface control. Open Styles on the far left instead.",
+        "Font size": "That changes only the numeric size. Open Styles on the far left instead."
+      }
+    },
+    {
+      "id": "choose-heading-one",
+      "mode": "guided",
+      "intent": "Choose Heading 1. The live row reads 'Heading 1►' while the lesson names it Apply 'Heading 1', exactly like the hero lesson's step s4.",
+      "target": { "scope": "menu", "name": "Apply 'Heading 1'" },
+      "action": "click",
+      "verify": { "kind": "label", "selector": "#docs-toolbar-wrapper [aria-label=\"Styles\"]", "match": "Heading 1" },
+      "hints": [
+        "Choose the first numbered heading level.",
+        "Third row of the open Styles menu, below Title."
+      ],
+      "wrongHints": {
+        "Apply 'Title'": "Title is a different structural role. Choose Heading 1 instead.",
+        "Apply 'Normal text'": "Normal text is body copy. Choose Heading 1 instead."
+      }
+    },
+    {
+      "id": "insert-toc",
+      "mode": "solo",
+      "intent": "Your turn, no highlight this time. Insert a table of contents. Have a look through the menus above the toolbar.",
+      "target": { "scope": "menu", "name": "Table of contents" },
+      "action": "click",
+      "verify": { "kind": "dom", "selector": "#resolver-toc-block" },
+      "hints": [
+        "You are adding something new to the document. Which menu handles that?",
+        "Insert menu, last item."
+      ],
+      "wrongHints": {
+        "Insert": "Good, that is the right menu. Now pick the item that builds a contents list from your headings."
+      }
+    }
+  ]
+}

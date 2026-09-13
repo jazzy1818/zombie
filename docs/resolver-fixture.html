@@ -1,0 +1,249 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Part A resolver practice</title>
+  <style>
+    :root { color-scheme: light; font-family: Arial, sans-serif; color: #202124; background: #f8f9fa; }
+    * { box-sizing: border-box; }
+    body { margin: 0; }
+    header { padding: 18px 24px 14px; border-bottom: 1px solid #dadce0; background: #fff; }
+    h1 { margin: 0 0 6px; font-size: 20px; font-weight: 600; }
+    header p { margin: 0; color: #5f6368; }
+    main { width: min(920px, calc(100% - 32px)); margin: 24px auto 80px; }
+    .workspace { position: relative; border: 1px solid #dadce0; background: #fff; box-shadow: 0 2px 8px rgb(60 64 67 / 12%); }
+
+    /* Docs-shaped chrome: a menubar of role=menuitem openers above the toolbar. */
+    #resolver-menubar { display: flex; gap: 2px; padding: 4px 10px; background: #fff; }
+    #resolver-menubar [role="menuitem"] { padding: 4px 8px; border-radius: 4px; cursor: default; user-select: none; }
+    #resolver-menubar [role="menuitem"]:hover, #resolver-menubar [aria-expanded="true"] { background: #e8eaed; }
+
+    #docs-toolbar-wrapper { display: flex; align-items: center; gap: 6px; min-height: 48px; padding: 7px 10px; border-top: 1px solid #dadce0; border-bottom: 1px solid #dadce0; background: #f1f3f4; }
+    button, [role="combobox"] { min-height: 32px; border: 1px solid transparent; border-radius: 4px; color: #202124; background: transparent; font: inherit; }
+    button { padding: 5px 10px; cursor: pointer; }
+    button:hover, button:focus-visible, [role="combobox"]:hover, [role="combobox"]:focus-within { border-color: #bdc1c6; background: #fff; outline: none; }
+    #resolver-styles { min-width: 110px; text-align: left; }
+    #resolver-styles-readout { display: inline-flex; align-items: center; padding: 0 4px; color: #5f6368; }
+    #resolver-font-size { display: flex; align-items: center; width: 58px; padding: 0 6px; cursor: pointer; }
+    #resolver-font-size input { width: 100%; border: 0; outline: 0; color: inherit; background: transparent; text-align: center; cursor: pointer; }
+    .sep { width: 1px; height: 22px; background: #dadce0; margin: 0 4px; }
+
+    .canvas { min-height: 390px; padding: 42px; background: #eef0f3; }
+    .page { width: min(620px, 100%); min-height: 300px; margin: 0 auto; padding: 42px 50px; background: #fff; box-shadow: 0 1px 4px rgb(60 64 67 / 22%); }
+    .page h2 { margin: 0 0 16px; font-size: 24px; }
+    .page p { line-height: 1.6; }
+    #resolver-toc-block { margin: 0 0 18px; padding: 10px 14px; border: 1px dashed #9aa0a6; color: #3c4043; }
+
+    /* Docs pre-renders every menu and hides it with display:none. Same here. */
+    .menu { position: absolute; z-index: 2; width: 230px; padding: 6px 0; border: 1px solid #dadce0; background: #fff; box-shadow: 0 4px 12px rgb(60 64 67 / 24%); user-select: none; }
+    .menu [role^="menuitem"] { display: block; width: 100%; border: 0; border-radius: 0; padding: 8px 18px; text-align: left; font: inherit; background: transparent; cursor: default; }
+    .menu [role^="menuitem"]:hover { background: #e8f0fe; }
+    #resolver-styles-menu { left: 10px; top: 84px; }
+    #resolver-insert-menu { left: 60px; top: 30px; }
+    [hidden] { display: none !important; }
+
+    .results { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 1px; margin-top: 18px; border: 1px solid #dadce0; background: #dadce0; }
+    .result { min-width: 0; padding: 12px 14px; background: #fff; }
+    .result strong { display: block; margin-bottom: 3px; font-size: 12px; color: #5f6368; text-transform: uppercase; }
+    .controls { margin-top: 14px; color: #3c4043; }
+    details { margin-top: 18px; padding: 14px 16px; border: 1px solid #dadce0; background: #fff; }
+    summary { cursor: pointer; font-weight: 600; }
+    pre { overflow: auto; margin: 12px 0 0; padding: 12px; border: 1px solid #dadce0; background: #f8f9fa; font: 13px/1.5 ui-monospace, SFMono-Regular, Menlo, monospace; white-space: pre-wrap; }
+    @media (max-width: 620px) { main { width: min(100% - 16px, 920px); margin-top: 8px; } #docs-toolbar-wrapper { flex-wrap: wrap; } .canvas { padding: 20px 12px; } .page { padding: 28px 24px; } .results { grid-template-columns: 1fr; } }
+  </style>
+</head>
+<body>
+  <header>
+    <h1>Part A resolver practice</h1>
+    <p>A Google Docs-shaped page for testing target resolution, click judgement and outcome verification. Labels follow the validated Docs formats in PLAN.md §7.</p>
+  </header>
+
+  <main>
+    <section class="workspace" aria-label="Resolver test workspace">
+      <div id="resolver-menubar" role="menubar">
+        <div id="resolver-file" role="menuitem" aria-haspopup="true" aria-disabled="true" tabindex="-1">File</div>
+        <div id="resolver-insert" role="menuitem" aria-haspopup="true" aria-expanded="false" tabindex="0">Insert</div>
+      </div>
+
+      <div id="docs-toolbar-wrapper" role="toolbar" aria-label="Document toolbar">
+        <!-- Real Docs: aria-label "Styles", caption = current paragraph style. -->
+        <button id="resolver-styles" type="button" aria-label="Styles" aria-expanded="false">Normal text</button>
+        <!-- C's finding: the dropdown also exposes a richer label stating the selection. -->
+        <div id="resolver-styles-readout" role="listbox" aria-label="Styles list. Normal text selected."><span aria-hidden="true">▾</span></div>
+        <span class="sep"></span>
+        <button id="resolver-font" type="button" aria-label="Font">Arial</button>
+        <!-- Outer combobox and inner input share one aria-label, as Docs does. -->
+        <div id="resolver-font-size" role="combobox" aria-label="Font size" tabindex="0">
+          <input aria-label="Font size" value="11" readonly tabindex="-1">
+        </div>
+        <span class="sep"></span>
+        <button id="resolver-bold" type="button" aria-label="Bold (⌘B)"><b>B</b></button>
+        <button id="resolver-reset" type="button" aria-label="Reset fixture">Reset</button>
+      </div>
+
+      <!-- Docs format: role=menuitemradio rows, arrow glued to the label, no space. -->
+      <div id="resolver-styles-menu" class="menu" role="menu" aria-label="Styles menu" hidden>
+        <div id="resolver-normal" role="menuitemradio" aria-checked="true">Normal text►</div>
+        <div id="resolver-title" role="menuitemradio" aria-checked="false">Title►</div>
+        <div id="resolver-heading-one" role="menuitemradio" aria-checked="false">Heading 1►</div>
+        <div id="resolver-heading-two" role="menuitemradio" aria-checked="false">Heading 2►</div>
+      </div>
+
+      <!-- Docs format: shortcut glued to the label, submenu arrow glued to the label. -->
+      <div id="resolver-insert-menu" class="menu" role="menu" aria-label="Insert menu" hidden>
+        <div id="resolver-image" role="menuitem">Image►</div>
+        <div id="resolver-table" role="menuitem">Table►</div>
+        <div id="resolver-footnote" role="menuitem">FootnoteCtrl+Alt+F</div>
+        <div id="resolver-toc" role="menuitem">Table of contents</div>
+      </div>
+
+      <div class="canvas">
+        <article class="page">
+          <div id="resolver-toc-block" hidden>Table of contents (inserted from the headings above)</div>
+          <h2>Quarterly planning notes</h2>
+          <p>This document is only a controlled practice surface. The toolbar deliberately contains two nested elements named Font size, and the style rows stay in the DOM while their menu is closed. With the checkbox below ticked, menu rows activate on mouseup and hide before the click event fires, exactly like Google Docs' Closure menus.</p>
+        </article>
+      </div>
+    </section>
+
+    <section class="results" aria-label="Fixture state">
+      <div class="result"><strong>Font size</strong><span id="resolver-font-size-state" aria-live="polite">Not selected</span></div>
+      <div class="result"><strong>Paragraph style</strong><span id="resolver-style-state" aria-live="polite">Normal text</span></div>
+      <div class="result"><strong>Last real click</strong><span id="resolver-click-state" aria-live="polite">none</span></div>
+    </section>
+
+    <p class="controls">
+      <label><input id="resolver-closure" type="checkbox"> <b>Google Docs behaviour:</b> menu rows activate on <code>mouseup</code> and hide before <code>click</code> fires (Closure menus). Off by default so the practice lesson completes through the bridge; tick it (or add <code>?activate=mouseup</code>) to reproduce the bridge gap that <code>docs/resolver-tests.cjs</code> reports.</label>
+    </p>
+
+    <details open>
+      <summary>Run the practice lesson through the real extension</summary>
+      <pre>// 1. Serve the repo root:  python3 -m http.server 8765   (run from the zombie/ folder)
+// 2. Open http://127.0.0.1:8765/docs/resolver-fixture.html with the unpacked extension loaded.
+// 3. DevTools → Console → switch the context dropdown from "top" to "Browser Teacher", then:
+fetch('/docs/resolver-practice.json')
+  .then(response =&gt; response.json())
+  .then(lesson =&gt; __BT_DEV.runLesson(lesson));
+// Click "Show me" in the panel and follow the steps.</pre>
+    </details>
+
+    <details>
+      <summary>Smoke-test __RESOLVE directly (same "Browser Teacher" console context)</summary>
+      <pre>__RESOLVE.findSync({ scope: 'toolbar', name: 'Font size' })?.id
+// Expected: "resolver-font-size" (the outer control, not its nested input).
+
+__RESOLVE.findSync({ scope: 'toolbar', name: 'Bold' })?.id
+// Expected: "resolver-bold" — the "(⌘B)" shortcut is stripped.
+
+__RESOLVE.findSync({ scope: 'menu', name: "Apply 'Heading 1'" })
+// Expected while the Styles menu is CLOSED: null.
+
+__RESOLVE.waitForClick({ scope: 'toolbar', name: 'Styles' }).then(console.log)
+// Click Font → { wrong: "Font" }.  Run again, click Styles → "correct" (menu opens).
+
+__RESOLVE.findSync({ scope: 'menu', name: "Apply 'Heading 1'" })?.id
+// Expected while the Styles menu is OPEN: "resolver-heading-one" (the "Heading 1►" row).
+
+__RESOLVE.waitForClick({ scope: 'menu', name: "Apply 'Heading 1'" }).then(console.log)
+// Click the Heading 1 row → "correct". With the Google Docs checkbox ticked the
+// row hides on mouseup before click fires; __RESOLVE still answers "correct".
+
+__RESOLVE.verify({ kind: 'label', selector: '#docs-toolbar-wrapper [aria-label="Styles"]', match: 'Heading 1' })
+// Expected: true — this is the exact verify used by styles-toc step s4.
+
+__RESOLVE.waitForClick({ scope: 'menu', name: 'Table of contents' }).then(console.log)
+// Click Insert → { wrong: "Insert" }.  Run again, click Table of contents → "correct".
+__RESOLVE.verify({ kind: 'dom', selector: '#resolver-toc-block' })   // → true</pre>
+    </details>
+  </main>
+
+  <script>
+    window.fixture = { clicks: {}, trusted: [] };
+
+    const $ = selector => document.querySelector(selector);
+    const stylesButton = $('#resolver-styles');
+    const stylesReadout = $('#resolver-styles-readout');
+    const stylesMenu = $('#resolver-styles-menu');
+    const insertOpener = $('#resolver-insert');
+    const insertMenu = $('#resolver-insert-menu');
+    const fontSize = $('#resolver-font-size');
+    const fontSizeState = $('#resolver-font-size-state');
+    const styleState = $('#resolver-style-state');
+    const clickState = $('#resolver-click-state');
+    const tocBlock = $('#resolver-toc-block');
+    const closureMode = $('#resolver-closure');
+    const styleRows = [...stylesMenu.querySelectorAll('[role="menuitemradio"]')];
+    const bare = text => text.replace(/\s*[►▶›]\s*$/, '').trim();
+
+    // Record which real controls were clicked, for the automated harness.
+    document.addEventListener('click', event => {
+      if (event.composedPath().some(node => node.id === 'browser-teacher-root')) return;
+      const control = event.composedPath().find(node => node instanceof Element && node.matches('button, [role^="menuitem"], [role="combobox"]'));
+      if (!control) return;
+      fixture.clicks[control.id] = (fixture.clicks[control.id] || 0) + 1;
+      fixture.trusted.push({ id: control.id, trusted: event.isTrusted });
+      clickState.textContent = control.id;
+    }, true);
+
+    function setMenu(menu, opener, open) {
+      menu.hidden = !open;
+      opener.setAttribute('aria-expanded', String(open));
+    }
+
+    function selectStyle(row) {
+      styleRows.forEach(candidate => candidate.setAttribute('aria-checked', String(candidate === row)));
+      const name = bare(row.textContent);
+      stylesButton.textContent = name;
+      stylesReadout.setAttribute('aria-label', `Styles list. ${name} selected.`);
+      styleState.textContent = name;
+    }
+
+    function activateInsert(item) {
+      if (item.id === 'resolver-toc') tocBlock.hidden = false;
+    }
+
+    // Google Docs menus are Closure menus: the item acts on MOUSEUP and the menu
+    // is hidden synchronously in that handler, so by the time the browser fires
+    // `click` on the row it is already display:none. The checkbox switches to
+    // plain click activation for comparison.
+    function menuActivation(menu, opener, activate) {
+      const handler = event => {
+        if (event.type !== (closureMode.checked ? 'mouseup' : 'click')) return;
+        if (event.button !== 0) return;
+        const item = event.target.closest('[role^="menuitem"]');
+        if (!item || !menu.contains(item)) return;
+        activate(item);
+        setMenu(menu, opener, false);
+      };
+      menu.addEventListener('mouseup', handler);
+      menu.addEventListener('click', handler);
+    }
+
+    menuActivation(stylesMenu, stylesButton, selectStyle);
+    menuActivation(insertMenu, insertOpener, activateInsert);
+
+    stylesButton.addEventListener('click', () => setMenu(stylesMenu, stylesButton, stylesMenu.hidden));
+    insertOpener.addEventListener('click', () => {
+      if (insertOpener.getAttribute('aria-disabled') === 'true') return;
+      setMenu(insertMenu, insertOpener, insertMenu.hidden);
+    });
+    fontSize.addEventListener('click', () => { fontSizeState.textContent = 'Font size selected'; });
+    $('#resolver-reset').addEventListener('click', reset);
+
+    function reset() {
+      fontSizeState.textContent = 'Not selected';
+      selectStyle($('#resolver-normal'));
+      tocBlock.hidden = true;
+      setMenu(stylesMenu, stylesButton, false);
+      setMenu(insertMenu, insertOpener, false);
+      clickState.textContent = 'none';
+    }
+
+    // Like Docs during load: File is present but disabled for a moment.
+    setTimeout(() => $('#resolver-file').setAttribute('aria-disabled', 'false'), 900);
+
+    closureMode.checked = new URLSearchParams(location.search).get('activate') === 'mouseup';
+  </script>
+</body>
+</html>
