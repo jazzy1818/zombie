@@ -1,0 +1,53 @@
+{
+  "id": "add-table",
+  "app": "google-docs",
+  "goal": "how to add a table",
+  "preamble": "A table isn't something you draw in a document — it's a grid you declare. You don't sketch the lines; you tell Docs how many columns and rows you want and it lays the structure down for you. So the question isn't \"where are the drawing tools\" — it's \"how do I add a new object to this page\", which is a different question with a much simpler answer.",
+  "generalization": "Anything that isn't typed text — a table, an image, a chart, a page break — gets added rather than formatted. Format changes what's already there; Insert brings something new into existence. Once you sort every control in a document editor into one of those two piles, you stop hunting through menus and start guessing correctly the first time.",
+  "steps": [
+    {
+      "id": "s1",
+      "intent": "Nothing on the page will become a table by being restyled — you're bringing a new object into the document that didn't exist a moment ago. Docs keeps all of those in one place: the menu for things you add rather than things you change.",
+      "mode": "demo",
+      "target": {
+        "scope": "menu",
+        "name": "Insert"
+      },
+      "action": "click",
+      "verify": {
+        "kind": "visible",
+        "name": "Table",
+        "scope": "menu"
+      },
+      "hints": [
+        "You're not altering any existing text. You're putting something new on the page — which menu is that whole job filed under?",
+        "The Insert menu, in the menu bar along the top, between View and Format."
+      ],
+      "wrongHints": {
+        "Format": "A reasonable guess, because a table looks like a formatting decision. But Format only acts on text that already exists — it can't create a grid that isn't there yet.",
+        "Edit": "Edit holds actions performed on your document's content — undo, copy, paste, find. Adding a brand-new structure is a different kind of operation, and Docs files it separately."
+      }
+    },
+    {
+      "id": "s2",
+      "intent": "Now pick the kind of object. Everything in this menu is something you can drop into the page, and the one you want has a small arrow beside it — because a table needs a size before it can exist, and that arrow leads to the grid where you choose it.",
+      "mode": "guided",
+      "target": {
+        "scope": "menu",
+        "name": "Table"
+      },
+      "action": "click",
+      "verify": {
+        "kind": "none"
+      },
+      "hints": [
+        "You're looking for the item named after the thing itself, not for anything that summarises or charts your content.",
+        "Near the top of the Insert menu, just below Image."
+      ],
+      "wrongHints": {
+        "Chart": "A chart also arrives as a grid-shaped block and even carries data, which makes it a fair guess. But a chart is a picture of numbers — a table is a layout you type directly into.",
+        "Drawing": "You could draw rectangles that look like a table, and people do. What you'd get is a picture — no cells, no typing, no rows you can add later."
+      }
+    }
+  ]
+}

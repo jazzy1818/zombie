@@ -1,0 +1,77 @@
+{
+  "id": "add-image-2",
+  "app": "google-docs",
+  "goal": "how to add an image",
+  "preamble": "Adding a picture feels like one action, but Docs treats it as two questions: what kind of thing are you adding, and where is it coming from. That's why the path has two layers of menu rather than one. Once you see the menu as answering those two questions in order, you'll find every other kind of insert without being told.",
+  "generalization": "The Insert menu is Docs' answer to \"put something here that isn't typed text\" — and whenever an item there has a submenu, that submenu is almost always asking where the thing comes from. Images, links, charts, drawings all follow the same shape. Also worth keeping: uploading copies the file into the document, so it travels with it. Anything you pull in by reference — a web address, a linked chart — stays dependent on the place it came from.",
+  "steps": [
+    {
+      "id": "s1",
+      "intent": "Nothing on the page needs changing — you're bringing something new into the document that doesn't exist there yet. Docs keeps all of that behind one menu, separate from the menus that alter what's already written.",
+      "mode": "demo",
+      "target": {
+        "scope": "menu",
+        "name": "Insert"
+      },
+      "action": "click",
+      "verify": {
+        "kind": "visible",
+        "name": "Image",
+        "scope": "menu"
+      },
+      "hints": [
+        "Formatting menus act on text that exists. You want the menu for things that don't exist yet.",
+        "The menu bar at the top, between View and Format."
+      ],
+      "wrongHints": {
+        "Format": "Format works on something already in the document — it changes how existing content looks. There's no image yet to format.",
+        "Edit": "A reasonable guess, since Edit holds paste. But paste depends on something already being on your clipboard; Insert is how you bring in a file from scratch."
+      }
+    },
+    {
+      "id": "s2",
+      "intent": "This menu is a list of the kinds of things a document can hold — tables, drawings, charts, page breaks. Pick the one that names what you actually want, and Docs will then ask you where to get it.",
+      "mode": "guided",
+      "target": {
+        "scope": "menu",
+        "name": "Image"
+      },
+      "action": "click",
+      "verify": {
+        "kind": "visible",
+        "name": "Upload from computer",
+        "scope": "menu"
+      },
+      "hints": [
+        "You're naming the type of object first, not its source. Which entry describes a photograph?",
+        "Near the top of the Insert menu, with a small arrow on the right showing more options underneath."
+      ],
+      "wrongHints": {
+        "Drawing": "Drawing gives you a blank canvas to make shapes yourself. You already have the picture — you need a way to bring it in, not a place to create one.",
+        "Chart": "A chart is generated from data you supply. An image is a file that already exists."
+      }
+    },
+    {
+      "id": "s3",
+      "intent": "Your turn. The submenu isn't offering different kinds of image — it's offering different places an image can come from: the web, your Drive, a web address, your camera. Yours is a file sitting on this machine, so choose the option that says exactly that.",
+      "mode": "solo",
+      "target": {
+        "scope": "menu",
+        "name": "Upload from computer"
+      },
+      "action": "click",
+      "verify": {
+        "kind": "none"
+      },
+      "hints": [
+        "Every option here answers the same question in a different way: where does this picture live right now?",
+        "The first entry in the submenu that opened to the right."
+      ],
+      "wrongHints": {
+        "By URL": "That points at an image still hosted elsewhere on the web. If that address ever goes away, so does your picture. Uploading puts a copy inside the document.",
+        "Search the web": "That finds an image you don't have yet. You already have the file — you only need to hand it over.",
+        "Drive": "Drive is for files you've already put in the cloud. A file still sitting on your own machine needs uploading first, which is what the other option does in one step."
+      }
+    }
+  ]
+}

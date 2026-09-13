@@ -1,0 +1,76 @@
+{
+  "id": "add-header",
+  "app": "google-docs",
+  "goal": "how to add a header",
+  "preamble": "A header isn't text you type at the top of the page — the top of the page isn't somewhere you can put your cursor. A header is a separate layer that Docs repeats on every page for you. So you can't write your way into one; you have to ask Docs to create the layer first, and then it lets you type there.",
+  "generalization": "Anything that belongs to the page rather than to the text — headers, footers, page numbers, breaks — lives together under Insert, in the group about page elements. When something won't accept your cursor, that's the signal: it isn't part of the document body, and you add it rather than type it.",
+  "steps": [
+    {
+      "id": "s1",
+      "intent": "You're not changing how existing text looks — you're bringing something into the document that isn't there yet. That's the difference between Format and Insert, and it's the question worth asking before you open any menu.",
+      "mode": "demo",
+      "target": {
+        "scope": "menu",
+        "name": "Insert"
+      },
+      "action": "click",
+      "verify": {
+        "kind": "visible",
+        "name": "Page elements",
+        "scope": "menu"
+      },
+      "hints": [
+        "Nothing in the document needs reformatting. Something new needs to exist.",
+        "The Insert menu, in the menu bar near the top left."
+      ],
+      "wrongHints": {
+        "Format": "Format changes text that already exists. There's no header yet to format — it has to be created first.",
+        "View": "View changes how the document is displayed to you. A header is part of the document itself, and will print."
+      }
+    },
+    {
+      "id": "s2",
+      "intent": "The header isn't at the top level of this menu, because Docs separates things that fill a page from things that structure one. A header belongs to the page frame, alongside footers, page numbers and breaks — look for the group that gathers them.",
+      "mode": "guided",
+      "target": {
+        "scope": "menu",
+        "name": "Page elements"
+      },
+      "action": "click",
+      "verify": {
+        "kind": "visible",
+        "name": "Header",
+        "scope": "menu"
+      },
+      "hints": [
+        "A header isn't content you're dropping in at the cursor. It belongs to the page itself.",
+        "'Page elements', partway down the Insert menu, with an arrow showing a submenu."
+      ],
+      "wrongHints": {
+        "Table": "A table is content that sits in the flow of the document. A header sits outside that flow, on every page.",
+        "Break": "Close in spirit — breaks are page furniture too — but a break divides the body text rather than adding a repeating band above it."
+      }
+    },
+    {
+      "id": "s3",
+      "intent": "Your turn, with no highlight. The submenu holds a matched pair: one band above the text and one below. Pick the one that sits at the top, and Docs will create the layer and drop your cursor straight into it.",
+      "mode": "solo",
+      "target": {
+        "scope": "menu",
+        "name": "Header"
+      },
+      "action": "click",
+      "verify": {
+        "kind": "none"
+      },
+      "hints": [
+        "Two options here are mirror images of each other. You want the one at the top of the page.",
+        "In the submenu that just opened, above the entry for its counterpart at the bottom of the page."
+      ],
+      "wrongHints": {
+        "Footer": "Same idea, opposite end — a footer repeats at the bottom of every page. Header is the one above the text.",
+        "Page numbers": "Page numbers live inside a header or footer, but choosing them commits you to a particular content. Header gives you the empty band to write whatever you want."
+      }
+    }
+  ]
+}
