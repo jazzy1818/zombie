@@ -109,6 +109,49 @@ Two consequences:
    targets it must run with the menu closed.
 2. `"Styles list. <X> selected."` is a cleaner signal for s4/s5 than reading `textContent`
    off the button. **But `Verify.kind: 'label'` reads `textContent`, not attributes**, and
-   §5 is frozen — so we cannot use it without a schema change. Worth raising with A: if
-   their `verify.js` reads the aria-label for `kind:'label'` as well as textContent, both
-   implementations get a much more reliable hook for free. [C + A]
+   §5 is frozen.
+
+### RESOLVED — no schema change needed; it is a `dom` verify, not a `label` verify
+
+`{kind:'dom', selector:'[aria-label="Zoom list. 150% selected."]'}` passes against the live
+page and is already inside §8.6's whitelist of safe selectors. §5 stays frozen.
+
+This matters because `label` **cannot** work for these controls: `Zoom`'s own `textContent`
+is the empty string — the value lives only in the sibling's aria-label. Measured:
+
+```
+before: ["Zoom list. 100% selected.", "Styles list. Heading 2 selected."]
+after:  ["Zoom list. 150% selected.", "Styles list. Heading 2 selected."]
+```
+
+`Styles` is the lucky case, not the rule: it carries its readout in both places, which is
+why `styles-toc` s4/s6 pass with `kind:'label'`. Leave those alone. [A]
+
+### NEW — these aria-labels are a verify signal and a descriptor trap
+
+The same string that makes a good verify makes a **fatal** target name: it changes when the
+value does. The pipeline authored a zoom lesson targeting `"Zoom list. 100% selected."`,
+which replayed clean once and would have failed on any doc not already at 100%.
+
+`dom-probe` now flags them (`c.state`) and `explore` omits them from the observation
+entirely, so the model cannot pick one. **A's resolver should refuse them as target names
+too** — pattern `/\b(?:list|menu)\.\s.+\sselected\.\s*$/`. A lesson that names one is
+already broken. [A]
+
+### NEW — the Word count dialog is invisible to every Verify kind
+
+`Tools → Word count` opens a `role="dialog"` with **no `aria-label`, no `id`, and no roles
+on any child**. Its only probe-visible contents are two generic buttons, `Cancel` and `OK`.
+
+```
+--- after clicking Tools ---
+  TRUE   {"kind":"visible","name":"Word count","scope":"menu"}
+--- after clicking Word count ---
+  false  {"kind":"visible","name":"Word count","scope":"menu"}
+  false  {"kind":"dom","selector":"[aria-label=\"Word count\"]"}
+```
+
+The check goes true one click early, then false again after the correct click. Nothing in
+§5 can express "this dialog is open". Avoid dialog-terminated goals; the pipeline's shallow
+goal is zoom instead. If B's panel ever needs to detect a Docs dialog, this is why it
+can't. [B + D]
