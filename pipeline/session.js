@@ -73,6 +73,17 @@ async function assertViewport(page) {
   console.warn(`[session] window was ${w}px; forced ${w2}px via Emulation override`);
 }
 
+// Which Google account this browser is acting as. An anonymous session can still edit a
+// link-shared doc, but every Drive-level menu item is greyed out, which reads as a broken
+// lesson rather than a missing login.
+export async function whoami(page) {
+  const labels = await page.evaluate(() =>
+    [...document.querySelectorAll('[aria-label]')]
+      .map(e => e.getAttribute('aria-label'))
+      .filter(l => l && l.includes('@')));
+  return labels[0] ?? null;
+}
+
 // Covers addInitScript not firing on the CDP default context.
 async function ensureProbe(page) {
   const ok = await page.evaluate(() => typeof window.__PROBE === 'object');

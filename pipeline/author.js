@@ -6,7 +6,7 @@ import { resolve as resolvePath } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import {
   openAuthedSession, openCaptureSession, saveProfile, closeSession,
-  listProfiles, adoptProfile,
+  listProfiles, adoptProfile, openLocalSession, whoami,
 } from './session.js';
 import { explore } from './explore.js';
 import { prune, printPrune } from './prune.js';
@@ -49,7 +49,7 @@ const commands = {
   // explore and verify actually run in.
   async open({ flags }) {
     const docUrl = str(flags.doc) ?? process.env.DEMO_DOC_URL;
-    const handle = await openAuthedSession();
+    const handle = flags.local ? await openLocalSession() : await openAuthedSession();
 
     try {
       if (docUrl) {
@@ -76,14 +76,8 @@ const commands = {
         );
         console.log(`  filter     ${obs.menu.length} visible of ${total} in the DOM`);
 
-        // Which account this browser is actually signed in as — the profile and your
-        // local browser can easily be different accounts.
-        const who = await handle.page.evaluate(() =>
-          [...document.querySelectorAll('[aria-label]')]
-            .map(e => e.getAttribute('aria-label'))
-            .filter(l => l && l.includes('@'))
-            .slice(0, 3));
-        console.log(`  account    ${who.length ? who.join(' | ') : 'no signed-in account found — the session may be anonymous'}`);
+        const who = await whoami(handle.page);
+        console.log(`  account    ${who ?? 'NOT SIGNED IN — Drive-level menu items will be disabled'}`);
       }
 
       if (docUrl) {

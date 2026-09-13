@@ -1,6 +1,6 @@
 // [C] Stage 5 — replay a lesson in a fresh session using only its emitted descriptors.
 // Completes → ship. Fails → descriptors too fragile, re-run.
-import { openAuthedSession, openLocalSession, closeSession } from './session.js';
+import { openAuthedSession, openLocalSession, closeSession, whoami } from './session.js';
 import { RESOLVE_TIMEOUT_MS, VERIFY_TIMEOUT_MS } from './config.js';
 
 export async function verifyLesson(lesson, opts = {}) {
@@ -19,6 +19,11 @@ export async function verifyLesson(lesson, opts = {}) {
     await handle.page.goto(docUrl, { waitUntil: 'domcontentloaded' });
     await handle.page.waitForSelector('#docs-toolbar-wrapper', { timeout: 30_000 });
     await handle.page.waitForTimeout(1500);   // Docs wires its menus after the toolbar paints
+
+    const account = await whoami(handle.page);
+    console.log(account
+      ? `  signed in as ${account}`
+      : '  NOT SIGNED IN — Drive-level menu items will be disabled and steps that need them will fail');
 
     for (const step of lesson.steps) {
       const t0 = Date.now();
