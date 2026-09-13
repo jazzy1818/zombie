@@ -9,7 +9,7 @@
   },
   "content_scripts": [
     {
-      "matches": ["http://*/*", "https://*/*"],
+      "matches": ["https://docs.google.com/*", "http://127.0.0.1/*", "http://localhost/*"],
       "js": ["src/content.js"],
       "run_at": "document_idle"
     }
@@ -17,7 +17,7 @@
   "web_accessible_resources": [
     {
       "resources": ["lessons/*.json", "src/*", "src/*/*"],
-      "matches": ["http://*/*", "https://*/*"]
+      "matches": ["https://docs.google.com/*", "http://127.0.0.1/*", "http://localhost/*"]
     }
   ]
 }
