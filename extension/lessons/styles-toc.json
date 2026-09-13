@@ -47,7 +47,7 @@
       "action": "click",
       "verify": {
         "kind": "visible",
-        "name": "Apply 'Heading 1'",
+        "name": "Heading 1",
         "scope": "menu"
       },
       "hints": [
@@ -65,7 +65,7 @@
       "intent": "Choose Heading 1. You're telling Docs 'this line is a top-level section'.",
       "target": {
         "scope": "menu",
-        "name": "Apply 'Heading 1'"
+        "name": "Heading 1"
       },
       "action": "click",
       "verify": {
@@ -78,16 +78,35 @@
         "Below 'Title' and 'Subtitle' in the list."
       ],
       "wrongHints": {
-        "Apply 'Title'": "Title works visually, but Docs treats it as the document name — it won't appear as a section in the contents."
+        "Title": "Title works visually, but Docs treats it as the document name — it won't appear as a section in the contents."
       }
     },
     {
       "id": "s5",
       "mode": "guided",
-      "intent": "Same thing for a section heading — put your cursor on one of the section lines and make it Heading 2. Heading 2 nests underneath Heading 1, which is how the contents gets its indentation.",
+      "intent": "Now the same move for a section heading. Put your cursor on one of the section lines, then open the Styles box again — notice it goes back to saying 'Normal text', because that's what this line still is.",
+      "target": {
+        "scope": "toolbar",
+        "name": "Styles"
+      },
+      "action": "click",
+      "verify": {
+        "kind": "visible",
+        "name": "Heading 2",
+        "scope": "menu"
+      },
+      "hints": [
+        "Same box as before — it always describes the line your cursor is on.",
+        "Click a section line first, then the Styles box in the toolbar."
+      ]
+    },
+    {
+      "id": "s6",
+      "mode": "guided",
+      "intent": "Choose Heading 2. It sits underneath Heading 1 rather than beside it, and that nesting is exactly what gives the table of contents its indentation.",
       "target": {
         "scope": "menu",
-        "name": "Apply 'Heading 2'"
+        "name": "Heading 2"
       },
       "action": "click",
       "verify": {
@@ -96,17 +115,39 @@
         "match": "Heading 2"
       },
       "hints": [
-        "Open the Styles box again, one step down from Heading 1.",
+        "One step down from Heading 1 — a subsection, not a new top-level section.",
         "Directly below 'Heading 1' in the dropdown."
+      ],
+      "wrongHints": {
+        "Heading 1": "That would make this a top-level section, level with the one you just set. Heading 2 is what makes it a subsection."
+      }
+    },
+    {
+      "id": "s7",
+      "mode": "solo",
+      "intent": "Your turn, and no highlight this time. Your headings are set, so the contents can build itself — you just have to ask for it. Which menu would you use to add something new to the document?",
+      "target": {
+        "scope": "menu",
+        "name": "Insert"
+      },
+      "action": "click",
+      "verify": {
+        "kind": "visible",
+        "name": "Page elements",
+        "scope": "menu"
+      },
+      "hints": [
+        "You're not formatting anything now — you're adding something that wasn't there.",
+        "The Insert menu, in the menu bar."
       ]
     },
     {
-      "id": "s6",
+      "id": "s8",
       "mode": "solo",
-      "intent": "Your turn, no highlight this time. Your headings are set — now insert the table of contents itself. Have a look through the menus.",
+      "intent": "It isn't in the top level of this menu. A table of contents isn't really content — it's a piece of page furniture, like a header or a page number. Look for the group that holds those.",
       "target": {
         "scope": "menu",
-        "name": "Table of contents"
+        "name": "Page elements"
       },
       "action": "click",
       "verify": {
@@ -115,8 +156,25 @@
         "scope": "menu"
       },
       "hints": [
-        "You're adding something new to the document — which menu handles that?",
-        "It's in the Insert menu, near the bottom."
+        "Docs groups the things that structure a page rather than fill it.",
+        "'Page elements', about two-thirds of the way down the Insert menu."
+      ]
+    },
+    {
+      "id": "s9",
+      "mode": "solo",
+      "intent": "There it is. Click it, and watch Docs build the whole thing out of the headings you set.",
+      "target": {
+        "scope": "menu",
+        "name": "Table of contents"
+      },
+      "action": "click",
+      "verify": {
+        "kind": "none"
+      },
+      "hints": [
+        "The thing you came here for.",
+        "In the submenu that just opened."
       ]
     }
   ]

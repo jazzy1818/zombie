@@ -1,0 +1,1821 @@
+{
+  "trace": {
+    "ok": true,
+    "goal": "Set the page zoom to 150%",
+    "goalCheck": {
+      "kind": "dom",
+      "selector": "[aria-label=\"Zoom list. 150% selected.\"]"
+    },
+    "steps": [
+      {
+        "n": 0,
+        "pre": {
+          "url": "https://docs.google.com/document/d/1FAarvqMcAY8f_c-XZ_Qie3Tw3QXTkz3mWgYLYhwUPxA/edit?tab=t.0#heading=h.9u3adgt3vq8f",
+          "toolbar": [
+            {
+              "id": 0,
+              "name": "Search the menus",
+              "raw": "Search the menus (Alt+/)",
+              "scope": "toolbar",
+              "source": "toolbar"
+            },
+            {
+              "id": 1,
+              "name": "Menus",
+              "raw": "Menus",
+              "scope": "toolbar",
+              "source": "toolbar"
+            },
+            {
+              "id": 2,
+              "name": "Main",
+              "raw": "Main",
+              "scope": "toolbar",
+              "source": "toolbar"
+            },
+            {
+              "id": 3,
+              "name": "Undo",
+              "raw": "Undo (Ctrl+Z)",
+              "scope": "toolbar",
+              "source": "toolbar"
+            },
+            {
+              "id": 4,
+              "name": "Redo",
+              "raw": "Redo (Ctrl+Y)",
+              "scope": "toolbar",
+              "source": "toolbar"
+            },
+            {
+              "id": 5,
+              "name": "Print",
+              "raw": "Print (Ctrl+P)",
+              "scope": "toolbar",
+              "source": "toolbar"
+            },
+            {
+              "id": 6,
+              "name": "Spelling and grammar check",
+              "raw": "Spelling and grammar check (Ctrl+Alt+X)",
+              "scope": "toolbar",
+              "source": "toolbar"
+            },
+            {
+              "id": 7,
+              "name": "Paint format",
+              "raw": "Paint format",
+              "scope": "toolbar",
+              "source": "toolbar"
+            },
+            {
+              "id": 8,
+              "name": "Zoom",
+              "raw": "Zoom",
+              "scope": "toolbar",
+              "source": "toolbar"
+            },
+            {
+              "id": 9,
+              "name": "Zoom list. 100% selected.",
+              "raw": "Zoom list. 100% selected.",
+              "scope": "toolbar",
+              "source": "toolbar",
+              "state": true
+            },
+            {
+              "id": 10,
+              "name": "Zoom",
+              "raw": "Zoom",
+              "scope": "toolbar",
+              "source": "toolbar"
+            },
+            {
+              "id": 11,
+              "name": "Styles",
+              "raw": "Styles",
+              "scope": "toolbar",
+              "source": "toolbar"
+            },
+            {
+              "id": 12,
+              "name": "Styles list. Heading 2 selected.",
+              "raw": "Styles list. Heading 2 selected.",
+              "scope": "toolbar",
+              "source": "toolbar",
+              "state": true
+            },
+            {
+              "id": 13,
+              "name": "Font",
+              "raw": "Font",
+              "scope": "toolbar",
+              "source": "toolbar"
+            },
+            {
+              "id": 14,
+              "name": "Decrease font size",
+              "raw": "Decrease font size (Ctrl+Shift+comma)",
+              "scope": "toolbar",
+              "source": "toolbar"
+            },
+            {
+              "id": 15,
+              "name": "Font size",
+              "raw": "Font size",
+              "scope": "toolbar",
+              "source": "toolbar"
+            },
+            {
+              "id": 16,
+              "name": "Font size list. 16 selected.",
+              "raw": "Font size list. 16 selected.",
+              "scope": "toolbar",
+              "source": "toolbar",
+              "state": true
+            },
+            {
+              "id": 17,
+              "name": "Font size",
+              "raw": "Font size",
+              "scope": "toolbar",
+              "source": "toolbar"
+            },
+            {
+              "id": 18,
+              "name": "Increase font size",
+              "raw": "Increase font size (Ctrl+Shift+period)",
+              "scope": "toolbar",
+              "source": "toolbar"
+            },
+            {
+              "id": 19,
+              "name": "Bold",
+              "raw": "Bold (Ctrl+B)",
+              "scope": "toolbar",
+              "source": "toolbar"
+            },
+            {
+              "id": 20,
+              "name": "Italic",
+              "raw": "Italic (Ctrl+I)",
+              "scope": "toolbar",
+              "source": "toolbar"
+            },
+            {
+              "id": 21,
+              "name": "Underline",
+              "raw": "Underline (Ctrl+U)",
+              "scope": "toolbar",
+              "source": "toolbar"
+            },
+            {
+              "id": 22,
+              "name": "Text color",
+              "raw": "Text color",
+              "scope": "toolbar",
+              "source": "toolbar"
+            },
+            {
+              "id": 23,
+              "name": "Highlight color",
+              "raw": "Highlight color",
+              "scope": "toolbar",
+              "source": "toolbar"
+            },
+            {
+              "id": 24,
+              "name": "Insert link",
+              "raw": "Insert link (Ctrl+K)",
+              "scope": "toolbar",
+              "source": "toolbar"
+            },
+            {
+              "id": 25,
+              "name": "Add comment",
+              "raw": "Add comment (Ctrl+Alt+M)",
+              "scope": "toolbar",
+              "source": "toolbar"
+            },
+            {
+              "id": 26,
+              "name": "Insert image",
+              "raw": "Insert image",
+              "scope": "toolbar",
+              "source": "toolbar"
+            },
+            {
+              "id": 27,
+              "name": "Align & indent",
+              "raw": "Align & indent",
+              "scope": "toolbar",
+              "source": "toolbar"
+            },
+            {
+              "id": 28,
+              "name": "Line & paragraph spacing",
+              "raw": "Line & paragraph spacing",
+              "scope": "toolbar",
+              "source": "toolbar"
+            },
+            {
+              "id": 29,
+              "name": "Checklist",
+              "raw": "Checklist (Ctrl+Shift+9)",
+              "scope": "toolbar",
+              "source": "toolbar"
+            },
+            {
+              "id": 30,
+              "name": "Checklist menu",
+              "raw": "Checklist menu",
+              "scope": "toolbar",
+              "source": "toolbar"
+            },
+            {
+              "id": 31,
+              "name": "Bulleted list",
+              "raw": "Bulleted list (Ctrl+Shift+8)",
+              "scope": "toolbar",
+              "source": "toolbar"
+            },
+            {
+              "id": 32,
+              "name": "Bulleted list menu",
+              "raw": "Bulleted list menu",
+              "scope": "toolbar",
+              "source": "toolbar"
+            },
+            {
+              "id": 33,
+              "name": "Numbered list",
+              "raw": "Numbered list (Ctrl+Shift+7)",
+              "scope": "toolbar",
+              "source": "toolbar"
+            },
+            {
+              "id": 34,
+              "name": "Numbered list menu",
+              "raw": "Numbered list menu",
+              "scope": "toolbar",
+              "source": "toolbar"
+            },
+            {
+              "id": 35,
+              "name": "Decrease indent",
+              "raw": "Decrease indent (Ctrl+left bracket)",
+              "scope": "toolbar",
+              "source": "toolbar"
+            },
+            {
+              "id": 36,
+              "name": "Increase indent",
+              "raw": "Increase indent (Ctrl+right bracket)",
+              "scope": "toolbar",
+              "source": "toolbar"
+            },
+            {
+              "id": 37,
+              "name": "Clear formatting",
+              "raw": "Clear formatting (Ctrl+backslash)",
+              "scope": "toolbar",
+              "source": "toolbar"
+            },
+            {
+              "id": 38,
+              "name": "Mode and view",
+              "raw": "Mode and view",
+              "scope": "toolbar",
+              "source": "toolbar"
+            },
+            {
+              "id": 39,
+              "name": "Editing mode",
+              "raw": "Editing mode",
+              "scope": "toolbar",
+              "source": "toolbar"
+            },
+            {
+              "id": 40,
+              "name": "Hide the menus",
+              "raw": "Hide the menus (Ctrl+Shift+F)",
+              "scope": "toolbar",
+              "source": "toolbar"
+            }
+          ],
+          "menu": [
+            {
+              "id": 41,
+              "name": "File",
+              "raw": "File",
+              "scope": "menu",
+              "source": "menubar-role"
+            },
+            {
+              "id": 42,
+              "name": "Edit",
+              "raw": "Edit",
+              "scope": "menu",
+              "source": "menubar-role"
+            },
+            {
+              "id": 43,
+              "name": "View",
+              "raw": "View",
+              "scope": "menu",
+              "source": "menubar-role"
+            },
+            {
+              "id": 44,
+              "name": "Insert",
+              "raw": "Insert",
+              "scope": "menu",
+              "source": "menubar-role"
+            },
+            {
+              "id": 45,
+              "name": "Format",
+              "raw": "Format",
+              "scope": "menu",
+              "source": "menubar-role"
+            },
+            {
+              "id": 46,
+              "name": "Tools",
+              "raw": "Tools",
+              "scope": "menu",
+              "source": "menubar-role"
+            },
+            {
+              "id": 47,
+              "name": "Extensions",
+              "raw": "Extensions",
+              "scope": "menu",
+              "source": "menubar-role"
+            },
+            {
+              "id": 48,
+              "name": "Help",
+              "raw": "Help",
+              "scope": "menu",
+              "source": "menubar-role"
+            },
+            {
+              "id": 49,
+              "name": "Quarterly Report",
+              "raw": "Quarterly Report",
+              "scope": "menu",
+              "source": "menuitem"
+            },
+            {
+              "id": 50,
+              "name": "Arial",
+              "raw": "Arial",
+              "scope": "menu",
+              "source": "option"
+            }
+          ],
+          "dialog": [],
+          "ts": 1789264617552
+        },
+        "post": {
+          "url": "https://docs.google.com/document/d/1FAarvqMcAY8f_c-XZ_Qie3Tw3QXTkz3mWgYLYhwUPxA/edit?tab=t.0#heading=h.9u3adgt3vq8f",
+          "toolbar": [
+            {
+              "id": 0,
+              "name": "Search the menus",
+              "raw": "Search the menus (Alt+/)",
+              "scope": "toolbar",
+              "source": "toolbar"
+            },
+            {
+              "id": 1,
+              "name": "Menus",
+              "raw": "Menus",
+              "scope": "toolbar",
+              "source": "toolbar"
+            },
+            {
+              "id": 2,
+              "name": "Main",
+              "raw": "Main",
+              "scope": "toolbar",
+              "source": "toolbar"
+            },
+            {
+              "id": 3,
+              "name": "Undo",
+              "raw": "Undo (Ctrl+Z)",
+              "scope": "toolbar",
+              "source": "toolbar"
+            },
+            {
+              "id": 4,
+              "name": "Redo",
+              "raw": "Redo (Ctrl+Y)",
+              "scope": "toolbar",
+              "source": "toolbar"
+            },
+            {
+              "id": 5,
+              "name": "Print",
+              "raw": "Print (Ctrl+P)",
+              "scope": "toolbar",
+              "source": "toolbar"
+            },
+            {
+              "id": 6,
+              "name": "Spelling and grammar check",
+              "raw": "Spelling and grammar check (Ctrl+Alt+X)",
+              "scope": "toolbar",
+              "source": "toolbar"
+            },
+            {
+              "id": 7,
+              "name": "Paint format",
+              "raw": "Paint format",
+              "scope": "toolbar",
+              "source": "toolbar"
+            },
+            {
+              "id": 9,
+              "name": "Zoom list. 100% selected.",
+              "raw": "Zoom list. 100% selected.",
+              "scope": "toolbar",
+              "source": "toolbar",
+              "state": true
+            },
+            {
+              "id": 10,
+              "name": "Zoom",
+              "raw": "Zoom",
+              "scope": "toolbar",
+              "source": "toolbar"
+            },
+            {
+              "id": 11,
+              "name": "Styles",
+              "raw": "Styles",
+              "scope": "toolbar",
+              "source": "toolbar"
+            },
+            {
+              "id": 12,
+              "name": "Styles list. Heading 2 selected.",
+              "raw": "Styles list. Heading 2 selected.",
+              "scope": "toolbar",
+              "source": "toolbar",
+              "state": true
+            },
+            {
+              "id": 13,
+              "name": "Font",
+              "raw": "Font",
+              "scope": "toolbar",
+              "source": "toolbar"
+            },
+            {
+              "id": 14,
+              "name": "Decrease font size",
+              "raw": "Decrease font size (Ctrl+Shift+comma)",
+              "scope": "toolbar",
+              "source": "toolbar"
+            },
+            {
+              "id": 15,
+              "name": "Font size",
+              "raw": "Font size",
+              "scope": "toolbar",
+              "source": "toolbar"
+            },
+            {
+              "id": 16,
+              "name": "Font size list. 16 selected.",
+              "raw": "Font size list. 16 selected.",
+              "scope": "toolbar",
+              "source": "toolbar",
+              "state": true
+            },
+            {
+              "id": 17,
+              "name": "Font size",
+              "raw": "Font size",
+              "scope": "toolbar",
+              "source": "toolbar"
+            },
+            {
+              "id": 18,
+              "name": "Increase font size",
+              "raw": "Increase font size (Ctrl+Shift+period)",
+              "scope": "toolbar",
+              "source": "toolbar"
+            },
+            {
+              "id": 19,
+              "name": "Bold",
+              "raw": "Bold (Ctrl+B)",
+              "scope": "toolbar",
+              "source": "toolbar"
+            },
+            {
+              "id": 20,
+              "name": "Italic",
+              "raw": "Italic (Ctrl+I)",
+              "scope": "toolbar",
+              "source": "toolbar"
+            },
+            {
+              "id": 21,
+              "name": "Underline",
+              "raw": "Underline (Ctrl+U)",
+              "scope": "toolbar",
+              "source": "toolbar"
+            },
+            {
+              "id": 22,
+              "name": "Text color",
+              "raw": "Text color",
+              "scope": "toolbar",
+              "source": "toolbar"
+            },
+            {
+              "id": 23,
+              "name": "Highlight color",
+              "raw": "Highlight color",
+              "scope": "toolbar",
+              "source": "toolbar"
+            },
+            {
+              "id": 24,
+              "name": "Insert link",
+              "raw": "Insert link (Ctrl+K)",
+              "scope": "toolbar",
+              "source": "toolbar"
+            },
+            {
+              "id": 25,
+              "name": "Add comment",
+              "raw": "Add comment (Ctrl+Alt+M)",
+              "scope": "toolbar",
+              "source": "toolbar"
+            },
+            {
+              "id": 26,
+              "name": "Insert image",
+              "raw": "Insert image",
+              "scope": "toolbar",
+              "source": "toolbar"
+            },
+            {
+              "id": 27,
+              "name": "Align & indent",
+              "raw": "Align & indent",
+              "scope": "toolbar",
+              "source": "toolbar"
+            },
+            {
+              "id": 28,
+              "name": "Line & paragraph spacing",
+              "raw": "Line & paragraph spacing",
+              "scope": "toolbar",
+              "source": "toolbar"
+            },
+            {
+              "id": 29,
+              "name": "Checklist",
+              "raw": "Checklist (Ctrl+Shift+9)",
+              "scope": "toolbar",
+              "source": "toolbar"
+            },
+            {
+              "id": 30,
+              "name": "Checklist menu",
+              "raw": "Checklist menu",
+              "scope": "toolbar",
+              "source": "toolbar"
+            },
+            {
+              "id": 31,
+              "name": "Bulleted list",
+              "raw": "Bulleted list (Ctrl+Shift+8)",
+              "scope": "toolbar",
+              "source": "toolbar"
+            },
+            {
+              "id": 32,
+              "name": "Bulleted list menu",
+              "raw": "Bulleted list menu",
+              "scope": "toolbar",
+              "source": "toolbar"
+            },
+            {
+              "id": 33,
+              "name": "Numbered list",
+              "raw": "Numbered list (Ctrl+Shift+7)",
+              "scope": "toolbar",
+              "source": "toolbar"
+            },
+            {
+              "id": 34,
+              "name": "Numbered list menu",
+              "raw": "Numbered list menu",
+              "scope": "toolbar",
+              "source": "toolbar"
+            },
+            {
+              "id": 35,
+              "name": "Decrease indent",
+              "raw": "Decrease indent (Ctrl+left bracket)",
+              "scope": "toolbar",
+              "source": "toolbar"
+            },
+            {
+              "id": 36,
+              "name": "Increase indent",
+              "raw": "Increase indent (Ctrl+right bracket)",
+              "scope": "toolbar",
+              "source": "toolbar"
+            },
+            {
+              "id": 37,
+              "name": "Clear formatting",
+              "raw": "Clear formatting (Ctrl+backslash)",
+              "scope": "toolbar",
+              "source": "toolbar"
+            },
+            {
+              "id": 38,
+              "name": "Mode and view",
+              "raw": "Mode and view",
+              "scope": "toolbar",
+              "source": "toolbar"
+            },
+            {
+              "id": 39,
+              "name": "Editing mode",
+              "raw": "Editing mode",
+              "scope": "toolbar",
+              "source": "toolbar"
+            },
+            {
+              "id": 40,
+              "name": "Hide the menus",
+              "raw": "Hide the menus (Ctrl+Shift+F)",
+              "scope": "toolbar",
+              "source": "toolbar"
+            }
+          ],
+          "menu": [
+            {
+              "id": 41,
+              "name": "File",
+              "raw": "File",
+              "scope": "menu",
+              "source": "menubar-role"
+            },
+            {
+              "id": 42,
+              "name": "Edit",
+              "raw": "Edit",
+              "scope": "menu",
+              "source": "menubar-role"
+            },
+            {
+              "id": 43,
+              "name": "View",
+              "raw": "View",
+              "scope": "menu",
+              "source": "menubar-role"
+            },
+            {
+              "id": 44,
+              "name": "Insert",
+              "raw": "Insert",
+              "scope": "menu",
+              "source": "menubar-role"
+            },
+            {
+              "id": 45,
+              "name": "Format",
+              "raw": "Format",
+              "scope": "menu",
+              "source": "menubar-role"
+            },
+            {
+              "id": 46,
+              "name": "Tools",
+              "raw": "Tools",
+              "scope": "menu",
+              "source": "menubar-role"
+            },
+            {
+              "id": 47,
+              "name": "Extensions",
+              "raw": "Extensions",
+              "scope": "menu",
+              "source": "menubar-role"
+            },
+            {
+              "id": 48,
+              "name": "Help",
+              "raw": "Help",
+              "scope": "menu",
+              "source": "menubar-role"
+            },
+            {
+              "id": 49,
+              "name": "Quarterly Report",
+              "raw": "Quarterly Report",
+              "scope": "menu",
+              "source": "menuitem"
+            },
+            {
+              "id": 50,
+              "name": "Arial",
+              "raw": "Arial",
+              "scope": "menu",
+              "source": "option"
+            },
+            {
+              "id": 51,
+              "name": "Fit",
+              "raw": "Fit",
+              "scope": "menu",
+              "source": "option"
+            },
+            {
+              "id": 52,
+              "name": "50%",
+              "raw": "50%",
+              "scope": "menu",
+              "source": "option"
+            },
+            {
+              "id": 53,
+              "name": "75%",
+              "raw": "75%",
+              "scope": "menu",
+              "source": "option"
+            },
+            {
+              "id": 54,
+              "name": "90%",
+              "raw": "90%",
+              "scope": "menu",
+              "source": "option"
+            },
+            {
+              "id": 55,
+              "name": "100%",
+              "raw": "100%",
+              "scope": "menu",
+              "source": "option"
+            },
+            {
+              "id": 56,
+              "name": "125%",
+              "raw": "125%",
+              "scope": "menu",
+              "source": "option"
+            },
+            {
+              "id": 57,
+              "name": "150%",
+              "raw": "150%",
+              "scope": "menu",
+              "source": "option"
+            },
+            {
+              "id": 58,
+              "name": "200%",
+              "raw": "200%",
+              "scope": "menu",
+              "source": "option"
+            }
+          ],
+          "dialog": [],
+          "ts": 1789264622844
+        },
+        "delta": {
+          "appeared": [
+            {
+              "id": 51,
+              "name": "Fit",
+              "raw": "Fit",
+              "scope": "menu",
+              "source": "option"
+            },
+            {
+              "id": 52,
+              "name": "50%",
+              "raw": "50%",
+              "scope": "menu",
+              "source": "option"
+            },
+            {
+              "id": 53,
+              "name": "75%",
+              "raw": "75%",
+              "scope": "menu",
+              "source": "option"
+            },
+            {
+              "id": 54,
+              "name": "90%",
+              "raw": "90%",
+              "scope": "menu",
+              "source": "option"
+            },
+            {
+              "id": 55,
+              "name": "100%",
+              "raw": "100%",
+              "scope": "menu",
+              "source": "option"
+            },
+            {
+              "id": 56,
+              "name": "125%",
+              "raw": "125%",
+              "scope": "menu",
+              "source": "option"
+            },
+            {
+              "id": 57,
+              "name": "150%",
+              "raw": "150%",
+              "scope": "menu",
+              "source": "option"
+            },
+            {
+              "id": 58,
+              "name": "200%",
+              "raw": "200%",
+              "scope": "menu",
+              "source": "option"
+            }
+          ],
+          "disappeared": [],
+          "changed": []
+        },
+        "action": {
+          "reasoning": "The toolbar Zoom dropdown lists zoom percentages including 150%.",
+          "kind": "click",
+          "id": 10,
+          "expectation": "the zoom dropdown opens showing percentage options"
+        },
+        "target": {
+          "id": 10,
+          "name": "Zoom",
+          "raw": "Zoom",
+          "scope": "toolbar",
+          "source": "toolbar"
+        }
+      },
+      {
+        "n": 1,
+        "pre": {
+          "url": "https://docs.google.com/document/d/1FAarvqMcAY8f_c-XZ_Qie3Tw3QXTkz3mWgYLYhwUPxA/edit?tab=t.0#heading=h.9u3adgt3vq8f",
+          "toolbar": [
+            {
+              "id": 0,
+              "name": "Search the menus",
+              "raw": "Search the menus (Alt+/)",
+              "scope": "toolbar",
+              "source": "toolbar"
+            },
+            {
+              "id": 1,
+              "name": "Menus",
+              "raw": "Menus",
+              "scope": "toolbar",
+              "source": "toolbar"
+            },
+            {
+              "id": 2,
+              "name": "Main",
+              "raw": "Main",
+              "scope": "toolbar",
+              "source": "toolbar"
+            },
+            {
+              "id": 3,
+              "name": "Undo",
+              "raw": "Undo (Ctrl+Z)",
+              "scope": "toolbar",
+              "source": "toolbar"
+            },
+            {
+              "id": 4,
+              "name": "Redo",
+              "raw": "Redo (Ctrl+Y)",
+              "scope": "toolbar",
+              "source": "toolbar"
+            },
+            {
+              "id": 5,
+              "name": "Print",
+              "raw": "Print (Ctrl+P)",
+              "scope": "toolbar",
+              "source": "toolbar"
+            },
+            {
+              "id": 6,
+              "name": "Spelling and grammar check",
+              "raw": "Spelling and grammar check (Ctrl+Alt+X)",
+              "scope": "toolbar",
+              "source": "toolbar"
+            },
+            {
+              "id": 7,
+              "name": "Paint format",
+              "raw": "Paint format",
+              "scope": "toolbar",
+              "source": "toolbar"
+            },
+            {
+              "id": 9,
+              "name": "Zoom list. 100% selected.",
+              "raw": "Zoom list. 100% selected.",
+              "scope": "toolbar",
+              "source": "toolbar",
+              "state": true
+            },
+            {
+              "id": 10,
+              "name": "Zoom",
+              "raw": "Zoom",
+              "scope": "toolbar",
+              "source": "toolbar"
+            },
+            {
+              "id": 11,
+              "name": "Styles",
+              "raw": "Styles",
+              "scope": "toolbar",
+              "source": "toolbar"
+            },
+            {
+              "id": 12,
+              "name": "Styles list. Heading 2 selected.",
+              "raw": "Styles list. Heading 2 selected.",
+              "scope": "toolbar",
+              "source": "toolbar",
+              "state": true
+            },
+            {
+              "id": 13,
+              "name": "Font",
+              "raw": "Font",
+              "scope": "toolbar",
+              "source": "toolbar"
+            },
+            {
+              "id": 14,
+              "name": "Decrease font size",
+              "raw": "Decrease font size (Ctrl+Shift+comma)",
+              "scope": "toolbar",
+              "source": "toolbar"
+            },
+            {
+              "id": 15,
+              "name": "Font size",
+              "raw": "Font size",
+              "scope": "toolbar",
+              "source": "toolbar"
+            },
+            {
+              "id": 16,
+              "name": "Font size list. 16 selected.",
+              "raw": "Font size list. 16 selected.",
+              "scope": "toolbar",
+              "source": "toolbar",
+              "state": true
+            },
+            {
+              "id": 17,
+              "name": "Font size",
+              "raw": "Font size",
+              "scope": "toolbar",
+              "source": "toolbar"
+            },
+            {
+              "id": 18,
+              "name": "Increase font size",
+              "raw": "Increase font size (Ctrl+Shift+period)",
+              "scope": "toolbar",
+              "source": "toolbar"
+            },
+            {
+              "id": 19,
+              "name": "Bold",
+              "raw": "Bold (Ctrl+B)",
+              "scope": "toolbar",
+              "source": "toolbar"
+            },
+            {
+              "id": 20,
+              "name": "Italic",
+              "raw": "Italic (Ctrl+I)",
+              "scope": "toolbar",
+              "source": "toolbar"
+            },
+            {
+              "id": 21,
+              "name": "Underline",
+              "raw": "Underline (Ctrl+U)",
+              "scope": "toolbar",
+              "source": "toolbar"
+            },
+            {
+              "id": 22,
+              "name": "Text color",
+              "raw": "Text color",
+              "scope": "toolbar",
+              "source": "toolbar"
+            },
+            {
+              "id": 23,
+              "name": "Highlight color",
+              "raw": "Highlight color",
+              "scope": "toolbar",
+              "source": "toolbar"
+            },
+            {
+              "id": 24,
+              "name": "Insert link",
+              "raw": "Insert link (Ctrl+K)",
+              "scope": "toolbar",
+              "source": "toolbar"
+            },
+            {
+              "id": 25,
+              "name": "Add comment",
+              "raw": "Add comment (Ctrl+Alt+M)",
+              "scope": "toolbar",
+              "source": "toolbar"
+            },
+            {
+              "id": 26,
+              "name": "Insert image",
+              "raw": "Insert image",
+              "scope": "toolbar",
+              "source": "toolbar"
+            },
+            {
+              "id": 27,
+              "name": "Align & indent",
+              "raw": "Align & indent",
+              "scope": "toolbar",
+              "source": "toolbar"
+            },
+            {
+              "id": 28,
+              "name": "Line & paragraph spacing",
+              "raw": "Line & paragraph spacing",
+              "scope": "toolbar",
+              "source": "toolbar"
+            },
+            {
+              "id": 29,
+              "name": "Checklist",
+              "raw": "Checklist (Ctrl+Shift+9)",
+              "scope": "toolbar",
+              "source": "toolbar"
+            },
+            {
+              "id": 30,
+              "name": "Checklist menu",
+              "raw": "Checklist menu",
+              "scope": "toolbar",
+              "source": "toolbar"
+            },
+            {
+              "id": 31,
+              "name": "Bulleted list",
+              "raw": "Bulleted list (Ctrl+Shift+8)",
+              "scope": "toolbar",
+              "source": "toolbar"
+            },
+            {
+              "id": 32,
+              "name": "Bulleted list menu",
+              "raw": "Bulleted list menu",
+              "scope": "toolbar",
+              "source": "toolbar"
+            },
+            {
+              "id": 33,
+              "name": "Numbered list",
+              "raw": "Numbered list (Ctrl+Shift+7)",
+              "scope": "toolbar",
+              "source": "toolbar"
+            },
+            {
+              "id": 34,
+              "name": "Numbered list menu",
+              "raw": "Numbered list menu",
+              "scope": "toolbar",
+              "source": "toolbar"
+            },
+            {
+              "id": 35,
+              "name": "Decrease indent",
+              "raw": "Decrease indent (Ctrl+left bracket)",
+              "scope": "toolbar",
+              "source": "toolbar"
+            },
+            {
+              "id": 36,
+              "name": "Increase indent",
+              "raw": "Increase indent (Ctrl+right bracket)",
+              "scope": "toolbar",
+              "source": "toolbar"
+            },
+            {
+              "id": 37,
+              "name": "Clear formatting",
+              "raw": "Clear formatting (Ctrl+backslash)",
+              "scope": "toolbar",
+              "source": "toolbar"
+            },
+            {
+              "id": 38,
+              "name": "Mode and view",
+              "raw": "Mode and view",
+              "scope": "toolbar",
+              "source": "toolbar"
+            },
+            {
+              "id": 39,
+              "name": "Editing mode",
+              "raw": "Editing mode",
+              "scope": "toolbar",
+              "source": "toolbar"
+            },
+            {
+              "id": 40,
+              "name": "Hide the menus",
+              "raw": "Hide the menus (Ctrl+Shift+F)",
+              "scope": "toolbar",
+              "source": "toolbar"
+            }
+          ],
+          "menu": [
+            {
+              "id": 41,
+              "name": "File",
+              "raw": "File",
+              "scope": "menu",
+              "source": "menubar-role"
+            },
+            {
+              "id": 42,
+              "name": "Edit",
+              "raw": "Edit",
+              "scope": "menu",
+              "source": "menubar-role"
+            },
+            {
+              "id": 43,
+              "name": "View",
+              "raw": "View",
+              "scope": "menu",
+              "source": "menubar-role"
+            },
+            {
+              "id": 44,
+              "name": "Insert",
+              "raw": "Insert",
+              "scope": "menu",
+              "source": "menubar-role"
+            },
+            {
+              "id": 45,
+              "name": "Format",
+              "raw": "Format",
+              "scope": "menu",
+              "source": "menubar-role"
+            },
+            {
+              "id": 46,
+              "name": "Tools",
+              "raw": "Tools",
+              "scope": "menu",
+              "source": "menubar-role"
+            },
+            {
+              "id": 47,
+              "name": "Extensions",
+              "raw": "Extensions",
+              "scope": "menu",
+              "source": "menubar-role"
+            },
+            {
+              "id": 48,
+              "name": "Help",
+              "raw": "Help",
+              "scope": "menu",
+              "source": "menubar-role"
+            },
+            {
+              "id": 49,
+              "name": "Quarterly Report",
+              "raw": "Quarterly Report",
+              "scope": "menu",
+              "source": "menuitem"
+            },
+            {
+              "id": 50,
+              "name": "Arial",
+              "raw": "Arial",
+              "scope": "menu",
+              "source": "option"
+            },
+            {
+              "id": 51,
+              "name": "Fit",
+              "raw": "Fit",
+              "scope": "menu",
+              "source": "option"
+            },
+            {
+              "id": 52,
+              "name": "50%",
+              "raw": "50%",
+              "scope": "menu",
+              "source": "option"
+            },
+            {
+              "id": 53,
+              "name": "75%",
+              "raw": "75%",
+              "scope": "menu",
+              "source": "option"
+            },
+            {
+              "id": 54,
+              "name": "90%",
+              "raw": "90%",
+              "scope": "menu",
+              "source": "option"
+            },
+            {
+              "id": 55,
+              "name": "100%",
+              "raw": "100%",
+              "scope": "menu",
+              "source": "option"
+            },
+            {
+              "id": 56,
+              "name": "125%",
+              "raw": "125%",
+              "scope": "menu",
+              "source": "option"
+            },
+            {
+              "id": 57,
+              "name": "150%",
+              "raw": "150%",
+              "scope": "menu",
+              "source": "option"
+            },
+            {
+              "id": 58,
+              "name": "200%",
+              "raw": "200%",
+              "scope": "menu",
+              "source": "option"
+            }
+          ],
+          "dialog": [],
+          "ts": 1789264622844
+        },
+        "post": {
+          "url": "https://docs.google.com/document/d/1FAarvqMcAY8f_c-XZ_Qie3Tw3QXTkz3mWgYLYhwUPxA/edit?tab=t.0#heading=h.9u3adgt3vq8f",
+          "toolbar": [
+            {
+              "id": 0,
+              "name": "Search the menus",
+              "raw": "Search the menus (Alt+/)",
+              "scope": "toolbar",
+              "source": "toolbar"
+            },
+            {
+              "id": 1,
+              "name": "Menus",
+              "raw": "Menus",
+              "scope": "toolbar",
+              "source": "toolbar"
+            },
+            {
+              "id": 2,
+              "name": "Main",
+              "raw": "Main",
+              "scope": "toolbar",
+              "source": "toolbar"
+            },
+            {
+              "id": 3,
+              "name": "Undo",
+              "raw": "Undo (Ctrl+Z)",
+              "scope": "toolbar",
+              "source": "toolbar"
+            },
+            {
+              "id": 4,
+              "name": "Redo",
+              "raw": "Redo (Ctrl+Y)",
+              "scope": "toolbar",
+              "source": "toolbar"
+            },
+            {
+              "id": 5,
+              "name": "Print",
+              "raw": "Print (Ctrl+P)",
+              "scope": "toolbar",
+              "source": "toolbar"
+            },
+            {
+              "id": 6,
+              "name": "Spelling and grammar check",
+              "raw": "Spelling and grammar check (Ctrl+Alt+X)",
+              "scope": "toolbar",
+              "source": "toolbar"
+            },
+            {
+              "id": 7,
+              "name": "Paint format",
+              "raw": "Paint format",
+              "scope": "toolbar",
+              "source": "toolbar"
+            },
+            {
+              "id": 8,
+              "name": "Zoom",
+              "raw": "Zoom",
+              "scope": "toolbar",
+              "source": "toolbar"
+            },
+            {
+              "id": 9,
+              "name": "Zoom list. 150% selected.",
+              "raw": "Zoom list. 150% selected.",
+              "scope": "toolbar",
+              "source": "toolbar",
+              "state": true
+            },
+            {
+              "id": 10,
+              "name": "Zoom",
+              "raw": "Zoom",
+              "scope": "toolbar",
+              "source": "toolbar"
+            },
+            {
+              "id": 11,
+              "name": "Styles",
+              "raw": "Styles",
+              "scope": "toolbar",
+              "source": "toolbar"
+            },
+            {
+              "id": 12,
+              "name": "Styles list. Heading 2 selected.",
+              "raw": "Styles list. Heading 2 selected.",
+              "scope": "toolbar",
+              "source": "toolbar",
+              "state": true
+            },
+            {
+              "id": 13,
+              "name": "Font",
+              "raw": "Font",
+              "scope": "toolbar",
+              "source": "toolbar"
+            },
+            {
+              "id": 14,
+              "name": "Decrease font size",
+              "raw": "Decrease font size (Ctrl+Shift+comma)",
+              "scope": "toolbar",
+              "source": "toolbar"
+            },
+            {
+              "id": 15,
+              "name": "Font size",
+              "raw": "Font size",
+              "scope": "toolbar",
+              "source": "toolbar"
+            },
+            {
+              "id": 16,
+              "name": "Font size list. 16 selected.",
+              "raw": "Font size list. 16 selected.",
+              "scope": "toolbar",
+              "source": "toolbar",
+              "state": true
+            },
+            {
+              "id": 17,
+              "name": "Font size",
+              "raw": "Font size",
+              "scope": "toolbar",
+              "source": "toolbar"
+            },
+            {
+              "id": 18,
+              "name": "Increase font size",
+              "raw": "Increase font size (Ctrl+Shift+period)",
+              "scope": "toolbar",
+              "source": "toolbar"
+            },
+            {
+              "id": 19,
+              "name": "Bold",
+              "raw": "Bold (Ctrl+B)",
+              "scope": "toolbar",
+              "source": "toolbar"
+            },
+            {
+              "id": 20,
+              "name": "Italic",
+              "raw": "Italic (Ctrl+I)",
+              "scope": "toolbar",
+              "source": "toolbar"
+            },
+            {
+              "id": 21,
+              "name": "Underline",
+              "raw": "Underline (Ctrl+U)",
+              "scope": "toolbar",
+              "source": "toolbar"
+            },
+            {
+              "id": 22,
+              "name": "Text color",
+              "raw": "Text color",
+              "scope": "toolbar",
+              "source": "toolbar"
+            },
+            {
+              "id": 23,
+              "name": "Highlight color",
+              "raw": "Highlight color",
+              "scope": "toolbar",
+              "source": "toolbar"
+            },
+            {
+              "id": 24,
+              "name": "Insert link",
+              "raw": "Insert link (Ctrl+K)",
+              "scope": "toolbar",
+              "source": "toolbar"
+            },
+            {
+              "id": 25,
+              "name": "Add comment",
+              "raw": "Add comment (Ctrl+Alt+M)",
+              "scope": "toolbar",
+              "source": "toolbar"
+            },
+            {
+              "id": 26,
+              "name": "Insert image",
+              "raw": "Insert image",
+              "scope": "toolbar",
+              "source": "toolbar"
+            },
+            {
+              "id": 27,
+              "name": "Align & indent",
+              "raw": "Align & indent",
+              "scope": "toolbar",
+              "source": "toolbar"
+            },
+            {
+              "id": 28,
+              "name": "Line & paragraph spacing",
+              "raw": "Line & paragraph spacing",
+              "scope": "toolbar",
+              "source": "toolbar"
+            },
+            {
+              "id": 29,
+              "name": "Checklist",
+              "raw": "Checklist (Ctrl+Shift+9)",
+              "scope": "toolbar",
+              "source": "toolbar"
+            },
+            {
+              "id": 30,
+              "name": "Checklist menu",
+              "raw": "Checklist menu",
+              "scope": "toolbar",
+              "source": "toolbar"
+            },
+            {
+              "id": 31,
+              "name": "Bulleted list",
+              "raw": "Bulleted list (Ctrl+Shift+8)",
+              "scope": "toolbar",
+              "source": "toolbar"
+            },
+            {
+              "id": 32,
+              "name": "Bulleted list menu",
+              "raw": "Bulleted list menu",
+              "scope": "toolbar",
+              "source": "toolbar"
+            },
+            {
+              "id": 33,
+              "name": "Numbered list",
+              "raw": "Numbered list (Ctrl+Shift+7)",
+              "scope": "toolbar",
+              "source": "toolbar"
+            },
+            {
+              "id": 34,
+              "name": "Numbered list menu",
+              "raw": "Numbered list menu",
+              "scope": "toolbar",
+              "source": "toolbar"
+            },
+            {
+              "id": 35,
+              "name": "Decrease indent",
+              "raw": "Decrease indent (Ctrl+left bracket)",
+              "scope": "toolbar",
+              "source": "toolbar"
+            },
+            {
+              "id": 36,
+              "name": "Increase indent",
+              "raw": "Increase indent (Ctrl+right bracket)",
+              "scope": "toolbar",
+              "source": "toolbar"
+            },
+            {
+              "id": 37,
+              "name": "Clear formatting",
+              "raw": "Clear formatting (Ctrl+backslash)",
+              "scope": "toolbar",
+              "source": "toolbar"
+            },
+            {
+              "id": 38,
+              "name": "Mode and view",
+              "raw": "Mode and view",
+              "scope": "toolbar",
+              "source": "toolbar"
+            },
+            {
+              "id": 39,
+              "name": "Editing mode",
+              "raw": "Editing mode",
+              "scope": "toolbar",
+              "source": "toolbar"
+            },
+            {
+              "id": 40,
+              "name": "Hide the menus",
+              "raw": "Hide the menus (Ctrl+Shift+F)",
+              "scope": "toolbar",
+              "source": "toolbar"
+            }
+          ],
+          "menu": [
+            {
+              "id": 41,
+              "name": "File",
+              "raw": "File",
+              "scope": "menu",
+              "source": "menubar-role"
+            },
+            {
+              "id": 42,
+              "name": "Edit",
+              "raw": "Edit",
+              "scope": "menu",
+              "source": "menubar-role"
+            },
+            {
+              "id": 43,
+              "name": "View",
+              "raw": "View",
+              "scope": "menu",
+              "source": "menubar-role"
+            },
+            {
+              "id": 44,
+              "name": "Insert",
+              "raw": "Insert",
+              "scope": "menu",
+              "source": "menubar-role"
+            },
+            {
+              "id": 45,
+              "name": "Format",
+              "raw": "Format",
+              "scope": "menu",
+              "source": "menubar-role"
+            },
+            {
+              "id": 46,
+              "name": "Tools",
+              "raw": "Tools",
+              "scope": "menu",
+              "source": "menubar-role"
+            },
+            {
+              "id": 47,
+              "name": "Extensions",
+              "raw": "Extensions",
+              "scope": "menu",
+              "source": "menubar-role"
+            },
+            {
+              "id": 48,
+              "name": "Help",
+              "raw": "Help",
+              "scope": "menu",
+              "source": "menubar-role"
+            },
+            {
+              "id": 49,
+              "name": "Quarterly Report",
+              "raw": "Quarterly Report",
+              "scope": "menu",
+              "source": "menuitem"
+            },
+            {
+              "id": 50,
+              "name": "Arial",
+              "raw": "Arial",
+              "scope": "menu",
+              "source": "option"
+            }
+          ],
+          "dialog": [],
+          "ts": 1789264626224
+        },
+        "delta": {
+          "appeared": [
+            {
+              "id": 9,
+              "name": "Zoom list. 150% selected.",
+              "raw": "Zoom list. 150% selected.",
+              "scope": "toolbar",
+              "source": "toolbar",
+              "state": true
+            }
+          ],
+          "disappeared": [
+            {
+              "id": 9,
+              "name": "Zoom list. 100% selected.",
+              "raw": "Zoom list. 100% selected.",
+              "scope": "toolbar",
+              "source": "toolbar",
+              "state": true
+            },
+            {
+              "id": 51,
+              "name": "Fit",
+              "raw": "Fit",
+              "scope": "menu",
+              "source": "option"
+            },
+            {
+              "id": 52,
+              "name": "50%",
+              "raw": "50%",
+              "scope": "menu",
+              "source": "option"
+            },
+            {
+              "id": 53,
+              "name": "75%",
+              "raw": "75%",
+              "scope": "menu",
+              "source": "option"
+            },
+            {
+              "id": 54,
+              "name": "90%",
+              "raw": "90%",
+              "scope": "menu",
+              "source": "option"
+            },
+            {
+              "id": 55,
+              "name": "100%",
+              "raw": "100%",
+              "scope": "menu",
+              "source": "option"
+            },
+            {
+              "id": 56,
+              "name": "125%",
+              "raw": "125%",
+              "scope": "menu",
+              "source": "option"
+            },
+            {
+              "id": 57,
+              "name": "150%",
+              "raw": "150%",
+              "scope": "menu",
+              "source": "option"
+            },
+            {
+              "id": 58,
+              "name": "200%",
+              "raw": "200%",
+              "scope": "menu",
+              "source": "option"
+            }
+          ],
+          "changed": [
+            {
+              "from": "Zoom list. 100% selected.",
+              "to": "Zoom list. 150% selected.",
+              "name": "Zoom list. 150% selected.",
+              "state": true
+            }
+          ]
+        },
+        "action": {
+          "reasoning": "Zoom dropdown is open; select 150%.",
+          "kind": "click",
+          "id": 57,
+          "expectation": "zoom set to 150%"
+        },
+        "target": {
+          "id": 57,
+          "name": "150%",
+          "raw": "150%",
+          "scope": "menu",
+          "source": "option"
+        }
+      }
+    ]
+  },
+  "lesson": {
+    "id": "zoom-150",
+    "app": "google-docs",
+    "goal": "Set the page zoom to 150%",
+    "preamble": "Zoom feels like it should change the document, but it doesn't touch a single thing in it. The page is still the same width, the text is still the same size, and anyone else opening this file sees it exactly as before. You're adjusting the distance between your eyes and the page — a setting about your view, not about the document. That's why it lives in the toolbar next to the other view controls rather than anywhere near the font size.",
+    "generalization": "Zoom is a property of your window, not of your document. The same distinction runs through most apps: some controls change the thing, and some change how you're looking at the thing. When a change doesn't survive being sent to someone else, it was a view setting all along — which is also why zooming in to read fine print never risks breaking anyone else's copy.",
+    "steps": [
+      {
+        "id": "s1",
+        "intent": "The Zoom control shows the current magnification and opens the list of preset levels. It reports where you're standing relative to the page — and clicking it is how you move.",
+        "mode": "demo",
+        "target": {
+          "scope": "toolbar",
+          "name": "Zoom",
+          "nth": 1
+        },
+        "action": "click",
+        "verify": {
+          "kind": "visible",
+          "name": "150%",
+          "scope": "menu"
+        },
+        "hints": [
+          "You want to change how close you are to the page, not how big the text is. That control sits with the view tools, not the text tools.",
+          "Toolbar, on the left — the box showing a percentage, just after the print and spelling icons."
+        ],
+        "wrongHints": {
+          "Font size": "Understandable — bigger numbers there do make text look larger. But that rewrites the document for everyone who opens it. Zoom only changes what you see.",
+          "Print": "Print preview does show the page scaled to fit, but that's a side effect of a different job. Zoom is the control that exists purely to set your magnification."
+        }
+      },
+      {
+        "id": "s2",
+        "intent": "Pick 150%. You're telling Docs to draw the page half again as large on your screen — the document's actual measurements stay exactly as they were.",
+        "mode": "guided",
+        "target": {
+          "scope": "menu",
+          "name": "150%"
+        },
+        "action": "click",
+        "verify": {
+          "kind": "dom",
+          "selector": "[aria-label=\"Zoom list. 150% selected.\"]"
+        },
+        "hints": [
+          "You want to be closer than normal, but not dramatically so — one step past 125%.",
+          "In the list that just opened, below 100% and 125%."
+        ],
+        "wrongHints": {
+          "Fit": "Fit is a reasonable instinct — it sizes the page to your window. But it hands the decision to Docs and changes as you resize. 150% is a fixed amount you chose.",
+          "100%": "That's the setting you're leaving: the page shown at its true printed size."
+        }
+      }
+    ]
+  }
+}
