@@ -1,0 +1,27 @@
+{
+  "id": "see-developer-docs",
+  "app": "developers.google.com",
+  "goal": "how do i see developer docs",
+  "preamble": "Developer documentation is rarely part of the ordinary site. It's usually a separate publication with its own search, its own versioning, sometimes its own domain — written for people building against the product rather than buying it. So you're not looking for a page buried inside this one. You're looking for the doorway out to that other place, and doorways like that live in the top navigation, where the site sorts its visitors by who they are.",
+  "generalization": "A site's top navigation isn't a list of topics, it's a list of audiences: customers, buyers, developers, support seekers. When you want technical reference, stop scanning for the subject you care about and scan for the word that names the reader — \"Developers\", \"Docs\", \"API\". Also worth remembering: links that open a separate publication often launch in a new tab, so a click that appears to do nothing has usually already worked somewhere you aren't looking.",
+  "steps": [
+    {
+      "id": "s1",
+      "intent": "This is the site's own signpost to its technical material — the link that hands you off from the product site to the documentation site. Using it matters more than typing a URL or searching, because whatever it points at is the current, official version of the docs for this product. If the click seems to do nothing, check for a new tab: docs usually open alongside rather than replacing what you were reading.",
+      "mode": "demo",
+      "target": {
+        "scope": "any",
+        "name": "Developer documentation",
+        "nth": 0
+      },
+      "action": "click",
+      "verify": {
+        "kind": "none"
+      },
+      "hints": [
+        "You want the part of the site written for people who build with the product, not the part written to explain the product. The persistent bar across the top is where a site separates those audiences.",
+        "In the top navigation bar, among the main links across the header."
+      ]
+    }
+  ]
+}

@@ -1,0 +1,52 @@
+{
+  "id": "wanna-have-line-spacing-double",
+  "app": "google-docs",
+  "goal": "i wanna have a line spacing double",
+  "preamble": "Line spacing feels like a setting for the whole document, the way margins are. It isn't. In Docs, spacing belongs to a paragraph — each one carries its own. So the question isn't only \"where is double spacing\", it's \"which paragraphs am I speaking for right now\". Whatever your cursor is sitting in, or whatever you've selected, is what will change. If you want the whole document doubled, select it all first.",
+  "generalization": "Spacing lives on the paragraph, not on the document. That's why the toolbar button changes what you're standing in and nothing else, and why selecting everything before you set it is the difference between one doubled paragraph and a doubled document. The same logic runs through alignment, indentation and list formatting — Docs applies them to the unit your cursor is inside.",
+  "steps": [
+    {
+      "id": "s1",
+      "intent": "Everything to do with the vertical rhythm of a paragraph — the gap between lines, and the gap between one paragraph and the next — is collected behind a single toolbar button. It's worth knowing as one place rather than four scattered settings, because line spacing and paragraph spacing are constantly confused for each other and Docs keeps them side by side on purpose.",
+      "mode": "demo",
+      "target": {
+        "scope": "toolbar",
+        "name": "Line & paragraph spacing"
+      },
+      "action": "click",
+      "verify": {
+        "kind": "visible",
+        "name": "Double",
+        "scope": "menu"
+      },
+      "hints": [
+        "You're not changing how the letters look — you're changing how much room the lines take up. Look for the control that deals with space rather than type.",
+        "Toolbar, over on the right-hand side, near the alignment and list buttons — its icon is stacked lines with an arrow beside them."
+      ],
+      "wrongHints": {
+        "Font size": "Bigger type does push lines further apart, but it's a side effect — the text grows too. Line spacing changes the gap while leaving the letters alone."
+      }
+    },
+    {
+      "id": "s2",
+      "intent": "Double is one of a set of presets — Single, 1.15, 1.5, Double — all describing the same thing: the height of a line as a multiple of the text's own size. Choosing Double means every line gets twice the room it needs, which is why it stays correct even if you later change the font size. If nothing appears to shift, that's your cue about scope: only the paragraph your cursor was in has changed.",
+      "mode": "guided",
+      "target": {
+        "scope": "menu",
+        "name": "Double"
+      },
+      "action": "click",
+      "verify": {
+        "kind": "none"
+      },
+      "hints": [
+        "You want twice the normal line height, and the menu is already offering the common multiples. Read them as ratios, not as names.",
+        "In the list of spacing presets at the top of the menu, the last one before the divider."
+      ],
+      "wrongHints": {
+        "1.5": "A reasonable near-miss — it's the other spacing people ask for by name. But 1.5 is one and a half times the line height; double is two.",
+        "Custom spacing": "You could type 2 in there and get the same result. The preset already means exactly that, and it's one click instead of a dialog."
+      }
+    }
+  ]
+}

@@ -8,7 +8,10 @@ export function prune(trace) {
   const reasons = {};
   const edges = [];
 
-  if (!steps.length) return { kept: [], dropped: [], reasons, edges };
+  // emit() needs to know which app this was; the trace is the only record.
+  const provenance = { app: trace.app, url: trace.steps[0]?.pre?.url };
+
+  if (!steps.length) return { ...provenance, kept: [], dropped: [], reasons, edges };
 
   const isNoop = s =>
     !s.delta.appeared.length && !s.delta.disappeared.length && !s.delta.changed.length;
@@ -48,7 +51,7 @@ export function prune(trace) {
     dropped.push(s);
   });
 
-  return { kept, dropped, reasons, edges };
+  return { ...provenance, kept, dropped, reasons, edges };
 }
 
 function visibleIn(obs, target) {

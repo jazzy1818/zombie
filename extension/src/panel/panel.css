@@ -90,6 +90,7 @@
 /* Locked while a lesson runs. Visible, so it doesn't feel like the UI vanished,
    but not focusable — a focused input mid-step would dismiss a Docs menu. */
 .bt-bar.is-locked { opacity: 0.4; }
+.bt-bar.is-locked.is-explained { opacity: 0.75; }
 
 .bt-bar.is-error .bt-bar-input::placeholder { color: var(--bt-wrong); }
 
@@ -354,6 +355,11 @@
 
 /* A solo step is the one where we deliberately stop helping. Say so. */
 .bt-mode-solo .bt-card-title { color: var(--bt-muted); }
+
+/* Not an error — the page is fine, it just isn't something we can teach.
+   Muted rather than red: nothing has gone wrong and nothing needs fixing. */
+.bt-card-unsupported .bt-card-title { color: var(--bt-muted); }
+.bt-card-unsupported .bt-card-body { color: var(--bt-muted); }
 
 .bt-card-error .bt-card-title { color: var(--bt-wrong); }
 .bt-card-error .bt-card-body {

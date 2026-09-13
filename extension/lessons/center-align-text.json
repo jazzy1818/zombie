@@ -1,0 +1,80 @@
+{
+  "id": "center-align-text",
+  "app": "google-docs",
+  "goal": "how to center align text",
+  "preamble": "Centring text feels like nudging it sideways until it looks right. It isn't. Alignment is a property the paragraph carries — a rule about where its lines anchor between the margins — and once you set it, the paragraph keeps obeying it as you type, resize, or change the page. So you don't have to select the words. You just have to be standing in the paragraph you mean.",
+  "generalization": "Alignment lives on the paragraph, not on the letters. That's why a cursor sitting anywhere in the line was enough, and why the text stays centred as you keep typing. The same split runs through the whole Format menu: things that describe characters (bold, font, colour) need a selection; things that describe paragraphs (alignment, indents, spacing) only need your cursor to be inside one.",
+  "steps": [
+    {
+      "id": "s1",
+      "intent": "Alignment isn't something you add to the document and it isn't something you type — it's a rule about how existing text sits on the page. One menu holds all the rules about how text sits: shape, spacing, indents, alignment. Start there.",
+      "mode": "demo",
+      "target": {
+        "scope": "menu",
+        "name": "Format"
+      },
+      "action": "click",
+      "verify": {
+        "kind": "visible",
+        "name": "Align & indent",
+        "scope": "menu"
+      },
+      "hints": [
+        "You're not putting anything new in the document, and you're not editing the words. You're changing how what's already there is arranged.",
+        "The Format menu, in the menu bar between Insert and Tools."
+      ],
+      "wrongHints": {
+        "Insert": "Insert is for things that weren't in the document before — images, tables, page breaks. Centring doesn't add anything; it rearranges what's already written.",
+        "Edit": "Edit moves and changes the content itself — cut, paste, undo. Alignment leaves the content untouched and changes how it's laid out.",
+        "View": "View changes what you see on screen, not what the document is. A centred paragraph stays centred in print and in a PDF, so it has to be a real property of the text."
+      }
+    },
+    {
+      "id": "s2",
+      "intent": "Alignment and indentation are two halves of the same idea — both describe where a paragraph's edges sit relative to the margins. Docs keeps them in one submenu for that reason. Open it.",
+      "mode": "guided",
+      "target": {
+        "scope": "menu",
+        "name": "Align & indent"
+      },
+      "action": "click",
+      "verify": {
+        "kind": "visible",
+        "name": "Center",
+        "scope": "menu"
+      },
+      "hints": [
+        "You want the group about horizontal position — where the paragraph's edges land, not how tall its lines are.",
+        "'Align & indent', in the middle of the Format menu, with an arrow showing it opens further."
+      ],
+      "wrongHints": {
+        "Text": "That group is about the characters themselves — bold, italic, size. Those need selected text to act on. Alignment belongs to the whole paragraph instead.",
+        "Line & paragraph spacing": "Reasonable neighbour, but spacing is vertical — the gaps above, below, and between lines. Centring is a horizontal question.",
+        "Paragraph styles": "Styles say what a line *is* — a heading, body text. Useful, but you want to set one specific property on this paragraph, not change its whole role.",
+        "Columns": "Columns divide the page into vertical tracks. That changes where text can flow, not where a paragraph anchors inside the space it already has."
+      }
+    },
+    {
+      "id": "s3",
+      "intent": "Your turn. The submenu lists every place a paragraph can anchor: against the left margin, against the right, stretched between both, or balanced around the midpoint. You want the one that keeps the paragraph balanced around the middle with ragged edges on either side.",
+      "mode": "solo",
+      "target": {
+        "scope": "menu",
+        "name": "Center"
+      },
+      "action": "click",
+      "verify": {
+        "kind": "none"
+      },
+      "hints": [
+        "Three of these anchor the paragraph to an edge or to both edges at once. Only one anchors it to nothing but the centre line.",
+        "Third down in the list that just opened, below Left and Right."
+      ],
+      "wrongHints": {
+        "Justified": "Justified touches both margins at once by stretching the spaces between words. It looks tidy, but it's anchored to the edges — the opposite of floating free in the middle.",
+        "Increase indent": "Indenting pushes the left edge inward. Push it far enough and short lines might look roughly central, but the paragraph is still measured from the left, and it will drift the moment the text or page width changes.",
+        "Right": "That anchors the paragraph to the right margin. It's the mirror of left alignment, not a midpoint."
+      }
+    }
+  ]
+}

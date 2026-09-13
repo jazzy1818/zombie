@@ -1,13 +1,18 @@
 // [C] Stage 5 — replay a lesson in a fresh session using only its emitted descriptors.
 // Completes → ship. Fails → descriptors too fragile, re-run.
-import { openAuthedSession, openLocalSession, closeSession, whoami } from './session.js';
+import { openExploreSession, closeSession, whoami } from './session.js';
 import { RESOLVE_TIMEOUT_MS, VERIFY_TIMEOUT_MS } from './config.js';
+import { appById, appFor, waitForApp } from './apps.js';
 
 export async function verifyLesson(lesson, opts = {}) {
-  const { docUrl = process.env.DEMO_DOC_URL, keepOpen = false, local = false } = opts;
-  if (!docUrl) throw new Error('no doc URL — pass { docUrl } or set DEMO_DOC_URL');
+  const { docUrl = process.env.DEMO_DOC_URL, keepOpen = false, local = false, auth = 'auto' } = opts;
+  if (!docUrl) throw new Error('no page URL — pass { docUrl } or set DEMO_DOC_URL');
 
-  const handle = local ? await openLocalSession() : await openAuthedSession();
+  // Replay in the same app the lesson was authored for. The lesson's own `app`
+  // wins over the URL: a lesson replayed against the wrong app should fail
+  // loudly on its first descriptor, not quietly against a mismatched probe.
+  const app = opts.app ?? appById(lesson.app) ?? appFor(docUrl);
+  const handle = await openExploreSession({ app, local, auth });
   const steps = [];
   let failedAt;
 
@@ -18,14 +23,14 @@ export async function verifyLesson(lesson, opts = {}) {
 
   try {
     await handle.page.goto(docUrl, { waitUntil: 'domcontentloaded' });
-    await handle.page.waitForSelector('#docs-toolbar-wrapper', { timeout: 30_000 });
+    await waitForApp(handle, app);
     viewport = await handle.page.evaluate(() => `${innerWidth}x${innerHeight}`);
-    await handle.page.waitForTimeout(1500);   // Docs wires its menus after the toolbar paints
+    await handle.page.waitForTimeout(1500);   // apps wire their menus after first paint
 
     const account = await whoami(handle.page);
     console.log(account
       ? `  signed in as ${account}`
-      : '  NOT SIGNED IN — Drive-level menu items will be disabled and steps that need them will fail');
+      : `  no signed-in account detected — anything in ${app.label} that needs one will be disabled`);
 
     for (const step of lesson.steps) {
       const t0 = Date.now();
@@ -139,7 +144,7 @@ async function roleCensus(handle) {
 async function dumpScope(handle, scope) {
   try {
     const obs = await handle.probe('observe');
-    const pool = scope && obs[scope] ? obs[scope] : [...obs.toolbar, ...obs.menu, ...obs.dialog];
+    const pool = scope && obs[scope] ? obs[scope] : [...obs.toolbar, ...obs.menu, ...obs.dialog, ...(obs.any ?? [])];
     return pool.map(c => c.raw + (c.disabled ? '   [disabled]' : ''));
   } catch {
     return [];

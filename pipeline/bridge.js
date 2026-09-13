@@ -14,6 +14,10 @@
 // Start it with:  npm run bridge
 //
 //   POST /generate  { goal, id?, docUrl?, check?, verify? }  -> { jobId }
+//
+// docUrl is whatever page the panel is open on, so a question asked on GitHub
+// explores GitHub. DEMO_DOC_URL is only the fallback for a panel that didn't
+// send one.
 //   GET  /jobs/:id                                           -> job state
 //   GET  /lessons                                            -> saved lesson ids
 //   GET  /health                                             -> { ok: true }
@@ -23,11 +27,12 @@
 import { createServer } from 'node:http';
 import { readFile, writeFile, mkdir, readdir } from 'node:fs/promises';
 import { fileURLToPath } from 'node:url';
-import { openAuthedSession, openLocalSession, closeSession } from './session.js';
+import { openExploreSession, closeSession, tryLoadProfile } from './session.js';
 import { explore } from './explore.js';
 import { prune } from './prune.js';
 import { emit } from './emit.js';
 import { verifyLesson } from './verify.js';
+import { appFor, choosePage } from './apps.js';
 
 const PORT = Number(process.env.BRIDGE_PORT ?? 7777);
 const LESSONS = new URL('../extension/lessons/', import.meta.url);
@@ -121,23 +126,44 @@ const note = (job, text) => {
  */
 async function runJob(job, spec) {
   const { goal, docUrl, check, verify, local } = spec;
+  // Explore whatever the panel was open on. A question asked on GitHub is a
+  // question about GitHub, and sending it to a Google Doc would produce a
+  // lesson for the wrong app that the panel would then refuse to offer.
+  const app = appFor(docUrl);
+  job.app = app.id;
   let trace = null;
 
   for (let attempt = 1; attempt <= 2 && !trace; attempt++) {
-    const handle = local ? await openLocalSession() : await openAuthedSession();
+    // 'auto': use a saved profile if there is one, otherwise browse signed out.
+    // A public page — a public repo, a docs site, a link-shared document —
+    // needs no account, and refusing to explore one until someone had captured
+    // a login was a barrier with nothing behind it.
+    const handle = await openExploreSession({ app, local: !!local, auth: spec.auth ?? 'auto' });
     job.viewerUrl = handle.viewerUrl;
+    job.anonymous = !!handle.anonymous;
     try {
-      note(job, attempt === 1 ? 'Opening a cloud browser…' : `Retrying (attempt ${attempt})…`);
+      note(job, attempt === 1
+        ? `Opening a cloud browser on ${app.label}${handle.anonymous ? ' (signed out)' : ''}…`
+        : `Retrying (attempt ${attempt})…`);
+      if (attempt === 1 && spec.pageUrl && spec.pageUrl !== docUrl) {
+        // Not the page you asked from. Say so, or a lesson authored against a
+        // different document looks like the agent wandered off.
+        note(job, 'Using the prepared document rather than yours — the cloud browser signs in as a different account.');
+      }
       const result = await explore(handle, {
         goal,
         docUrl,
+        app,
         goalCheck: check ?? { kind: 'none' },
         onStep(ev) {
-          if (ev.phase === 'opening') note(job, 'Loading the document…');
+          // The URL matters here: the commonest confusion is the cloud browser
+          // opening a different page than the one you asked from.
+          if (ev.phase === 'opening') note(job, `Loading ${ev.docUrl ?? app.label}…`);
           if (ev.phase === 'click') note(job, `Tried "${ev.name}" — ${ev.reasoning}`);
           if (ev.phase === 'checking') note(job, 'Checking whether that worked…');
           if (ev.phase === 'reached') note(job, 'Found a path that works.');
           if (ev.phase === 'stuck') note(job, `Stuck: ${ev.reasoning}`);
+          if (ev.phase === 'login-wall') note(job, `That page wants a sign-in: ${ev.reason}.`);
         },
       });
       if (result.ok) trace = result;
@@ -154,11 +180,11 @@ async function runJob(job, spec) {
 
   note(job, 'Writing the explanation…');
   const id = spec.id ?? await uniqueId(goal);
-  const lesson = await emit(pruned, { id, goal });
+  const lesson = await emit(pruned, { id, goal, app });
 
   if (verify) {
     note(job, 'Replaying it in a fresh browser to be sure…');
-    const report = await verifyLesson(lesson, { docUrl, local: !!local });
+    const report = await verifyLesson(lesson, { docUrl, local: !!local, app });
     if (!report.ok) throw new Error('The lesson did not replay cleanly, so I threw it away.');
   }
 
@@ -207,7 +233,16 @@ const server = createServer(async (req, res) => {
   if (req.method === 'OPTIONS') { cors(res); res.writeHead(204); res.end(); return; }
 
   if (url.pathname === '/health') {
-    return send(res, 200, { ok: true, busy: running, docUrl: !!process.env.DEMO_DOC_URL });
+    return send(res, 200, {
+      ok: true,
+      busy: running,
+      docUrl: !!process.env.DEMO_DOC_URL,
+      // The panel sends its own page URL; this is only the fallback.
+      fallbackApp: process.env.DEMO_DOC_URL ? appFor(process.env.DEMO_DOC_URL).id : null,
+      // Whether a signed-in browser is available. Public pages work without
+      // one; anything behind a login does not.
+      profile: Boolean(await tryLoadProfile()),
+    });
   }
 
   if (url.pathname === '/lessons') {
@@ -230,8 +265,9 @@ const server = createServer(async (req, res) => {
     const goal = typeof body.goal === 'string' && body.goal.trim();
     if (!goal) return send(res, 400, { error: 'goal is required' });
 
-    const docUrl = body.docUrl ?? process.env.DEMO_DOC_URL;
-    if (!docUrl) return send(res, 400, { error: 'no docUrl and DEMO_DOC_URL is not set' });
+    const docUrl = choosePage(body.docUrl);
+    if (!docUrl) return send(res, 400, { error: 'no page URL sent and DEMO_DOC_URL is not set' });
+    if (!/^https?:\/\//i.test(docUrl)) return send(res, 400, { error: 'page URL must be http(s)' });
 
     // A second session would fight the first over the same document.
     if (running) return send(res, 409, { error: 'already generating a lesson — try again in a minute' });
@@ -240,7 +276,13 @@ const server = createServer(async (req, res) => {
     running = true;
     send(res, 202, { jobId: job.id });
 
-    runJob(job, { goal, docUrl, id: body.id, check: body.check, verify: !!body.verify, local: !!body.local })
+    runJob(job, {
+      goal, docUrl, pageUrl: body.docUrl, id: body.id, check: body.check,
+      verify: !!body.verify, local: !!body.local,
+      // 'none' forces a signed-out browser — the honest way to check that a
+      // lesson is reachable by a logged-out visitor.
+      auth: body.auth === 'none' || body.auth === 'required' ? body.auth : 'auto',
+    })
       .catch(err => {
         job.state = 'error';
         job.error = err.message;
@@ -255,6 +297,7 @@ const server = createServer(async (req, res) => {
 
 server.listen(PORT, '127.0.0.1', () => {
   console.log(`\n  Browser Teacher bridge on http://localhost:${PORT}`);
-  console.log(`  Doc: ${process.env.DEMO_DOC_URL ?? 'DEMO_DOC_URL not set — the panel must send one'}`);
-  console.log('\n  Leave this running. Ask the panel a question it has no lesson for.\n');
+  console.log(`  Fallback page: ${process.env.DEMO_DOC_URL ?? 'DEMO_DOC_URL not set — the panel must send its own'}`);
+  console.log('\n  Leave this running. Ask the panel a question it has no lesson for,');
+  console.log('  on any teachable site — it explores whatever page you asked from.\n');
 });
