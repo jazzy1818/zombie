@@ -1,7 +1,12 @@
 import { findSync } from './resolver.js';
 import { createGestureTracker } from './gesture.js';
+import { chosenFrom, isStateReadout } from './eligibility.js';
 
-const MENU_ROLES = new Set(['menuitem', 'menuitemcheckbox', 'menuitemradio']);
+// Rows a learner can click in a list. `option` belongs here as much as the
+// menuitem family: Docs' font rows are options, and without it a wrong click on
+// one fell through to the aria-label loop and reported the widget's readout
+// ("Font list. Georgia selected.") instead of the font.
+const MENU_ROLES = new Set(['menuitem', 'menuitemcheckbox', 'menuitemradio', 'option']);
 const MAX_FALLBACK_LABEL_LENGTH = 80;
 let cancelActive = null;
 
@@ -30,14 +35,16 @@ function menuItemLabel(item, target) {
 }
 
 export function clickedLabel(path, target) {
+  // A state readout ("Font list. Arial selected.") names a value, not the
+  // control the learner clicked; its parent carries the control's own name.
   const menuItem = path.find(node =>
-    isElement(node) && MENU_ROLES.has(node.getAttribute('role'))
+    isElement(node) && MENU_ROLES.has(node.getAttribute('role')) && !isStateReadout(node)
   );
   const menuLabel = menuItem && menuItemLabel(menuItem, target);
   if (menuLabel) return menuLabel;
 
   for (const node of path) {
-    if (!isElement(node)) continue;
+    if (!isElement(node) || isStateReadout(node)) continue;
 
     const label = cleanAriaLabel(node.getAttribute('aria-label'));
     if (label) return label;
@@ -70,7 +77,9 @@ export function clickedLabel(path, target) {
 export function waitForClick(target, { signal } = {}) {
   cancelActive?.();
   return new Promise((resolve, reject) => {
-    const tracker = createGestureTracker(target, findSync);
+    const tracker = createGestureTracker(target, findSync, undefined,
+      target?.any ? (path, example) => chosenFrom(example, path, target.any) : null,
+      judge);
     function cleanup() {
       document.removeEventListener('click', handler, true);
       signal?.removeEventListener('abort', cancel);
@@ -84,7 +93,10 @@ export function waitForClick(target, { signal } = {}) {
 
     function handler(event) {
       const activation = tracker.read(event);
-      if (!activation || (!activation.target && !activation.action)) return;
+      if (activation) judge(activation);
+    }
+    function judge(activation) {
+      if (!activation.target && !activation.action) return;
       cleanup();
       if (activation.target) {
         resolve('correct');

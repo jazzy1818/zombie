@@ -210,7 +210,7 @@ const commands = {
 
     // The mechanical half costs nothing — no browser, no model. Iterate here.
     if (flags['skeleton-only'] || flags['no-narrate']) {
-      for (const s of skeleton(pruned.kept)) {
+      for (const s of skeleton(pruned.kept, { goal: trace.goal })) {
         console.log(`  ${s.id.padEnd(3)} ${s.mode.padEnd(7)}${JSON.stringify(s.target).padEnd(46)}${JSON.stringify(s.verify)}`);
         console.log(`        why: ${s._trace.reasoning}`);
         console.log(`        saw: ${s._trace.observed}`);

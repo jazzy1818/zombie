@@ -5,6 +5,7 @@ import { abortError, abortable, checkAbort, delay } from './async.js';
 import { resolveTarget, findTarget, actionFromPath, verifyOutcome } from './resolution.js';
 import { createGestureTracker } from '../resolve/gesture.js';
 import { clickedLabel } from '../resolve/click.js';
+import { chosenFrom } from '../resolve/eligibility.js';
 
 export function createTeaching({ paint, resolver }) {
   if (!paint) throw new Error('Paint must be initialized before teaching.');
@@ -87,7 +88,13 @@ export function createTeaching({ paint, resolver }) {
     signal.addEventListener('abort', abort, { once: true });
     return new Promise((resolve, reject) => {
       let settleTimer = null;
-      const tracker = createGestureTracker(target, descriptor => findTarget(descriptor, resolver), actionFromPath);
+      // A free choice accepts any row chosen from the example's list. The row is
+      // remembered at mousedown, before the list can close under the click, and
+      // the example is resolved unwidened so its list can be found from it.
+      const tracker = createGestureTracker(target,
+        descriptor => findTarget(descriptor, resolver, { widenChoices: false }), actionFromPath,
+        target?.any ? (path, example) => chosenFrom(example, path, target.any) : null,
+        judge);
       function cleanup() {
         document.removeEventListener('click', click, true);
         tracker.dispose();
@@ -99,7 +106,18 @@ export function createTeaching({ paint, resolver }) {
       function cancelled() { cleanup(); reject(controller.signal.reason || abortError()); }
       function click(event) {
         const activation = tracker.read(event);
-        if (!activation) return;
+        if (activation) judge(activation);
+      }
+      function judge(activation) {
+        // What the teacher made of the click, kept where a person can read it.
+        // A click that was neither accepted nor wrong is invisible on screen by
+        // design; this is the only trace of it. `__TEACH.lastClick` in the
+        // extension's console context, or the debug log.
+        api.lastClick = {
+          verdict: activation.target ? 'accepted' : activation.action ? 'wrong' : 'ignored',
+          target, path: describePath(activation.path),
+        };
+        console.debug('[browser-teacher] click', api.lastClick.verdict, api.lastClick.path);
         let result;
         if (activation.target) {
           stopVisual('activated');
@@ -127,7 +145,7 @@ export function createTeaching({ paint, resolver }) {
     });
   }
 
-  return {
+  const api = {
     highlight: target => show(target, 'highlight'),
     clear,
     moveCursor: async target => { await show(target, 'cursor'); },
@@ -138,5 +156,16 @@ export function createTeaching({ paint, resolver }) {
     verify: verification => verifyOutcome(verification, { signal: ensureSession(), resolver }),
     flashCorrect: () => paint.flashCorrect(),
     setCursorVisible: visible => { cursorVisible = Boolean(visible); paint.setCursorVisible(cursorVisible); },
+    lastClick: null,
   };
+  return api;
+}
+
+/** "div#x[option]"Georgia" < div[menu] < …" — enough of a click path to see what a page is made of. */
+function describePath(path) {
+  return path.filter(node => node?.nodeType === 1).slice(0, 8).map(node => {
+    const role = node.getAttribute('role');
+    const label = node.getAttribute('aria-label');
+    return `${node.localName}${node.id ? `#${node.id}` : ''}${role ? `[${role}]` : ''}${label ? `"${label.slice(0, 40)}"` : ''}`;
+  }).join(' < ');
 }

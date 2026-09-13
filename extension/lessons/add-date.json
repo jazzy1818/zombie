@@ -1,0 +1,85 @@
+{
+  "id": "add-date",
+  "app": "google-docs",
+  "goal": "how to add a date",
+  "preamble": "Typing \"15 Sep\" into a document gives you nine characters that happen to look like a date. Docs can hold something better: a date chip — an object that knows it is a date, so it can be reformatted, hovered for a calendar, and read as a date by anything that later looks at the document. You're not typing a date here. You're placing one.",
+  "generalization": "Anything Docs offers as a chip — a date, a person, a file, a calendar event — is the same trade: a little more effort placing it, in exchange for text that carries meaning instead of just characters. The rule of thumb is that if a menu offers you a structured version of something you could have typed, the menu version is the one that will still make sense to the document six months from now.",
+  "steps": [
+    {
+      "id": "s1",
+      "intent": "A date isn't formatting applied to text that's already there — it's a new object going into the document. That distinction is what separates the Format menu from the Insert menu, and it's why everything from images to page numbers lives in one place.",
+      "mode": "demo",
+      "target": {
+        "scope": "menu",
+        "name": "Insert"
+      },
+      "action": "click",
+      "verify": {
+        "kind": "visible",
+        "name": "Smart chips(Z)",
+        "scope": "menu"
+      },
+      "hints": [
+        "Nothing on the page is being changed; something new is arriving. Which menu handles arrivals?",
+        "The Insert menu, in the menu bar along the top."
+      ],
+      "wrongHints": {
+        "Format": "Format changes text that already exists. There's no date on the page yet to format.",
+        "Tools": "Tools holds things that act on the document — spelling, word count. A date is content going in, not a process being run."
+      }
+    },
+    {
+      "id": "s2",
+      "intent": "Most items in this menu drop a visible thing onto the page: an image, a table, a line. A date is different — it's a small piece of live data that sits inline with your sentence. Docs keeps that whole family together, and the arrow beside the entry tells you the family has more than one member.",
+      "mode": "guided",
+      "target": {
+        "scope": "menu",
+        "name": "Smart chips(Z)"
+      },
+      "action": "click",
+      "verify": {
+        "kind": "visible",
+        "name": "Date",
+        "scope": "menu"
+      },
+      "hints": [
+        "You want a date that behaves like data rather than like a picture. Look for the group of small inline items rather than the page-sized ones.",
+        "Partway down the Insert menu, an entry with a submenu arrow on its right edge."
+      ],
+      "wrongHints": {
+        "Building blocks": "A reasonable guess, since these are also prefabricated. But building blocks are whole blocks of layout, like a meeting-notes template. A date sits inside a line of text."
+      }
+    },
+    {
+      "id": "s3",
+      "intent": "Here's the family: people, files, events, dates. Each one is a reference to something real rather than a description of it. Choose Date, and Docs will hand you a calendar rather than a text box — the first sign that it's treating this as a date and not as words.",
+      "mode": "guided",
+      "target": {
+        "scope": "menu",
+        "name": "Date"
+      },
+      "action": "click",
+      "verify": {
+        "kind": "none"
+      },
+      "hints": [
+        "Of the chip types on offer, only one refers to a point in time.",
+        "In the submenu that just opened to the side."
+      ]
+    },
+    {
+      "id": "s4",
+      "intent": "Your turn, and no highlight. What opened is a calendar, not a form — Docs is asking you to point at a day rather than describe one. Pick whatever date you want; the chip lands in your sentence. Then tell me you're done.",
+      "mode": "solo",
+      "target": null,
+      "action": "click",
+      "verify": {
+        "kind": "none"
+      },
+      "hints": [
+        "You don't type the answer here; you choose it. The grid in front of you is already showing this month.",
+        "Click any day in the calendar grid — whichever date you actually mean."
+      ]
+    }
+  ]
+}

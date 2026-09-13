@@ -1,12 +1,12 @@
 # Part A resolver checks
 
-Run: 2026-09-13T04:03:22.390Z
+Run: 2026-09-13T09:53:15.401Z
 
-Phase 1 browser (resolve modules only): 153.0.8010.37
+Phase 1 browser (resolve modules only): 141.0.7390.122
 
-Phase 2 browser (real unpacked extension): not launched
+Phase 2 browser (real unpacked extension): 141.0.7390.122
 
-Result: **19/19 checks passed**.
+Result: **25/25 checks passed**.
 
 Phase 1 imports `extension/src/resolve/index.js` into `docs/resolver-fixture.html` and drives `__RESOLVE` with real browser input. Phase 2 loads the unchanged `extension/` directory and runs `docs/resolver-practice.json` through the real panel, teaching bridge and paint. The fixture follows the validated Google Docs label formats from PLAN.md §7, and its menu rows activate on mouseup and hide before `click` fires, as Closure menus do.
 
@@ -29,10 +29,15 @@ Phase 1 imports `extension/src/resolve/index.js` into `docs/resolver-fixture.htm
 - PASS: [direct] a real press alone does not finish a click wait and cancellation discards its gesture
 - PASS: [direct] an ambiguous name cannot become correct through a broad event-path fallback
 - PASS: [direct] verify: none is true, malformed rules are false, nth:null is rejected
+- PASS: [extension] the extension resolves fixture targets through A (an alias only A understands)
+- PASS: [extension] the practice lesson completes end to end with real clicks (fixture default: menus activate on click)
+- PASS: [extension] the bridge completes a hidden-on-mouseup row only after its real click, including explicit nth
+- PASS: [extension] hidden wrong rows preserve authored Apply-name corrections before the next real click
+- PASS: [extension] current bare-name lessons retain their Title correction on legacy radio menu rows
+- PASS: [extension] C option-role lesson runs through A, the real bridge and an aria-label outcome
 
 Notes:
 - Unused nth must be omitted by lesson authors; an explicit nth:null is rejected rather than silently selecting another control.
-- Phase 2 skipped: set CHROME_PATH to Chromium or Chrome for Testing to load the unpacked extension.
 
 This is a local fixture, not a signed-in Google Doc. It checks that the resolver, click judgement and verification behave as specified for Docs-shaped markup; it does not certify the live Docs DOM.
 

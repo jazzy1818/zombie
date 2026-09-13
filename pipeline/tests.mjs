@@ -10,7 +10,7 @@ import { chromium } from 'playwright-core';
 import { PROBE_SOURCE } from './dom-probe.js';
 import { diff } from './explore.js';
 import { prune } from './prune.js';
-import { skeleton, deriveTarget, validate } from './emit.js';
+import { skeleton, deriveTarget, isFreeChoice, freeChoice, acceptedPeers, validate } from './emit.js';
 import { validatePublishable, verificationEvidence, recordVerification, runRecordedVerification, publishLesson } from './publish.js';
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), '..');
@@ -97,6 +97,30 @@ try {
     assert.equal(await page.evaluate(() => __PROBE.check({ kind: 'label', selector: '#zoom-readout', match: '100% selected.' })), true);
   });
 
+  await test('Shortcut cleanup preserves bare names through probe, emitter and runtime', async () => {
+    const labels = [
+      ['Find and replaceCtrl+H', 'Find and replace'],
+      ['HeaderCtrl+Alt+O, Ctrl+Alt+H', 'Header'],
+      ['Alternative', 'Alternative'],
+    ];
+    for (const [raw, name] of labels) {
+      const observed = await page.evaluate(raw => {
+        const element = document.createElement('button');
+        element.id = 'shortcut-case';
+        element.setAttribute('role', 'menuitem');
+        element.textContent = raw;
+        document.querySelector('#shortcut-case')?.remove();
+        document.body.append(element);
+        const pre = __PROBE.observe();
+        return { pre, target: pre.menu.find(candidate => __PROBE.el(candidate.id) === element) };
+      }, raw);
+      assert.equal(observed.target.name, name);
+      const target = deriveTarget({ n: 1, ...observed });
+      assert.deepEqual(target, { scope: 'menu', name });
+      assert.deepEqual(await compare(target), { pipeline: 'shortcut-case', runtime: 'shortcut-case' });
+    }
+  });
+
   let lesson;
   let replay;
   await test('Real observation → clicks → diff → prune → stable descriptors', async () => {
@@ -122,6 +146,46 @@ try {
     assert.deepEqual(steps.map(step => step.target), [{ scope: 'toolbar', name: 'Zoom' }, { scope: 'menu', name: '150%' }]);
     assert.deepEqual(steps[1].verify, { kind: 'dom', selector: '[aria-label="Zoom list. 150% selected."]' });
     assert.throws(() => deriveTarget({ ...trace.steps[0], target: { ...first.target, state: true } }), /state readout/);
+  });
+  await test('A terminal free choice ships as any-of-the-list, not the one the explorer clicked', () => {
+    const option = (id, name, order, ancestor, role, source) => ({
+      id, name, raw: name, label: '', scope: 'menu', source, role, order, ancestors: [ancestor],
+    });
+    const list = { id: 9, name: 'Font list. Arial selected.', raw: 'Font list. Arial selected.', label: 'Font list. Arial selected.', scope: 'menu', source: 'option', role: 'listbox', order: 0, ancestors: [], state: true };
+    const fonts = ['Arial', 'Georgia', 'Verdana', 'Courier New', 'Roboto'].map((name, i) => option(10 + i, name, i + 1, 9, 'option', 'option'));
+    const menu = { id: 19, name: 'Insert image', raw: 'Insert image', label: 'Insert image', scope: 'menu', source: 'menuitem', role: 'menu', order: 0, ancestors: [] };
+    const commands = ['Upload from computer', 'Search the web', 'Drive', 'Photos', 'By URL'].map((name, i) => option(20 + i, name, i + 1, 19, 'menuitem', 'menuitem'));
+    const stepFor = (clicked, pool) => ({
+      n: 1, target: clicked, pre: { toolbar: [], menu: pool, dialog: [] }, post: { toolbar: [], menu: [], dialog: [] },
+      delta: { appeared: [], changed: [{ name: 'Font', to: 'Georgia', state: true }] }, action: { reasoning: 'Choose one.' },
+    });
+    const fontStep = stepFor(fonts[0], [list, ...fonts]);
+    const imageStep = stepFor(commands[0], [menu, ...commands]);
+    const free = skeleton([fontStep], { goal: 'how to change font style' })[0];
+    assert.deepEqual(free.target, { scope: 'menu', name: 'Arial', any: true });
+    // Whatever changed named the font that was chosen, so it cannot be the
+    // outcome a different, equally correct choice has to produce.
+    assert.deepEqual(free.verify, { kind: 'none' });
+    // A goal that asks for that value specifically is not a free choice.
+    assert.deepEqual(skeleton([fontStep], { goal: 'set my font to Arial' })[0].target, { scope: 'menu', name: 'Arial' });
+    assert.equal(isFreeChoice(fontStep, 'set my font to Georgia'), false,
+      'a trace choosing the wrong requested value must not be broadened to hide the mismatch');
+    // Nor is a menu of different ways to do the job: "Search the web" is not
+    // another spelling of "Upload from computer".
+    assert.deepEqual(skeleton([imageStep], { goal: 'how do i add an image' })[0].target, { scope: 'menu', name: 'Upload from computer' });
+    assert.equal(isFreeChoice(fontStep, undefined), false);
+    // "Change the heading" among styles: the goal names the kind, so the
+    // headings are all right and Title keeps its correction.
+    const styles = ['Normal text', 'Title', 'Subtitle', 'Heading 1', 'Heading 2', 'Heading 3']
+      .map((name, i) => option(30 + i, name, i + 1, 9, 'menuitemradio', 'option'));
+    const headingStep = stepFor(styles[3], [list, ...styles]);
+    const pattern = freeChoice(headingStep, 'how do i change the heading');
+    assert.equal(pattern, '^(?:Heading 1|Heading 2|Heading 3)$');
+    assert.deepEqual([...acceptedPeers(pattern, headingStep)], ['Heading 2', 'Heading 3']);
+    assert.deepEqual([...acceptedPeers(true, fontStep)], ['Georgia', 'Verdana', 'Courier New', 'Roboto']);
+    assert.equal(skeleton([headingStep], { goal: 'how do i change the heading' })[0].target.any, pattern);
+    validate({ ...cached.lesson, steps: [{ ...cached.lesson.steps[0], target: { scope: 'menu', name: 'Arial', any: true } }] });
+    validate({ ...cached.lesson, steps: [{ ...cached.lesson.steps[0], target: { scope: 'menu', name: 'Heading 1', any: pattern } }] });
   });
   await test('Fresh local browser replay produces evidence only after measured outcomes', async () => {
     assert.ok(lesson, 'Descriptor generation must pass');

@@ -69,10 +69,16 @@ export function installProbe() {
     if (raw == null) return '';
     const t = String(raw).trim();
     if (scope === 'toolbar') return t.replace(/\s*\([^)]*\)\s*$/, '').trim();
+    // A shortcut is one or two chords glued to the label ("Find and replaceCtrl+H",
+    // "HeaderCtrl+Alt+O, Ctrl+Alt+H"). Match from the first modifier that is
+    // followed by "+"/glyph to the end, over shortcut chars and separators, so
+    // both chords go. Requiring the "+"/glyph spares words like "Alternative".
+    // Keep this identical to stripShortcut in emit.js.
     return t
       .replace(/[▶▸►‣]\s*$/, '')
       .replace(/\s*\([A-Za-z0-9]{1,3}\)\s*$/, '')
-      .replace(/(?:Ctrl|Alt|Shift|Cmd|⌘|⌥|⇧|⌃)[^\s]*$/, '')
+      .replace(/(?:(?:Ctrl|Control|Alt|Option|Shift|Meta|Cmd|Command|Fn)\s*\+|[⌘⌥⇧⌃])[A-Za-z0-9+\s,⌘⌥⇧⌃]*$/, '')
+      .replace(/[\s,]+$/, '')
       .trim();
   }
 

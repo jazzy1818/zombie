@@ -1,0 +1,54 @@
+{
+  "id": "change-font-style",
+  "app": "google-docs",
+  "goal": "how to change font style",
+  "preamble": "Changing a font feels like changing a setting on the document, but it isn't. A font belongs to the characters themselves — each letter carries its own. That means the answer to \"what does this control change?\" is always the same: whatever text you have selected right now, or, if nothing is selected, whatever you type next. So before you reach for the toolbar, decide what you're aiming at.",
+  "generalization": "The Font box does two jobs at once: it reports the font of the text under your cursor, and it changes it. Most of the toolbar works this way — it's a readout of the current selection as much as a set of buttons. That's why the box appears blank when you select text with mixed fonts: there's nothing single to report. And it's why a font change never travels with your headings the way a style does. Fonts describe how letters look; styles describe what lines are.",
+  "steps": [
+    {
+      "id": "s1",
+      "intent": "This box always names the font of the text your cursor is sitting in. Opening it does two things: it shows you the current font at the top of the list, and it offers you every other one you could swap to. Note what it says before you click — that's the font you're leaving.",
+      "mode": "demo",
+      "target": {
+        "scope": "toolbar",
+        "name": "Font"
+      },
+      "action": "click",
+      "verify": {
+        "kind": "visible",
+        "name": "Arial",
+        "scope": "menu"
+      },
+      "hints": [
+        "You want the control that names the typeface rather than one that modifies it — it shows a word, not a symbol.",
+        "In the toolbar, just right of the styles box and left of the size number."
+      ],
+      "wrongHints": {
+        "Styles": "Reasonable — it sits right next to it and also changes how text looks. But Styles says what a line is: a heading, a title, normal text. Font says which typeface draws the letters. Different questions.",
+        "Bold": "Bold is a weight applied on top of whatever font you already have. It changes emphasis, not the typeface itself.",
+        "Font size": "Size and font live side by side and both describe the characters, but size is a number. You're after the one that carries a name."
+      }
+    },
+    {
+      "id": "s2",
+      "intent": "Every name in this list is the same kind of thing: a typeface Docs can draw your letters in. Pick whichever one you actually want — the choice isn't the lesson, the mechanism is. The moment you click, the change lands on your selection and the box you just opened rewrites itself to say the name you picked, because it was never a button, it was a readout.",
+      "mode": "guided",
+      "target": {
+        "scope": "menu",
+        "name": "Arial",
+        "any": true
+      },
+      "action": "click",
+      "verify": {
+        "kind": "none"
+      },
+      "hints": [
+        "You're choosing a named typeface from the list that opened, not opening anything further. Any of them counts.",
+        "Anywhere in the alphabetical run of font names in the dropdown."
+      ],
+      "wrongHints": {
+        "More fonts": "That opens Google's full catalogue to add fonts to this list. Useful when what you want isn't here — but Arial already is, so there's nothing to fetch."
+      }
+    }
+  ]
+}

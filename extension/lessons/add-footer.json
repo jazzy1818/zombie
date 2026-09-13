@@ -1,0 +1,76 @@
+{
+  "id": "add-footer",
+  "app": "google-docs",
+  "goal": "how to add footer",
+  "preamble": "A footer looks like text at the bottom of the page, so the obvious move is to scroll down and start typing there. That won't work, and it's worth knowing why. The bottom margin isn't part of your document's text — it's part of the page. A footer is a separate little region that sits outside the flow of your writing and repeats itself on every page automatically. So you're not writing something at the end; you're switching on a zone of the page that was always there, empty.",
+  "generalization": "A page in Docs has more to it than the part you type in. Anything that repeats on every page — footers, headers, page numbers, watermarks — lives in those outer zones, which is why they're all filed together under page elements rather than scattered through the menus. Once you've found that group, you've found all of them. And notice the Styles box still says Normal text down in the footer: it's a real text area with its own formatting, just one that belongs to the page instead of to your document's flow.",
+  "steps": [
+    {
+      "id": "s1",
+      "intent": "Nothing you're about to do is formatting — you're not changing how existing text looks. You're bringing a part of the page into existence that isn't there yet. That's what one particular menu is for.",
+      "mode": "demo",
+      "target": {
+        "scope": "menu",
+        "name": "Insert"
+      },
+      "action": "click",
+      "verify": {
+        "kind": "visible",
+        "name": "Page elements",
+        "scope": "menu"
+      },
+      "hints": [
+        "Ask what the action really is: adding something that doesn't exist yet, not adjusting something that does.",
+        "The Insert menu, in the menu bar along the top."
+      ],
+      "wrongHints": {
+        "Format": "Format changes things that already exist — spacing, alignment, margins. The footer isn't there yet to be formatted.",
+        "File": "File covers the document as a whole: printing, page setup, sharing. A footer is a piece of the page you add, not a document-wide setting."
+      }
+    },
+    {
+      "id": "s2",
+      "intent": "The footer isn't in the top level of this menu, because Docs doesn't count it as content. Images, tables and charts go *in* your document. A footer is part of the page around your document. Look for the group that holds the page's own furniture.",
+      "mode": "guided",
+      "target": {
+        "scope": "menu",
+        "name": "Page elements"
+      },
+      "action": "click",
+      "verify": {
+        "kind": "visible",
+        "name": "Footer",
+        "scope": "menu"
+      },
+      "hints": [
+        "Sort the items in your head: which ones fill the page, and which ones structure it? You want the second kind.",
+        "'Page elements', a little over halfway down the Insert menu, with an arrow showing there's a submenu."
+      ],
+      "wrongHints": {
+        "Break": "A break controls where one page ends and the next begins. Useful, but it doesn't create the strip at the bottom."
+      }
+    },
+    {
+      "id": "s3",
+      "intent": "Here's the group of things that belong to the page rather than the text. Pick the one that means 'the repeating strip at the bottom' — and watch where your cursor lands afterwards.",
+      "mode": "solo",
+      "target": {
+        "scope": "menu",
+        "name": "Footer"
+      },
+      "action": "click",
+      "verify": {
+        "kind": "dom",
+        "selector": "[aria-label=\"Styles list. Normal text selected.\"]"
+      },
+      "hints": [
+        "Two of these options are mirror images of each other, one at the top of the page and one at the bottom. You want the lower one.",
+        "In the submenu that just opened, next to Header."
+      ],
+      "wrongHints": {
+        "Header": "Same idea, wrong end of the page. Header is the strip at the top; Footer is the one at the bottom.",
+        "Page numbers": "Page numbers do get placed in the footer, so this nearly works. But it inserts one specific thing into that region rather than opening the region itself for you to put whatever you like in it."
+      }
+    }
+  ]
+}

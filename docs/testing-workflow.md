@@ -2,8 +2,9 @@
 
 The merged extension contains the real resolver, teaching adapter, panel and paint.
 Use the local fixture to check extension behavior, then a prepared Google Doc to
-rehearse the demo lesson. Generating a new lesson is a separate authoring operation;
-typing a question into **Teach me** only searches the published local library.
+rehearse the demo lesson. Typing into **Teach me** searches saved lessons and may
+ask the running bridge to judge an uncertain match. Generating a new lesson
+requires choosing the generation or rejection action.
 
 ## 1. Start the local page on Windows
 
@@ -69,8 +70,14 @@ size equals its content viewport. If controls collapse into overflow, record tha
 as an application-layout difference.
 
 Type **How do I add an automatic table of contents?** in the chat bar and click
-**Teach me**. A confident match opens its preamble; an uncertain question shows
-up to four published lesson choices. Click **Show me** and follow the nine steps:
+**Teach me**. A confident match opens its preamble, with a **No, I'm not talking about this**
+button that hands the question to the authoring bridge instead. An uncertain
+question is checked with the bridge's model when `npm run bridge` is running.
+Either way the panel offers only lessons that are actually related, or says it
+has none: a model that rules every saved lesson out stops the panel launching
+one, but it does not hide a near miss local search still believes in — the
+choice stays with you, next to **No, I'm not talking about this**. Click **Show me** and
+follow the nine steps:
 
 1. Click the highlighted **Styles** opener yourself, including in demo mode.
 2. Click the document's title line, then **Got it** in the panel. Canvas text is
@@ -95,6 +102,78 @@ when checking the actual outcome, and record the limitation in the rehearsal log
 Try **Stop** once and start again through the question box. **Show me where**
 adds visual guidance; it does not click the page for you. No authoring API keys
 or cloud session are needed to run these existing lessons.
+
+### Free-choice steps
+
+Ask **how do I change the font style**. Its last step is a *free choice*: the
+target carries `"any": true`, so the spotlight covers the whole font list rather
+than the one font the explorer happened to click, and picking Georgia is as
+correct as picking Arial. Verify both — choose a font other than the highlighted
+one and confirm the panel accepts it instead of showing a wrong-click
+correction: a correct click leaves a green note ("Yes — that works.") for a
+moment before the next step, the counterpart of the red note a wrong one gets.
+A step like this always verifies as `none`, because whatever changed on the
+page names the value that was chosen.
+
+A choice is defined by where it sits, not by what ARIA the row carries. The
+example named in the target is resolved once — by role, or failing that by its
+text inside any list (`listbox`, `menu`, `radiogroup`, `grid`, `tree`) — and
+from then on any row chosen inside that list counts, whether the page calls it
+an option, a checkbox item, or nothing at all. The row is remembered at
+mousedown, so a popup that closes or re-renders before the click arrives cannot
+lose it. Empty space, the list's search field, disabled rows, readouts and,
+when the example has a role, rows of a different role (**More fonts**) do not
+complete the step. Nothing in this is specific to Google Docs; the same rule
+covers a date picker, a colour grid or a settings radio group on any site.
+
+`any` may also be a pattern. Ask **how do I change the heading**: its last step
+carries `"any": "^Heading \\d+$"`, so Heading 1, 2 or 3 all complete it while
+Title and Normal text still get their corrections. The emitter derives this
+itself: when the goal's own words name the kind of row wanted and only some
+rows are that kind, the accepted rows are listed; when nothing in the goal
+singles any row out, every row counts; when the goal names one exact value
+("zoom to 200%"), the step stays pinned.
+
+The emitter sets the flag for a lesson's final step when the control is one of
+several interchangeable options (`option`, `menuitemradio`, `menuitemcheckbox`,
+`radio`, or a `menuitem` inside a `listbox`), it has at least three peers in
+the same list, and the goal does not name any value in that group.
+`extension/lessons/add-date.json` solves the same problem the other way: its
+calendar grid has no resolvable option names, so the last step is instruct-only
+(`target: null`) and ends on **Got it**.
+
+If a click during a step does nothing at all, it was neither accepted nor
+recognised as wrong. In DevTools, switch the console context to *Browser
+Teacher* and read `__TEACH.lastClick` — the verdict and the click path with
+each element's tag, role and label — or enable *Verbose* to see the same line
+logged for every click.
+
+### Search and rejection regression
+
+These are saved lessons, not a chronological list of everything typed. The
+picker ranks related tasks and shows at most three; it can show one or none
+when the library has fewer useful matches.
+
+1. Reload Browser Teacher at `chrome://extensions`, then refresh the test Doc.
+2. Ask **change font size and color**. Expect two or three related font lessons
+   and **No, I'm not talking about this**. Unrelated date, image and version
+   lessons should be absent.
+3. Choose a suggestion. Its preamble must retain the rejection button. Rejecting
+   it sends the original question to generation, not the saved lesson's title.
+4. Ask **make my document have chapters**. A near-match picker should include the
+   table-of-contents lesson. If the bridge selects it, the preamble still lets
+   you reject it. A bridge response of "none" must not hide local near matches.
+5. Ask **how do I mail merge from a spreadsheet**. With no such saved lesson,
+   the previous choices must disappear instead of accumulating.
+6. With the bridge stopped, repeat the chapters question and reject the
+   suggestions. The panel must explain generation is unavailable and leave
+   the question field enabled.
+
+Run `node --test docs/search-tests.cjs` from the repository root for the stable
+local ranking cases. `docs/generate-tests.cjs` checks the actual loaded extension
+with a stub bridge, including rejection, the three-suggestion cap and replacing
+old results. Its requests are routed to a temporary port, so your real bridge
+can keep running without receiving test requests.
 
 ## 4. Publish a newly generated lesson
 

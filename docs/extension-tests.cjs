@@ -65,6 +65,13 @@ async function report() {
     viewport: { width: 1440, height: 900 },
   });
   browserVersion = context.browser()?.version() || 'Chromium persistent context';
+  // This suite owns the panel; docs/generate-tests.cjs owns the authoring
+  // bridge, against a stub. A real bridge left running on the developer's
+  // machine would otherwise answer these questions with a live model call —
+  // slow, billed, and a different answer every run.
+  for (const host of ['localhost', '127.0.0.1']) {
+    await context.route(`**://${host}:7777/**`, route => route.abort());
+  }
   const page = context.pages()[0] || await context.newPage();
   page.setDefaultTimeout(6000);
   page.on('pageerror', error => runtimeErrors.push(`Page: ${error.message}`));
@@ -282,19 +289,31 @@ async function report() {
     await panelButton('Not now').click();
     await stopped();
   });
-  await test('An unknown typed question offers published lesson choices and opens the chosen lesson', async () => {
+  await test('An unknown typed question is refused honestly, and a near miss offers only the related lesson', async () => {
     const shipped = await evaluate(`import(chrome.runtime.getURL('src/panel/lessons.js')).then(module => module.loadAll()).then(lessons => lessons.map(({ id, goal, preamble }) => ({ id, goal, preamble })))`);
     await page.locator('#browser-teacher-root .bt-bar-input').fill('zxqv nebular flibbertigibbet');
     await panelButton('Teach me').click();
     await page.locator('#browser-teacher-root .bt-card-picker').waitFor();
     // Published lessons only. A reachable authoring bridge adds a "work it out
     // for me" button here, and whether one is running must not change this.
-    const choices = page.locator('#browser-teacher-root .bt-actions .bt-btn:not(.bt-btn-generate)');
+    const choices = page.locator('#browser-teacher-root .bt-actions .bt-btn-lesson');
+    assert.deepEqual(await choices.allTextContents(), [], 'nonsense must not be answered with unrelated lessons');
+    assert.match(await page.locator('#browser-teacher-root .bt-card-title').textContent(), /don't know that one/);
+    // Nothing to click on that card, so the question box must come back.
+    await page.locator('#browser-teacher-root .bt-bar-input:not([disabled])').waitFor();
+
+    await page.locator('#browser-teacher-root .bt-bar-input').fill('make my document have chapters');
+    await panelButton('Teach me').click();
+    await page.locator('#browser-teacher-root .bt-card-picker').waitFor();
     const labels = await choices.allTextContents();
-    assert.equal(labels.length, Math.min(4, shipped.length));
+    assert.ok(labels.length >= 1 && labels.length <= 3, `expected at most three related lessons, got ${JSON.stringify(labels)}`);
     assert.ok(labels.every(label => shipped.some(lesson => lesson.goal === label)));
-    const selected = shipped.find(lesson => lesson.goal === labels[0]);
-    await choices.first().click();
+    // The contents lesson must be on offer. Which related lesson ranks first is
+    // a property of the library, not of the panel: a lesson about changing a
+    // heading is just as much about "chapters" and may legitimately outrank it.
+    const selected = shipped.find(lesson => lesson.id === 'styles-toc');
+    assert.ok(labels.includes(selected.goal), `the contents lesson must be offered, got ${JSON.stringify(labels)}`);
+    await choices.filter({ hasText: selected.goal }).first().click();
     await page.locator('#browser-teacher-root .bt-card-preamble').waitFor();
     assert.equal(await page.locator('#browser-teacher-root .bt-card-body').textContent(), selected.preamble);
     await panelButton('Not now').click();
@@ -617,6 +636,149 @@ async function report() {
     await page.locator('#zoom-150').click(); await completed();
     assert.equal(await count('zoom-open'), 1); assert.equal(await count('zoom-150'), 1);
   });
+
+  async function fontChoices({ grouped = true, hideOnMouseup = false } = {}) {
+    await page.evaluate(({ grouped, hideOnMouseup }) => {
+      const list = document.createElement('div');
+      list.id = 'choice-list';
+      if (grouped) {
+        list.setAttribute('role', 'listbox');
+        list.setAttribute('aria-label', 'Font list. Arial selected.');
+      }
+      list.style.cssText = 'width:320px;padding:28px;margin:20px;background:white;';
+      list.innerHTML = '<div role="option" id="choice-arial">Arial</div>'
+        + '<div role="option" id="choice-georgia"><span>Georgia</span></div>'
+        + '<div role="option" id="choice-disabled" aria-disabled="true">Unavailable font</div>'
+        + '<input id="choice-search" aria-label="Search fonts">'
+        + '<button id="choice-more">More fonts</button>';
+      list.addEventListener(hideOnMouseup ? 'mouseup' : 'click', event => {
+        const option = event.target.closest('[role="option"]');
+        if (!option || option.getAttribute('aria-disabled') === 'true') return;
+        window.chosenFont = option.textContent;
+        if (hideOnMouseup) list.hidden = true;
+      });
+      document.body.prepend(list);
+    }, { grouped, hideOnMouseup });
+  }
+
+  await test('Free-choice font steps ignore blank space, disabled options and list tools', async () => {
+    await fontChoices();
+    await begin([step('Arial', { target: { scope: 'menu', name: 'Arial', any: true } })]);
+    await cursorAligned('#choice-list');
+    await page.locator('#choice-list').click({ position: { x: 8, y: 8 } });
+    const disabled = await page.locator('#choice-disabled').boundingBox();
+    await page.mouse.click(disabled.x + disabled.width / 2, disabled.y + disabled.height / 2);
+    await page.locator('#choice-search').click();
+    await page.locator('#choice-more').click();
+    assert.equal(await page.locator('#browser-teacher-root .bt-card-generalization').count(), 0);
+    assert.equal(await progress(), '1 / 1');
+    await page.locator('#choice-georgia span').click();
+    await completed();
+    assert.equal(await page.evaluate(() => chosenFont), 'Georgia');
+  });
+
+  for (const grouped of [true, false]) {
+    await test(`Free-choice ${grouped ? 'list' : 'sibling'} options stay correct when mouseup hides the popup`, async () => {
+      await fontChoices({ grouped, hideOnMouseup: true });
+      await begin([step('Arial', { target: { scope: 'menu', name: 'Arial', any: true } })]);
+      await cursorAligned(grouped ? '#choice-list' : '#choice-arial');
+      await page.locator('#choice-georgia span').click();
+      await completed();
+      assert.equal(await page.locator('#choice-list').isVisible(), false);
+      assert.equal(await page.evaluate(() => chosenFont), 'Georgia');
+    });
+  }
+
+  await test('A free choice needs no row roles: plain rows in a menu the page removes on mousedown', async () => {
+    await page.evaluate(() => {
+      const menu = document.createElement('div');
+      menu.id = 'plain-menu';
+      menu.setAttribute('role', 'menu');
+      menu.style.cssText = 'width:320px;padding:28px;margin:20px;background:white;';
+      menu.innerHTML = '<div id="plain-baskerville">Baskerville</div><div id="plain-cambria"><span>Cambria</span></div>';
+      menu.addEventListener('mousedown', event => {
+        const row = event.target.closest('#plain-menu > div');
+        if (!row) return;
+        window.chosenPlain = row.textContent;
+        menu.remove();   // gone before mouseup, let alone the click
+      });
+      document.body.prepend(menu);
+    });
+    await begin([step('Baskerville', { target: { scope: 'menu', name: 'Baskerville', any: true } })]);
+    await cursorAligned('#plain-menu');
+    await page.locator('#plain-cambria span').click();
+    await completed();
+    assert.equal(await page.evaluate(() => chosenPlain), 'Cambria');
+  });
+
+  await test('A font step without free choice still requires its named value', async () => {
+    await fontChoices();
+    await begin([step('Arial', { target: { scope: 'menu', name: 'Arial' } })]);
+    await cursorAligned('#choice-arial');
+    await page.locator('#choice-georgia').click();
+    assert.equal(await page.locator('#browser-teacher-root .bt-card-generalization').count(), 0);
+    await page.locator('#choice-arial').click();
+    await completed();
+  });
+
+  async function docsFontChoices() {
+    // Observed in live Docs: checkbox menu rows, Recent + alphabetical Arial,
+    // and the toolbar's selected-value readout outside the popup.
+    await page.evaluate(() => {
+      const fixture = document.createElement('div');
+      fixture.innerHTML = '<div role="toolbar"><div id="docs-font-test-open" role="listbox" aria-label="Font">'
+        + '<span id="docs-font-test-readout" role="option" aria-label="Font list. Arial selected.">Arial</span></div></div>'
+        + '<div id="docs-font-test-menu" role="menu" hidden style="width:320px;padding:24px;background:white">'
+        + '<div role="menuitem" id="docs-font-more">More fonts</div>'
+        + '<div role="menuitem" aria-disabled="true">RECENT</div>'
+        + '<div role="menuitemcheckbox" id="docs-font-recent">Arial</div>'
+        + '<div><div role="menuitemcheckbox" id="docs-font-alpha">Arial</div>'
+        + '<div role="menuitemcheckbox" id="docs-font-georgia"><span>Georgia</span></div>'
+        + '<div role="menuitemcheckbox" aria-disabled="true">Unavailable font</div></div></div>';
+      document.body.prepend(fixture);
+      const menu = document.querySelector('#docs-font-test-menu');
+      document.querySelector('#docs-font-test-open').addEventListener('mousedown', () => { menu.hidden = false; });
+      menu.addEventListener('mouseup', event => {
+        const choice = event.target.closest('[role="menuitemcheckbox"]');
+        if (!choice || choice.getAttribute('aria-disabled') === 'true') return;
+        document.querySelector('#docs-font-test-readout').setAttribute('aria-label', `Font list. ${choice.textContent} selected.`);
+        menu.hidden = true;
+      });
+    });
+  }
+
+  await test('Docs font free choice completes with duplicate Arial checkbox rows and mouseup dismissal', async () => {
+    await docsFontChoices();
+    await begin([
+      step('Font', { target: { scope: 'toolbar', name: 'Font' }, verify: { kind: 'visible', scope: 'menu', name: 'Arial' } }),
+      step('Arial', { target: { scope: 'menu', name: 'Arial', any: true } }),
+    ]);
+    await cursorAligned('#docs-font-test-open');
+    await page.locator('#docs-font-test-open').click();
+    await cursorAligned('#docs-font-test-menu');
+    assert.equal(await progress(), '2 / 2');
+    await page.locator('#docs-font-more').click();
+    assert.equal(await page.locator('#browser-teacher-root .bt-card-generalization').count(), 0);
+    await page.locator('#docs-font-georgia span').click();
+    await completed();
+    assert.equal(await page.locator('#docs-font-test-readout').getAttribute('aria-label'), 'Font list. Georgia selected.');
+  });
+
+  await test('Free-choice duplicate names may share a menu but cannot span different menus', async () => {
+    await docsFontChoices();
+    await page.locator('#docs-font-test-open').click();
+    assert.equal(await evaluate(`__RESOLVE.findSync({ scope: 'menu', name: 'Arial' })?.id || null`), null);
+    assert.equal(await evaluate(`__RESOLVE.findSync({ scope: 'menu', name: 'Arial', any: true })?.id`), 'docs-font-recent');
+    await page.evaluate(() => {
+      const menu = document.createElement('div');
+      menu.setAttribute('role', 'menu');
+      menu.innerHTML = '<div role="menuitemcheckbox">Arial</div>';
+      document.body.prepend(menu);
+    });
+    assert.equal(await evaluate(`__RESOLVE.findSync({ scope: 'menu', name: 'Arial', any: true })?.id || null`), null);
+    assert.equal(await evaluate(`import(chrome.runtime.getURL('src/teaching/resolution.js')).then(m => m.findTarget({ scope: 'menu', name: 'Arial', any: true }, () => __RESOLVE)?.id || null)`), null);
+  });
+
   await test('Existing textContent label outcomes still verify after a real user action', async () => {
     await begin([step('Start verification', { verify: { kind: 'label', selector: '#verify-state', match: 'Verified' } })]);
     await cursorAligned('#verify');

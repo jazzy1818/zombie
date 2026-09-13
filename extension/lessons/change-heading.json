@@ -1,0 +1,55 @@
+{
+  "id": "change-heading",
+  "app": "google-docs",
+  "goal": "how do i change the heading",
+  "preamble": "\"Change the heading\" sounds like a formatting job — make the line bigger, make it bold. It isn't. In Docs, a heading is a label you attach to a line, telling the document what that line *is*. The size and weight come along afterwards, as a consequence. So you're not reaching for the font controls; you're reaching for the one box that describes the line your cursor is sitting on.",
+  "generalization": "The font size box changed on its own when you applied the heading — you never touched it. That's the difference between styling a line and declaring what it is: a style carries the meaning, and the appearance follows from it. It's also why headings set this way show up in the outline pane and in any table of contents, while a line you merely enlarged by hand never will.",
+  "steps": [
+    {
+      "id": "s1",
+      "intent": "This box always reports the style of the line your cursor is on, and it's also where you change it. Opening it is how you ask Docs 'what kind of line is this, and what else could it be?' — which is the actual question behind changing a heading.",
+      "mode": "demo",
+      "target": {
+        "scope": "toolbar",
+        "name": "Styles"
+      },
+      "action": "click",
+      "verify": {
+        "kind": "visible",
+        "name": "Heading 1",
+        "scope": "menu"
+      },
+      "hints": [
+        "You're not changing how the text looks, you're changing what kind of line it is. One control in the toolbar is about that, and only that.",
+        "Top-left of the toolbar, just left of the font name — the box currently reading a style name."
+      ],
+      "wrongHints": {
+        "Font size": "Reasonable, because headings are bigger. But setting a number gives you large text that's still an ordinary paragraph. The size should be the result of the heading, not the definition of it.",
+        "Bold": "Bold makes a line look important without telling Docs that it is. Nothing else in the document — outlines, contents, exports — can read boldness as structure.",
+        "Font": "That's the typeface, purely cosmetic. The box you want sits just to its left and describes the line rather than decorating it."
+      }
+    },
+    {
+      "id": "s2",
+      "intent": "The numbered headings are the document's structure — Heading 1 begins a main section, Heading 2 a section inside it, and so on down. Pick whichever level this line deserves. Choosing it is the whole change: Docs takes the label and works out the size, spacing and weight for you.",
+      "mode": "guided",
+      "target": {
+        "scope": "menu",
+        "name": "Heading 1",
+        "any": "^Heading \\d+$"
+      },
+      "action": "click",
+      "verify": {
+        "kind": "none"
+      },
+      "hints": [
+        "You want a level of heading — a numbered one, not the document's own title.",
+        "In the open list, below Title and Subtitle: the numbered headings."
+      ],
+      "wrongHints": {
+        "Title": "It looks the most heading-like of anything in the list, but Docs reserves Title for the name of the whole document. It won't behave as a section.",
+        "Normal text": "That's the style the line already has, which is exactly what you're moving away from. Picking it changes nothing."
+      }
+    }
+  ]
+}

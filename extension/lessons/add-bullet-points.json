@@ -1,0 +1,32 @@
+{
+  "id": "add-bullet-points",
+  "app": "google-docs",
+  "goal": "how to add bullet points",
+  "preamble": "Typing a dash and a space at the start of a line gives you something that looks like a bulleted list. It isn't one. A real bulleted list is a property of the paragraph itself — Docs knows the line is a list item, so it handles the bullet character, the hanging indent, and what happens when you press Enter. You're not about to type bullets. You're about to change what kind of paragraph you're standing in.",
+  "generalization": "The list button doesn't insert anything at your cursor — it re-describes the paragraph your cursor happens to be in. That's why you don't select the text first, and why one click can change several paragraphs at once if your selection spans them. Most of the toolbar splits this way: some controls act on the characters you've highlighted, others act on the whole paragraph. Knowing which kind you're touching tells you where to put the cursor before you click.",
+  "steps": [
+    {
+      "id": "s1",
+      "intent": "Put your cursor on the line you want bulleted — anywhere in it, no need to select the words — and use the bulleted list control. It turns that whole paragraph into a list item: Docs draws the bullet, sets the indent, and from then on every time you press Enter it gives you the next bullet automatically. That last part is the real reason to use it rather than typing dashes.",
+      "mode": "demo",
+      "target": {
+        "scope": "toolbar",
+        "name": "Bulleted list"
+      },
+      "action": "click",
+      "verify": {
+        "kind": "dom",
+        "selector": "[aria-label=\"Styles list. Normal text selected.\"]"
+      },
+      "hints": [
+        "You're changing the shape of a paragraph, not styling letters, so look among the controls that act on whole lines — alignment, indenting, spacing — rather than the ones for font and colour.",
+        "The right-hand end of the toolbar, in the run of paragraph controls; it's the icon showing three short lines each preceded by a dot, sitting next to the numbered version."
+      ],
+      "wrongHints": {
+        "Numbered list": "A reasonable neighbour — it works the same way, on the whole paragraph. But numbering implies order and steps. Choose it when the sequence matters; bullets are for items that simply belong together.",
+        "Styles": "Styles say what a line is in the document's structure — a heading, a title, body text. A bullet is about how a paragraph presents its items, and it sits on top of whatever style the line already has.",
+        "Font size": "Size changes the characters you've selected. Nothing about it tells Docs the line is one item in a list, so pressing Enter would just give you an ordinary new paragraph."
+      }
+    }
+  ]
+}

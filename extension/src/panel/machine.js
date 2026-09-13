@@ -4,7 +4,10 @@ import { startHints } from './hints.js';
 
 const T = () => window.__TEACH;
 const MAX_VERIFY_RETRIES = 2;
-export const ACTION = { CONTINUE: 'continue', DEMO_REST: 'demo-rest', QUIT: 'quit' };
+// How long a "that's it" stays on screen before the next step replaces the
+// card. Long enough to be read, short enough not to feel like a pause.
+const OK_DWELL_MS = 900;
+export const ACTION = { CONTINUE: 'continue', DEMO_REST: 'demo-rest', QUIT: 'quit', REGENERATE: 'regenerate' };
 const REQUIRED = ['highlight', 'clear', 'moveCursor', 'demo', 'waitForClick', 'verify', 'flashCorrect', 'setCursorVisible'];
 const aborted = () => new DOMException('Lesson cancelled', 'AbortError');
 
@@ -33,7 +36,15 @@ function pause(ms, signal) {
   });
 }
 
-export async function runLesson(lesson, ui, { from = 0, signal, isCurrent = () => true } = {}) {
+/**
+ * @param {object} opts
+ * @param {number}  opts.from        step index to start at — rehearsal shortcut
+ * @param {boolean} opts.regenerate  offer "not this one" on the preamble. The
+ *   matcher picked this lesson for a typed question; if the user says it's the
+ *   wrong one the caller sends the question to the authoring bridge instead.
+ *   Resolves ACTION.REGENERATE in that case.
+ */
+export async function runLesson(lesson, ui, { from = 0, signal, isCurrent = () => true, regenerate = false } = {}) {
   const teach = T();
   const missing = REQUIRED.filter(method => typeof teach?.[method] !== 'function');
   if (missing.length) throw new Error('window.__TEACH is missing: ' + missing.join(', '));
@@ -45,10 +56,15 @@ export async function runLesson(lesson, ui, { from = 0, signal, isCurrent = () =
     if (from === 0) {
       const start = await cancellable(ui.card({
         kind: 'preamble', title: lesson.goal, body: lesson.preamble,
-        actions: [{ label: 'Show me', value: ACTION.CONTINUE }, { label: 'Not now', value: ACTION.QUIT }],
+        actions: [
+          { label: 'Show me', value: ACTION.CONTINUE },
+          ...(regenerate ? [{ label: "No, I'm not talking about this", value: ACTION.REGENERATE, subtle: true }] : []),
+          { label: 'Not now', value: ACTION.QUIT, subtle: regenerate },
+        ],
       }, { signal }), signal);
       check(signal);
       if (start === ACTION.QUIT) return;
+      if (start === ACTION.REGENERATE) return ACTION.REGENERATE;
     }
     let showWhere = false;
     for (let index = from; index < lesson.steps.length; index++) {
@@ -148,7 +164,15 @@ async function runInteractive(step, ui, signal) {
         await pause(0, signal);
         const ok = await cancellable(T().verify(step.verify), signal);
         check(signal);
-        if (ok || ++verifyFailures > MAX_VERIFY_RETRIES) return null;
+        if (ok) {
+          // The wrong control earns a red note; the right one earns a green one.
+          // Held briefly, because the next step's card would otherwise replace it
+          // in the same frame and it would never be seen.
+          ui.ok(okMessage(step));
+          await pause(OK_DWELL_MS, signal);
+          return null;
+        }
+        if (++verifyFailures > MAX_VERIFY_RETRIES) return null;
         ui.hint("That's the right control — it just didn't take. Give it another go.");
       }
     } finally {
@@ -166,6 +190,10 @@ async function waitForCorrect(step, signal, onWrong) {
     onWrong(result?.wrong);
     // Re-arm immediately, even if the initial smooth scroll is still running.
   }
+}
+
+function okMessage(step) {
+  return step.target?.any ? "Yes — that works. Any of those would have." : "Yes — that's the one.";
 }
 
 function wrongMessage(step, name) {

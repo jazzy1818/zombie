@@ -1,0 +1,54 @@
+{
+  "id": "paragraph-spacing",
+  "app": "google-docs",
+  "goal": "how to DO PARAGRAPH SPACING?",
+  "preamble": "Most people space out a document by pressing Enter a few extra times. That works until you need to change it, and then you're hunting for invisible blank lines across twenty pages. Spacing in Docs isn't something you type — it's a property the paragraph carries, like its font. You set it once, and the paragraph remembers, however long it grows.",
+  "generalization": "Blank lines are text; spacing is a property. The difference shows up the moment something changes — reflow the document, change the font size, paste the paragraph somewhere else, and typed-in blank lines go wrong while a spacing setting travels with the paragraph and stays correct. Anything measured in multiples rather than in keystrokes tends to behave this way.",
+  "steps": [
+    {
+      "id": "s1",
+      "intent": "There's one toolbar control that owns every kind of gap in a paragraph — the space between its lines and the space before and after the whole block. They live together because they're the same idea at two scales. Opening it shows you both at once, and tells you what the paragraph your cursor sits in is currently set to.",
+      "mode": "demo",
+      "target": {
+        "scope": "toolbar",
+        "name": "Line & paragraph spacing"
+      },
+      "action": "click",
+      "verify": {
+        "kind": "visible",
+        "name": "1.5",
+        "scope": "menu"
+      },
+      "hints": [
+        "You're not adding anything or changing how letters look — you're adjusting the air around them. One toolbar button covers all of it.",
+        "Toward the right end of the toolbar, near the alignment buttons — its icon is a stack of lines with an arrow beside it."
+      ],
+      "wrongHints": {
+        "Font size": "Larger type does push lines further apart, but only because the letters got bigger. That's a side effect, not control — you'd have to resize the text every time you wanted a different gap.",
+        "Bulleted list": "Lists do change the shape of a block, including its indentation, but they're about structure. The gaps themselves are set elsewhere."
+      }
+    },
+    {
+      "id": "s2",
+      "intent": "The numbers here aren't measurements — they're multiples of the line's own height. Choosing 1.5 says 'give each line half again as much room as it needs', so the spacing stays right whatever font or size you later use. If your cursor is in a short paragraph, you may see almost nothing happen; the setting is stored on the paragraph either way and shows up as soon as it has more than one line.",
+      "mode": "guided",
+      "target": {
+        "scope": "menu",
+        "name": "1.5"
+      },
+      "action": "click",
+      "verify": {
+        "kind": "none"
+      },
+      "hints": [
+        "You want noticeably more breathing room than the default, but not a full empty line's worth between every line.",
+        "In the list that just opened, between Single and Double."
+      ],
+      "wrongHints": {
+        "Single": "That's the default the paragraph already has — picking it would leave things exactly where they are.",
+        "Double": "Double is a full extra line between every line. It's the manuscript convention and it's a legitimate choice, but it's a bigger step than the one we're making here.",
+        "Custom spacing": "That opens the same settings as exact numbers you type in. Worth knowing about, but the preset multiples are the same idea with the arithmetic already done."
+      }
+    }
+  ]
+}

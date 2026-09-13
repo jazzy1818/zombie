@@ -1,10 +1,10 @@
 # Offline pipeline handoff checks
 
-Run: 2026-09-13T04:01:57.006Z
+Run: 2026-09-13T09:46:15.271Z
 
-Browser: 153.0.8010.37
+Browser: 141.0.7390.122
 
-Result: **12/12 checks passed**.
+Result: **14/14 checks passed**.
 
 The local browser observes and activates actual fixture controls. Production probe, diff, prune and descriptor generation produce a lesson; a fresh fixture replay checks its outcomes before a digest-bound verification record permits publication to a temporary lesson directory and index. The test reuses recorded narration prose and does not call a model, open Steel sessions, access Google accounts or modify external documents.
 
@@ -13,7 +13,9 @@ The local browser observes and activates actual fixture controls. Production pro
 - PASS: Action targets reject state labels while outcomes can inspect them
 - PASS: Menu matching agrees on exact choices and known promo badges
 - PASS: Native fieldset exception and rendered label checks agree
+- PASS: Shortcut cleanup preserves bare names through probe, emitter and runtime
 - PASS: Real observation → clicks → diff → prune → stable descriptors
+- PASS: A terminal free choice ships as any-of-the-list, not the one the explorer clicked
 - PASS: Fresh local browser replay produces evidence only after measured outcomes
 - PASS: Explicit publication writes complete lesson then discovers it through index
 - PASS: Modified, failed, skipped and unsafe lessons cannot be published

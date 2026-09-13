@@ -14,15 +14,19 @@
 // Start it with:  npm run bridge
 //
 //   POST /generate  { goal, id?, docUrl?, check?, verify? }  -> { jobId }
+//   POST /match     { question, candidates: [{id, goal, summary}] } -> { id | null, reason }
 //   GET  /jobs/:id                                           -> job state
 //   GET  /lessons                                            -> saved lesson ids
-//   GET  /health                                             -> { ok: true }
+//   GET  /health                                             -> { ok: true, match: true }
 //
 // Jobs are async because generation takes 1-4 minutes and no browser will hold
 // a request open that long. The panel polls.
 import { createServer } from 'node:http';
 import { readFile, writeFile, mkdir, readdir } from 'node:fs/promises';
 import { fileURLToPath } from 'node:url';
+import Anthropic from '@anthropic-ai/sdk';
+import { zodOutputFormat } from '@anthropic-ai/sdk/helpers/zod';
+import { z } from 'zod';
 import { openAuthedSession, openLocalSession, closeSession } from './session.js';
 import { explore } from './explore.js';
 import { prune } from './prune.js';
@@ -170,6 +174,51 @@ async function runJob(job, spec) {
   note(job, `Done — ${lesson.steps.length} steps.`);
 }
 
+/* -------------------------------------------------------------------- match */
+
+// The panel's own search is lexical: it can only see shared words, which is
+// how "add a header" once opened the headings lesson and "email draft" opened
+// version history. When it is not confident it asks here, and the model reads
+// the question against the real lessons and says which one — if any — does
+// what the user asked. One short call, no browser, no Steel session.
+const Match = z.object({
+  id: z.string().describe('The id of the one saved lesson that teaches what the user asked, or exactly "none".'),
+  reason: z.string().describe('One sentence: why that lesson fits, or why none of them does.'),
+});
+
+const MATCH_RULES = `You decide whether one of the saved Browser Teacher lessons answers a user's question about Google Docs.
+
+A lesson matches only if completing its steps does what the user asked. Sharing words is not a match:
+- "how do I add a header or footer" is NOT a lesson about heading styles or a table of contents.
+- "add an email draft" is NOT a lesson about version history, even though a version is a kind of draft.
+- "insert a table" is NOT the table-of-contents lesson.
+Different wording for the same task IS a match: "make my document have chapters" is the headings and table-of-contents lesson.
+
+If no saved lesson does what the user asked, answer "none". Prefer "none" over a loose fit: a wrong lesson wastes the user's time, while "none" lets us go and work the task out for them.`;
+
+async function matchLesson({ question, candidates }) {
+  const client = new Anthropic();
+  const list = candidates
+    .map(c => `- id: ${c.id}\n  goal: ${c.goal}\n  summary: ${c.summary}`)
+    .join('\n');
+
+  const res = await client.messages.parse({
+    model: 'claude-opus-5',
+    max_tokens: 2048,
+    thinking: { type: 'adaptive' },
+    output_config: { effort: 'low', format: zodOutputFormat(Match) },
+    system: MATCH_RULES,
+    messages: [{
+      role: 'user',
+      content: `Question: ${question}\n\nSaved lessons:\n${list}\n\nWhich lesson id answers the question, or "none"?`,
+    }],
+  });
+
+  const parsed = res.parsed_output;
+  const id = parsed && candidates.some(c => c.id === parsed.id) ? parsed.id : null;
+  return { id, reason: parsed?.reason ?? '' };
+}
+
 /* ------------------------------------------------------------------- server */
 
 // The panel fetches from a content script, so the request carries the page's
@@ -207,7 +256,33 @@ const server = createServer(async (req, res) => {
   if (req.method === 'OPTIONS') { cors(res); res.writeHead(204); res.end(); return; }
 
   if (url.pathname === '/health') {
-    return send(res, 200, { ok: true, busy: running, docUrl: !!process.env.DEMO_DOC_URL });
+    return send(res, 200, { ok: true, busy: running, match: true, docUrl: !!process.env.DEMO_DOC_URL });
+  }
+
+  if (url.pathname === '/match' && req.method === 'POST') {
+    let body;
+    try { body = await readBody(req); } catch (err) { return send(res, 400, { error: err.message }); }
+
+    const question = typeof body.question === 'string' && body.question.trim();
+    if (!question) return send(res, 400, { error: 'question is required' });
+
+    const candidates = (Array.isArray(body.candidates) ? body.candidates : [])
+      .filter(c => c && typeof c.id === 'string' && typeof c.goal === 'string')
+      .slice(0, 50)
+      .map(c => ({ id: c.id, goal: c.goal.slice(0, 200), summary: String(c.summary ?? '').slice(0, 400) }));
+    if (!candidates.length) return send(res, 200, { id: null, reason: 'no saved lessons' });
+
+    try {
+      const result = await matchLesson({ question, candidates });
+      console.log(`  [match] "${question}" -> ${result.id ?? 'none'} — ${result.reason}`);
+      return send(res, 200, result);
+    } catch (err) {
+      // The panel treats anything but a clean answer as "bridge could not say"
+      // and falls back to its local picker, so a model or key problem here
+      // degrades rather than wrongly reporting "no match".
+      console.warn(`  [match] failed: ${err.message}`);
+      return send(res, 502, { error: err.message });
+    }
   }
 
   if (url.pathname === '/lessons') {

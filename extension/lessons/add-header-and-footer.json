@@ -1,0 +1,74 @@
+{
+  "id": "add-header-and-footer",
+  "app": "google-docs",
+  "goal": "how do i add a header and footer",
+  "preamble": "A header isn't a line of text you type at the top of page one. It's a separate layer that belongs to the page rather than to your writing — which is why it repeats itself on every page without you retyping it, and why your cursor can't reach it by pressing the up arrow. So you're not adding text. You're opening a zone that sits outside the flow of the document.",
+  "generalization": "The Insert menu divides into two kinds of thing: stuff that flows along with your words — images, tables, footnotes — and stuff that belongs to the page itself, which Docs keeps together under Page elements. Headers, footers, page numbers and page breaks all live there for the same reason. Once you know that split, you stop hunting through the whole menu: you first ask whether the thing you want travels with the text or sits on the paper.",
+  "steps": [
+    {
+      "id": "s1",
+      "intent": "Nothing about your existing text is changing here — you're bringing something into the document that wasn't in it before. That's what Insert is for: it adds, rather than restyles what's already written.",
+      "mode": "demo",
+      "target": {
+        "scope": "menu",
+        "name": "Insert"
+      },
+      "action": "click",
+      "verify": {
+        "kind": "visible",
+        "name": "Page elements",
+        "scope": "menu"
+      },
+      "hints": [
+        "You're not reformatting a line of text. You're putting a new element into the document.",
+        "The menu bar along the top, third from the left after File and Edit."
+      ],
+      "wrongHints": {
+        "Format": "Format changes how existing text looks — spacing, alignment, style. A header doesn't exist yet, so there's nothing there to format.",
+        "View": "View changes how the document is displayed to you. It can show you the page edges, but it won't create a header zone in the file itself.",
+        "File": "File deals with the document as a whole — sharing, printing, history. A header is a piece of the page's contents, not a property of the file."
+      }
+    },
+    {
+      "id": "s2",
+      "intent": "The header isn't at the top level of this menu, and that's deliberate. Most of what Insert offers drops into the middle of your text and flows with it. A header doesn't flow — it's attached to the page. Docs keeps that whole family in one place.",
+      "mode": "guided",
+      "target": {
+        "scope": "menu",
+        "name": "Page elements"
+      },
+      "action": "click",
+      "verify": {
+        "kind": "visible",
+        "name": "Header",
+        "scope": "menu"
+      },
+      "hints": [
+        "Ask which items here stay put on the paper no matter how much you type — that group has its own submenu.",
+        "'Page elements', low down in the Insert menu, with an arrow showing a submenu."
+      ]
+    },
+    {
+      "id": "s3",
+      "intent": "Your turn. This submenu holds everything that belongs to the page rather than the text — and one of these opens the strip at the top of every page. Clicking it won't seem to do much: it moves your cursor up into that separate layer, ready for you to type. The footer works exactly the same way, from this same list.",
+      "mode": "solo",
+      "target": {
+        "scope": "menu",
+        "name": "Header"
+      },
+      "action": "click",
+      "verify": {
+        "kind": "none"
+      },
+      "hints": [
+        "You want the band that sits above your text on every page, not a number and not a line.",
+        "Near the top of the small submenu that just opened, paired with Footer."
+      ],
+      "wrongHints": {
+        "Page numbers": "Page numbers do live in the header or footer, so this is close. But it inserts one specific thing — the number — rather than opening the zone for you to put whatever you like in it.",
+        "Footer": "That's the same idea at the other end of the page. You'll want it too, by this same route — but the top strip is the header.",
+        "Watermark": "A watermark also repeats on every page, which makes it a fair guess. It sits behind your text as a background image rather than giving you an editable strip to type in."
+      }
+    }
+  ]
+}

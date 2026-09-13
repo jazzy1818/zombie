@@ -27,6 +27,38 @@ export async function bridgeAvailable({ timeoutMs = 1500 } = {}) {
   }
 }
 
+/**
+ * Ask the bridge's model whether one of the saved lessons answers `question`.
+ *
+ * Local search is lexical and can only see shared words, which is why "add a
+ * header" once looked like the headings lesson. This is the second opinion for
+ * the ambiguous tail: the bridge shows the candidates to Claude and asks which
+ * one, if any, actually does what the user asked.
+ *
+ * Returns `{ id }` — a candidate id, or null when the model says none of them.
+ * Returns `undefined` when the bridge could not answer (not running, old
+ * version without /match, network error), so the caller can fall back to the
+ * local picker instead of treating a failure as "no match".
+ */
+export async function matchRemote(question, candidates, { signal, timeoutMs = 20_000 } = {}) {
+  try {
+    const res = await fetch(`${BRIDGE}/match`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ question, candidates }),
+      signal: signal ? AbortSignal.any([signal, AbortSignal.timeout(timeoutMs)]) : AbortSignal.timeout(timeoutMs),
+    });
+    if (!res.ok) return undefined;
+    const body = await res.json();
+    if (!body || typeof body !== 'object' || !('id' in body)) return undefined;
+    const id = typeof body.id === 'string' && candidates.some(c => c.id === body.id) ? body.id : null;
+    return { id };
+  } catch (err) {
+    if (err?.name === 'AbortError' && signal?.aborted) throw err;
+    return undefined;
+  }
+}
+
 const sleep = (ms, signal) => new Promise((resolve, reject) => {
   const t = setTimeout(resolve, ms);
   signal?.addEventListener('abort', () => {

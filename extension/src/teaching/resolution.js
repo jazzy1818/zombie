@@ -2,7 +2,7 @@
 import { RESOLVE_TIMEOUT_MS, VERIFY_TIMEOUT_MS } from '../constants.js';
 import { isVisible } from '../resolve/visible.js';
 import { checkAbort, delay } from './async.js';
-import { parentOf as parent, isEnabled, isStateReadout, roleOf, collapseNested } from '../resolve/eligibility.js';
+import { parentOf as parent, isEnabled, isStateReadout, roleOf, collapseNested, optionList, samePeerGroup, LIST_SELECTOR } from '../resolve/eligibility.js';
 export { isEnabled, roleOf } from '../resolve/eligibility.js';
 
 const CONTROL = 'button, a[href], input:not([type="hidden"]), select, textarea, summary, [role], [aria-label], [aria-labelledby]';
@@ -90,24 +90,67 @@ function matchesName(element, wanted) {
     || /^(?:[►▸▶›»]|\(?\s*(?:Ctrl|Control|Alt|Option|Shift|Meta|Cmd|Command|⌘|⌥|⇧|F\d{1,2})(?:\b|[+⌘⌥⇧]).*\)?)$/i.test(suffix);
 }
 
-export function findTarget(target, resolver, { requireEnabled = true, allowReadouts = false } = {}) {
+/**
+ * `target.any` marks a control that is one of a set of interchangeable choices —
+ * a font in the font list, a heading level, a zoom percentage. The trace can
+ * only ever record the one the explorer happened to click, and pinning that
+ * turns every other legitimate choice into a wrong click. Widening to the list
+ * makes the spotlight cover the whole column. Click recognition keeps the
+ * example option and checks its peers, so clicking empty space cannot advance.
+ *
+ * The list is not re-checked for enabled/readout eligibility: Docs labels the
+ * font list "Font list. Arial selected.", which is exactly the readout rule
+ * that stops it being an action target. It is not one here — nobody clicks the
+ * list, they click into it.
+ */
+function widen(element, target) {
+  return element && target?.any ? optionList(element) ?? element : element;
+}
+
+/**
+ * Rows a page gave no role and no label — Docs' font menu is a column of plain
+ * divs — never enter CONTROL, so by name alone they do not exist. For a free
+ * choice, look for the name as the bare text of something inside a list: a
+ * choice is defined by where it sits, not by the ARIA it carries. Toolbars are
+ * left out because a widget's current-value caption reads "Arial" too, and
+ * that is a readout of the choice, not a row of it.
+ */
+function textMatches(target) {
+  const wanted = normalize(target.name);
+  const found = [];
+  for (const list of queryDeep(LIST_SELECTOR)) {
+    if (!usable(list) || list.closest('[role="toolbar"]')) continue;
+    for (const element of list.querySelectorAll('*')) {
+      if (!normalize(element.textContent).startsWith(wanted)) continue;   // cheap gate before layout reads
+      if (!usable(element) || !isEnabled(element) || isStateReadout(element)) continue;
+      if (matchesName(element, target.name)) found.push(element);
+    }
+  }
+  return collapseNested(found);
+}
+
+export function findTarget(target, resolver, { requireEnabled = true, allowReadouts = false, widenChoices = true } = {}) {
   const eligible = element => usable(element) && (!requireEnabled || isEnabled(element))
     && (allowReadouts || !isStateReadout(element));
   if (target?.nodeType === 1) return eligible(target) ? target : null;
   if (!target || typeof target.name !== 'string' || !target.name.trim()) return null;
   if (target.nth !== undefined && (!Number.isInteger(target.nth) || target.nth < 0)) return null;
+  if (target.any !== undefined && typeof target.any !== 'boolean' && typeof target.any !== 'string') return null;
   // Read A live so a completed resolver can replace the stub without changing D.
   const provided = resolver?.()?.findSync?.(target, { requireEnabled, allowReadouts });
-  if (eligible(provided)) return provided;
-  const matches = collapseNested(queryDeep(CONTROL).filter(element => eligible(element)
+  if (eligible(provided)) return widenChoices ? widen(provided, target) : provided;
+  let matches = collapseNested(queryDeep(CONTROL).filter(element => eligible(element)
     && withinScope(element, target.scope)
     && (!target.role || roleOf(element) === target.role)
     // A menu/toolbar container's concatenated text is not its child's button
     // name. Grouping and static roles require an explicit role in the target.
     && (target.role || !roleOf(element) || ACTION_ROLES.has(roleOf(element)))
     && matchesName(element, target.name)));
-  if (target.nth === undefined && matches.length !== 1) return null;
-  return matches[target.nth ?? 0] || null;
+  if (!matches.length && target.any && requireEnabled) matches = textMatches(target);
+  if (target.nth === undefined && matches.length !== 1
+    && !(target.any && matches.length && matches.every(element => samePeerGroup(element, matches[0])))) return null;
+  const found = matches[target.nth ?? 0] || null;
+  return widenChoices ? widen(found, target) : found;
 }
 
 export async function resolveTarget(target, { signal, resolver, timeout = RESOLVE_TIMEOUT_MS }) {
@@ -143,7 +186,9 @@ export async function verifyOutcome(verification, { signal, resolver, timeout = 
   if (!verification || verification.kind === 'none') return true;
   const end = performance.now() + timeout;
   function matches() {
-    if (verification.kind === 'visible') return Boolean(findTarget(verification, resolver, { requireEnabled: false, allowReadouts: true }));
+    // Existence is proven by duplicate choices in one popup, even though a
+    // normal action would need nth to choose between those same-name rows.
+    if (verification.kind === 'visible') return Boolean(findTarget({ ...verification, any: true }, resolver, { requireEnabled: false, allowReadouts: true }));
     if (!['dom', 'label'].includes(verification.kind) || typeof verification.selector !== 'string') return false;
     let elements;
     try { elements = queryDeep(verification.selector); } catch { return false; }

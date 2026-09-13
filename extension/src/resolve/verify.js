@@ -50,7 +50,7 @@ function checkOnce(v) {
         .some(value => value?.replace(/\s+/g, ' ').trim().includes(expected)));
     }
     case 'visible':
-      return findSync({ name: v.name, scope: v.scope, role: v.role }, { requireEnabled: false, allowReadouts: true }) !== null;
+      return findSync({ name: v.name, scope: v.scope, role: v.role, any: true }, { requireEnabled: false, allowReadouts: true }) !== null;
     default:
       return false;
   }

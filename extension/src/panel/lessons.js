@@ -58,6 +58,12 @@ export function listLessons() {
 const EXTRA_TERMS = {
   'styles-toc': ['toc', 'table of contents'],
   'version-history': ['version history', 'undo', 'revert'],
+  // Since search gates suggestions on a subject word from the goal or a target
+  // name, the everyday synonyms a lesson's prose uses but its goal does not
+  // have to be listed here or the lesson can never be offered for them.
+  'change-font-style': ['typeface', 'font family'],
+  'add-image': ['picture', 'photo'],
+  'wanna-increase-font-size': ['bigger', 'larger', 'text size'],
 };
 
 const cache = new Map();
@@ -112,6 +118,13 @@ export function validateLesson(lesson, id = lesson?.id) {
       }
       if (/Ctrl\+|⌘|\(.*\)$/.test(step.target.name)) {
         console.warn(`[browser-teacher] ${at}: target name looks like it includes a shortcut`);
+      }
+      // `any` is a free choice: true for any row in the list, or a pattern the
+      // chosen row's label must match ("any heading level").
+      const { any } = step.target;
+      if (any !== undefined && typeof any !== 'boolean' && typeof any !== 'string') bad(`${at} has an "any" that is neither true nor a pattern.`);
+      if (typeof any === 'string') {
+        try { new RegExp(any); } catch { bad(`${at} has an "any" pattern that is not a valid regular expression.`); }
       }
     } else if (step.mode === 'demo') {
       bad(`${at} is mode "demo" but has no target — there's nothing to demonstrate.`);

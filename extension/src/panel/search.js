@@ -13,8 +13,8 @@
 // better with no work from us.
 //
 // Everything here is local and synchronous: no model, no network, no bundle
-// cost, and nothing to fail on stage. A remote scorer can be layered on top for
-// the ambiguous tail — see scoreRemote in matchLesson's caller.
+// cost, and nothing to fail on stage. The authoring bridge's /match route is
+// layered on top for the ambiguous tail — see start() in panel.js.
 
 /* ------------------------------------------------------------- tokenising */
 
@@ -31,31 +31,49 @@ const STOP = new Set([
 /**
  * Crude suffix stripping. Not linguistically correct and doesn't need to be —
  * it only has to make "headings", "heading" and "headed" collide.
+ *
+ * Deliberately no "er" rule: it made "header" and "heading" the same word, so
+ * a question about headers and footers confidently launched the headings
+ * lesson. It also mangled "paper", "number" and "border". The plural comes off
+ * first so "headings" reaches the same stem as "heading".
  */
 function stem(w) {
   if (w.length <= 3) return w;
-  for (const [suffix, min, repl] of [
-    ['ies', 4, 'y'], ['ing', 5, ''], ['ers', 5, ''], ['er', 5, ''],
-    ['ed', 4, ''], ['es', 4, ''], ['ly', 4, ''], ['s', 4, ''],
-  ]) {
-    if (w.endsWith(suffix) && w.length >= min) return w.slice(0, -suffix.length) + repl;
+  if (w.endsWith('ies') && w.length >= 4) return w.slice(0, -3) + 'y';
+  if (w.endsWith('s') && !w.endsWith('ss') && w.length >= 4) w = w.slice(0, -1);
+  for (const [suffix, min] of [['ing', 5], ['ed', 4], ['ly', 4]]) {
+    if (w.endsWith(suffix) && w.length >= min) return w.slice(0, -suffix.length);
   }
   return w;
 }
 
-function tokenize(text) {
+/** The question's own words, stop words removed, not yet stemmed. */
+function rawTokens(text) {
   return String(text || '')
     .toLowerCase()
     .replace(/[^a-z0-9\s]/g, ' ')
     .split(/\s+/)
     .filter(t => t && !STOP.has(t))
-    .map(stem);
+    .map(t => t.replace(/^colour/, 'color'));
 }
+
+function tokenize(text) {
+  return rawTokens(text).map(stem);
+}
+
+// These describe performing a task, not which task. They may contribute to
+// prose ranking, but cannot make an unrelated lesson worth suggesting.
+const GENERIC = new Set(tokenize('add insert change make set apply use open close select choose click press find show create adjust increase decrease turn enable disable option menu toolbar control button current wanna'));
+const subjectTerms = text => tokenize(text).filter(term => !GENERIC.has(term));
 
 /**
  * Words a user reaches for that a lesson's own prose may never contain. Kept
  * deliberately small — this is for vocabulary gaps, not for doing the matching.
  * Everything is stemmed on both sides, so list the plain form.
+ *
+ * Synonyms count for relevance but never for confidence on their own (see
+ * isConfident): "draft" used to sit here pointing at version history, and
+ * "add an email draft" confidently opened the version-history lesson.
  */
 const RAW_SYNONYMS = {
   chapter: ['heading', 'section', 'outline'],
@@ -74,20 +92,20 @@ const RAW_SYNONYMS = {
   yesterday: ['version', 'history', 'earlier'],
   older: ['version', 'history', 'earlier'],
   previous: ['version', 'history', 'earlier'],
-  draft: ['version', 'history'],
 };
 
 // Both sides have to be stemmed or nothing ever matches: the query token is
-// stemmed before lookup, so "chapters" arrives as "chapt" and would miss a key
-// spelled "chapter". This cost me a test run — keep the stemming here.
+// stemmed before lookup, so "chapters" arrives as "chapter" and would miss a
+// key that stemmed differently. Keep the stemming here.
 const SYNONYMS = new Map(
   Object.entries(RAW_SYNONYMS).map(([k, v]) => [stem(k), v.map(stem)]),
 );
 
-/** @returns {{terms: Map<string, number>, origin: Map<string, string>}} */
+/** @returns {{terms: Map<string, number>, origin: Map<string, string>, direct: Set<string>}} */
 function expand(tokens) {
   const terms = new Map();          // term -> weight (synonyms count for less)
   const origin = new Map();         // term -> the query word it came from
+  const direct = new Set(tokens);   // terms the user actually typed
   const put = (term, weight, from) => {
     if ((terms.get(term) ?? 0) >= weight) return;
     terms.set(term, weight);
@@ -98,7 +116,7 @@ function expand(tokens) {
     put(t, 1, t);
     for (const s of SYNONYMS.get(t) || []) put(s, 0.55, t);
   }
-  return { terms, origin };
+  return { terms, origin, direct };
 }
 
 /* ---------------------------------------------------------------- indexing */
@@ -126,11 +144,6 @@ function fields(lesson) {
   return out;
 }
 
-/**
- * @param {Array} lessons  full lesson objects
- * @param {Object} extra   optional per-id array of hand-added terms, for
- *                         vocabulary the prose genuinely lacks ("toc")
- */
 /** Adjacent token pairs. "table of contents" -> "table content" once stopped. */
 function bigrams(tokens) {
   const out = [];
@@ -138,10 +151,20 @@ function bigrams(tokens) {
   return out;
 }
 
+/**
+ * @param {Array} lessons  full lesson objects
+ * @param {Object} extra   optional per-id array of hand-added terms, for
+ *                         vocabulary the prose genuinely lacks ("toc")
+ */
 export function buildIndex(lessons, extra = {}) {
   const docs = lessons.map(lesson => {
     const tf = new Map();
     const bg = new Map();
+    const subjects = new Set([
+      ...subjectTerms(lesson.goal),
+      ...(lesson.steps || []).flatMap(step => subjectTerms(step.target?.name)),
+      ...(extra[lesson.id] || []).flatMap(subjectTerms),
+    ]);
     const add = (term, weight) => tf.set(term, (tf.get(term) ?? 0) + weight);
     const addBg = (pair, weight) => bg.set(pair, (bg.get(pair) ?? 0) + weight);
 
@@ -161,7 +184,7 @@ export function buildIndex(lessons, extra = {}) {
     // Long lessons have more words and would otherwise always win. Square root
     // rather than linear so length still counts for something.
     const norm = Math.sqrt([...tf.values()].reduce((a, b) => a + b, 0)) || 1;
-    return { id: lesson.id, tf, bg, norm };
+    return { id: lesson.id, tf, bg, norm, subjects };
   });
 
   // Words in every lesson carry no signal. With a small library this matters
@@ -224,14 +247,19 @@ function withinOneEdit(a, b) {
 /**
  * Ranked lessons, best first. Pure function of the index.
  *
- * Each result also carries `hits` — how many distinct words of the question
- * actually contributed — because the score alone can't tell "two words matched
- * weakly" from "one common word matched hard", and those deserve very
- * different amounts of trust.
+ * Each result also carries:
+ *   hits      how many distinct question words contributed (synonyms included)
+ *   direct    how many of those were words the user actually typed
+ *   phrase    whether a two-word phrase from the question matched
+ *   coverage  the share of the question's words we recognised at all
+ * because the score alone can't tell "two generic words matched weakly" from
+ * "the goal was named", and those deserve very different amounts of trust.
  */
 export function search(question, index) {
-  const tokens = tokenize(question);
-  const { terms, origin } = expand(tokens);
+  const raw = rawTokens(question);
+  const tokens = raw.map(stem);
+  const { terms, origin, direct } = expand(tokens);
+  const subjects = new Set(tokens.filter(term => !GENERIC.has(term)));
 
   // Rescue typos by mapping unknown terms onto the closest known one.
   for (const [t, w] of [...terms]) {
@@ -240,29 +268,39 @@ export function search(question, index) {
     if (near && !terms.has(near)) {
       terms.set(near, w * 0.8);
       origin.set(near, origin.get(t) ?? t);
+      if (direct.has(t)) direct.add(near);
     }
   }
 
   // A question full of words we've never seen is a question about something we
-  // don't teach — however well its one familiar word happens to score. Short
-  // words are too generic to count as evidence either way.
+  // don't teach — however well its one familiar word happens to score. Judged
+  // on the word as typed: "footer" is a real, specific word even though its
+  // stem is short.
   const contributed = new Set();
   for (const [term] of terms) {
     if (index.idf.has(term)) contributed.add(origin.get(term));
   }
-  const unknown = tokens.filter(t => !contributed.has(t) && t.length >= 5).length;
+  const unknown = raw.filter((word, i) => !contributed.has(tokens[i]) && word.length >= 4).length;
+  const coverage = tokens.length ? (tokens.length - unknown) / tokens.length : 0;
 
-  const qBigrams = bigrams(tokens);
+  // "Change font" alone must not outweigh the requested subject in "change
+  // font colour". Subject phrases such as "font size" keep their bonus.
+  const qBigrams = bigrams(tokens).filter(pair => pair.split(' ').every(term => !GENERIC.has(term)));
 
   const ranked = index.docs
     .map(doc => {
       let score = 0;
       const hits = new Set();
+      const subjectHits = new Set();
+      const directHits = new Set();
       for (const [term, qWeight] of terms) {
         const tf = doc.tf.get(term);
         if (!tf) continue;
         score += qWeight * tf * (index.idf.get(term) ?? 1);
-        hits.add(origin.get(term) ?? term);
+        const from = origin.get(term) ?? term;
+        if (direct.has(term)) directHits.add(from);
+        if (subjects.has(from) && doc.subjects.has(term)) subjectHits.add(from);
+        hits.add(from);
       }
 
       // A matched phrase is far stronger evidence than the same words apart:
@@ -272,7 +310,12 @@ export function search(question, index) {
       for (const p of qBigrams) phrase += doc.bg.get(p) ?? 0;
       score += phrase * BIGRAM_BOOST;
 
-      return { id: doc.id, score: score / doc.norm, hits: hits.size, phrase: phrase > 0 };
+      return {
+        id: doc.id, score: score / doc.norm, hits: hits.size,
+        direct: directHits.size, phrase: phrase > 0, coverage,
+        subjectHits: subjectHits.size,
+        subjectCoverage: subjects.size ? subjectHits.size / subjects.size : 0,
+      };
     })
     .sort((a, b) => b.score - a.score);
 
@@ -282,26 +325,50 @@ export function search(question, index) {
 
 const BIGRAM_BOOST = 3;   // a matched phrase counts for several loose words
 const FLOOR = 0.5;        // below this we're reading tea leaves
-const MARGIN = 1.35;      // how far clear of the runner-up before we commit
-const SOLO_STRONG = 1.6;  // a single word can carry it, but it has to be emphatic
+const OFFER = 0.8;        // below this a lesson isn't even worth offering
+const MARGIN = 1.5;       // how far clear of the runner-up before we commit
+const STRONG = 2.5;       // loose words can carry it only when they score this high
+const MIN_COVERAGE = 0.6; // most of the question has to be words we recognise
+const BAND = 0.35;        // and a near miss has to be near the best answer, too
+export const SUGGESTION_LIMIT = 3;
+
+/**
+ * The lessons worth putting in front of the user when we're not sure. A
+ * question about something we don't teach should get an honest "I don't know
+ * that", not four unrelated guesses dressed up as near misses.
+ *
+ * Require a subject match in the goal or target names before applying the
+ * score floor and relative band. Mentions in hints alone cannot qualify a
+ * lesson. Return at most three without padding a shorter result set.
+ */
+export function relevant(ranked) {
+  const candidates = ranked.filter(r => r.score >= OFFER && r.subjectHits > 0);
+  const best = candidates[0]?.score ?? 0;
+  return candidates.filter(r => r.score >= best * BAND).slice(0, SUGGESTION_LIMIT);
+}
 
 /**
  * Enough signal to commit, or should we ask?
  *
  * Getting this wrong in the safe direction costs one extra click. Getting it
- * wrong in the other direction means confidently teaching a judge the wrong
- * lesson, so the bar is deliberately set high.
+ * wrong in the other direction means confidently teaching the wrong lesson,
+ * so the bar is deliberately high:
+ *
+ *   - a matched phrase, or a score no loose word overlap reaches
+ *   - most of the question recognised ("add an email draft" is not about
+ *     anything we teach just because "add" is)
+ *   - at least one of the matching words typed by the user, not supplied by
+ *     the synonym table
+ *
+ * "insert a table" shares two real words with the contents lesson and none of
+ * them is a phrase; "add a header" used to share one stem with "headings".
+ * Neither is the lesson, and neither passes this.
  */
 export function isConfident(ranked) {
   const [best, next] = ranked;
   if (!best || best.score < FLOOR) return false;
   if (best.score < (next?.score ?? 0) * MARGIN) return false;
-
-  // "how do I insert a pivot table" matches the contents lesson on `insert` and
-  // `table` alone. Both words really are in it; the question still isn't about
-  // it. An unrecognised, specific word is the tell.
-  if (ranked.unknown > 0 && best.score < SOLO_STRONG) return false;
-
-  // One matching word is only enough when it matched emphatically.
-  return best.hits >= 2 || best.score >= SOLO_STRONG;
+  if (best.coverage < MIN_COVERAGE || best.direct < 1) return false;
+  if (best.subjectCoverage < 1) return false;
+  return best.phrase || best.score >= STRONG;
 }

@@ -1,0 +1,52 @@
+{
+  "id": "change-typeface",
+  "app": "google-docs",
+  "goal": "change the typeface",
+  "preamble": "Typeface is the one formatting choice people reach for first, and it's also the one most often applied to nothing. Docs formats what is selected — if nothing is selected, it just changes what your next keystroke will look like. So this is really two ideas at once: choosing a font, and knowing what that choice lands on. Watch the Font box before you open it; like the Styles box beside it, it's always reporting the text under your cursor.",
+  "generalization": "The Font box is a mirror as much as a control: it tells you what the current text is before you use it to say what the text should be. That pattern holds across the whole toolbar — size, colour, bold. Select first, then choose, and the toolbar becomes a readout of your selection rather than a set of buttons you hope did something.",
+  "steps": [
+    {
+      "id": "s1",
+      "intent": "Typeface is a visual property of text — the shape of the letters, nothing to do with what the text means. Visual properties of text live in the toolbar, and the box showing the current font name is both the readout and the way in. Opening it asks Docs: what else could this text look like?",
+      "mode": "demo",
+      "target": {
+        "scope": "toolbar",
+        "name": "Font"
+      },
+      "action": "click",
+      "verify": {
+        "kind": "visible",
+        "name": "Times New Roman",
+        "scope": "menu"
+      },
+      "hints": [
+        "You want the shapes of the letters, not the size or weight of them. One box in the toolbar is already telling you the current answer.",
+        "Toolbar, just right of the Styles box — it shows the name of the font currently in use."
+      ],
+      "wrongHints": {
+        "Styles": "Styles say what a line is — a heading, body text. That's meaning, not appearance. You want the box next to it, the one naming an actual typeface.",
+        "Font size": "Reasonable neighbour, wrong property. Size changes how big the letters are; the typeface is which letters they are.",
+        "Bold": "Bold is a weight applied on top of a typeface, not a typeface itself. You want to swap the underlying font, not thicken the current one."
+      }
+    },
+    {
+      "id": "s2",
+      "intent": "The list that opened is the set of typefaces available to this document, with the current one marked. Pick any of them — there's no correct choice here, only a different one. The point is to see the change take effect and then look back at the Font box, which will now be reporting the name you chose.",
+      "mode": "guided",
+      "target": {
+        "scope": "menu",
+        "name": "Times New Roman",
+        "nth": 1,
+        "any": true
+      },
+      "action": "click",
+      "verify": {
+        "kind": "none"
+      },
+      "hints": [
+        "Any entry in this list will do. You're not looking for a right answer, you're looking for a different one from what's there now.",
+        "Anywhere in the open dropdown — the names are listed in their own typeface, so you can see each one before you commit."
+      ]
+    }
+  ]
+}

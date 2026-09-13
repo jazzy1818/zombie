@@ -383,6 +383,11 @@
   border-color: rgba(255, 154, 144, 0.3);
 }
 
+.bt-note-ok {
+  background: rgba(123, 224, 164, 0.15);   /* --bt-correct, as wrong uses --bt-wrong */
+  border-color: rgba(123, 224, 164, 0.3);
+}
+
 /* ------------------------------------------------- authoring progress trail */
 
 /* The cloud agent's reasoning while it explores. Quieter than a note: this is

@@ -30,6 +30,11 @@ const fixture = `<!doctype html><html><head><meta charset="utf-8"><title>Teachin
 <div role="listbox"><button role="option" id="single-option">Single option</button></div>
 <div role="listbox"><button role="option" id="first-list-option">First option</button><button role="option">Second option</button></div>
 <div role="listbox" aria-label="Zoom choices"><button role="option" id="option-150" aria-label="150%">150%</button></div>
+<div role="listbox" id="font-list" aria-label="Font list. Arial selected."><div role="option" id="font-arial">Arial</div><div role="option" id="font-georgia">Georgia</div><div role="option" id="font-verdana">Verdana</div></div>
+<div id="plain-choices"><div role="option" id="plain-alpha">Alpha choice</div><div role="option" id="plain-beta">Beta choice</div></div>
+<div role="listbox" id="page-sized" style="width:100vw;height:100vh"><div role="option" id="page-option">Page sized option</div></div>
+<div role="toolbar"><div role="listbox" id="caption-widget"><div id="caption">Baskerville</div></div></div>
+<div role="menu" id="plain-menu"><div id="plain-baskerville">Baskerville</div><div id="plain-cambria"><span>Cambria</span></div><div id="plain-off" aria-disabled="true">Candara</div><input id="plain-search" aria-label="Search fonts"><button id="plain-more">More fonts</button></div>
 <div role="menuitem" id="badge-menuitem">Page elementsUpdated►</div>
 <span id="rich-label" aria-label="Styles list. Heading 1 selected.">Icon only</span>
 <span id="hidden-label" aria-label="Styles list. Heading 2 selected." hidden>Icon only</span>
@@ -109,6 +114,54 @@ async function report() {
     adapter.findTarget({ scope: 'menu', role: 'option', name: '150%' })?.id,
     adapter.findTarget({ scope: 'menu', role: 'option', name: '150%' }, () => actualResolver)?.id,
   ], ['option-150', 'option-150']);
+  await test('An "any" target widens from the option the trace clicked to the list it belongs to', () => [
+    adapter.findTarget({ scope: 'menu', name: 'Arial' })?.id,
+    adapter.findTarget({ scope: 'menu', name: 'Arial', any: true })?.id,
+    adapter.findTarget({ scope: 'menu', name: 'Arial', any: true }, () => actualResolver)?.id,
+  ], ['font-arial', 'font-list', 'font-list']);
+  await test('Widening puts every other option in the same list on the click path', () => {
+    const list = adapter.findTarget({ scope: 'menu', name: 'Arial', any: true });
+    return ['font-arial', 'font-georgia', 'font-verdana']
+      .map(id => gesture.pathHits(gesture.eventPath({ target: document.getElementById(id) }), list));
+  }, [true, true, true]);
+  await test('A readout-labelled list is still a valid place to widen to, though never a target', () => [
+    adapter.findTarget({ scope: 'menu', name: 'Font list. Arial selected.' }),
+    adapter.findTarget({ scope: 'menu', name: 'Arial', any: true })?.getAttribute('aria-label'),
+  ], [null, 'Font list. Arial selected.']);
+  await test('A list the size of the page is a layout container, not a column of choices', () => adapter.findTarget({ scope: 'menu', name: 'Page sized option', any: true })?.id, 'page-option');
+  await test('Options the page gives no list role fall back to sibling peers', () => [
+    adapter.findTarget({ scope: 'menu', name: 'Alpha choice', any: true })?.id,
+    eligibility.samePeerGroup(document.querySelector('#plain-beta'), document.querySelector('#plain-alpha')),
+    eligibility.samePeerGroup(document.querySelector('#font-georgia'), document.querySelector('#plain-alpha')),
+    eligibility.samePeerGroup(document.querySelector('#dupe1'), document.querySelector('#font-arial')),
+  ], ['plain-alpha', true, false, false]);
+  await test('A free choice finds rows the page gave no role, by their text inside a list, and not a toolbar caption', () => [
+    adapter.findTarget({ scope: 'menu', name: 'Baskerville' }),
+    adapter.findTarget({ scope: 'menu', name: 'Baskerville', any: true })?.id,
+    adapter.findTarget({ scope: 'menu', name: 'Baskerville', any: true }, undefined, { widenChoices: false })?.id,
+  ], [null, 'plain-menu', 'plain-baskerville']);
+  await test('A free choice accepts any row chosen from the list, whatever its role, and nothing that is not a row', () => {
+    const example = document.querySelector('#plain-baskerville');
+    const path = id => gesture.eventPath({ target: document.querySelector(id) });
+    return [
+      eligibility.chosenFrom(example, path('#plain-cambria span'), true)?.id,
+      eligibility.chosenFrom(example, path('#plain-off'), true),
+      eligibility.chosenFrom(example, path('#plain-search'), true),
+      eligibility.chosenFrom(example, path('#plain-menu'), true),
+      eligibility.chosenFrom(example, path('#font-georgia'), true),
+    ];
+  }, ['plain-cambria', null, null, null, null]);
+  await test('A role on the example keeps the choice to rows of that role, and a pattern to rows it names', () => {
+    const path = id => gesture.eventPath({ target: document.querySelector(id) });
+    const example = document.querySelector('#font-arial');
+    return [
+      eligibility.chosenFrom(example, path('#font-georgia'), true)?.id,
+      eligibility.chosenFrom(example, path('#font-georgia'), '^Geo')?.id,
+      eligibility.chosenFrom(example, path('#font-georgia'), '^Ver'),
+      eligibility.chosenFrom(document.querySelector('#plain-baskerville'), path('#plain-more'), true)?.id,
+      eligibility.chosenFrom(example, path('#plain-more'), true),
+    ];
+  }, ['font-georgia', 'font-georgia', null, 'plain-more', null]);
   await test('Known promo badges match authored menu names in both resolvers', () => [
     adapter.findTarget({ scope: 'menu', name: 'Page elements' })?.id,
     adapter.findTarget({ scope: 'menu', name: 'Page elements' }, () => actualResolver)?.id,

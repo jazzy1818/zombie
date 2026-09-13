@@ -1,10 +1,10 @@
 # Teaching adapter checks
 
-Run: 2026-09-13T04:01:45.769Z
+Run: 2026-09-13T09:52:43.031Z
 
-Browser: 153.0.8010.37
+Browser: 141.0.7390.122
 
-Result: **40/40 checks passed**.
+Result: **48/48 checks passed**.
 
 These checks import the actual semantic adapter and completed A resolver in a real browser. Explicitly named handoff-double checks isolate Element precedence and rejection; checks labelled "real A" use A’s production resolver. The loaded-extension suites separately test the manifest, panel and teaching interaction.
 
@@ -26,6 +26,14 @@ These checks import the actual semantic adapter and completed A resolver in a re
 - PASS: Real A and fallback collapse nested same-name controls before nth
 - PASS: Unlabelled listboxes cannot impersonate either a sole option or aggregated options
 - PASS: Real A and fallback accept C option-role descriptors in menu scope
+- PASS: An "any" target widens from the option the trace clicked to the list it belongs to
+- PASS: Widening puts every other option in the same list on the click path
+- PASS: A readout-labelled list is still a valid place to widen to, though never a target
+- PASS: A list the size of the page is a layout container, not a column of choices
+- PASS: Options the page gives no list role fall back to sibling peers
+- PASS: A free choice finds rows the page gave no role, by their text inside a list, and not a toolbar caption
+- PASS: A free choice accepts any row chosen from the list, whatever its role, and nothing that is not a row
+- PASS: A role on the example keeps the choice to rows of that role, and a pattern to rows it names
 - PASS: Known promo badges match authored menu names in both resolvers
 - PASS: Stateful selected readouts are not action targets in real A or fallback
 - PASS: Stateful readouts remain available for visible outcome verification

@@ -18,7 +18,7 @@ const http = require('node:http');
 const root = path.resolve(__dirname, '..');
 const artifacts = path.join(__dirname, '.paint-artifacts');
 const extensionPath = path.join(root, 'extension');
-const BRIDGE_PORT = 7777;   // generate.js targets this; the real bridge must be stopped
+const BRIDGE_PORT = 7777;   // the port generate.js targets; requests to it are routed to the stub
 
 const results = [];
 const runtimeErrors = [];
@@ -71,7 +71,9 @@ const GENERATED = {
   ],
 };
 
-const bridgeState = { generateCalls: [], mode: 'ok', delayMs: 60 };
+// `match` drives the stub's /match route: 'unavailable' answers 404 the way an
+// older bridge would, 'none' says no saved lesson fits, 'pick:<id>' names one.
+const bridgeState = { generateCalls: [], matchCalls: [], mode: 'ok', delayMs: 60, match: 'unavailable' };
 
 const bridge = http.createServer(async (request, response) => {
   const url = new URL(request.url, `http://localhost:${BRIDGE_PORT}`);
@@ -95,6 +97,16 @@ const bridge = http.createServer(async (request, response) => {
     bridgeState.generateCalls.push(JSON.parse(raw || '{}'));
     bridgeState.startedAt = Date.now();
     response.writeHead(202, cors).end(JSON.stringify({ jobId: 'j_test' }));
+    return;
+  }
+
+  if (url.pathname === '/match') {
+    let raw = '';
+    for await (const chunk of request) raw += chunk;
+    bridgeState.matchCalls.push(JSON.parse(raw || '{}'));
+    if (bridgeState.match === 'unavailable') { response.writeHead(404, cors).end(JSON.stringify({ error: 'not found' })); return; }
+    const id = bridgeState.match.startsWith('pick:') ? bridgeState.match.slice(5) : null;
+    response.writeHead(200, cors).end(JSON.stringify({ id, reason: 'stub' }));
     return;
   }
 
@@ -141,14 +153,14 @@ async function report() {
 (async () => {
   await fs.mkdir(artifacts, { recursive: true });
   await new Promise(resolve => server.listen(0, '127.0.0.1', resolve));
+  // Bind anywhere and redirect the extension's requests here, rather than
+  // squatting on 7777. A developer's real bridge is usually running, and a
+  // suite that can only pass once it is killed is a suite nobody runs.
   await new Promise((resolve, reject) => {
-    bridge.once('error', err => reject(new Error(
-      err.code === 'EADDRINUSE'
-        ? `port ${BRIDGE_PORT} is busy — stop the real bridge (npm run bridge) before running these tests`
-        : err.message,
-    )));
-    bridge.listen(BRIDGE_PORT, '127.0.0.1', resolve);
+    bridge.once('error', reject);
+    bridge.listen(0, '127.0.0.1', resolve);
   });
+  const bridgePort = bridge.address().port;
 
   const url = `http://127.0.0.1:${server.address().port}/docs/extension-fixture.html`;
   const profile = await fs.mkdtemp(path.join(artifacts, 'generate-profile-'));
@@ -159,6 +171,14 @@ async function report() {
     viewport: { width: 1440, height: 900 },
   });
   browserVersion = context.browser()?.version() || 'Chromium persistent context';
+  for (const host of ['localhost', '127.0.0.1']) {
+    await context.route(`**://${host}:${BRIDGE_PORT}/**`, route => {
+      const target = new URL(route.request().url());
+      target.hostname = '127.0.0.1';
+      target.port = String(bridgePort);
+      return route.continue({ url: target.toString() });
+    });
+  }
 
   const page = context.pages()[0] || await context.newPage();
   page.setDefaultTimeout(8000);
@@ -167,6 +187,8 @@ async function report() {
   const panel = () => page.locator('#browser-teacher-root');
   const actionLabels = async () =>
     panel().locator('.bt-actions .bt-btn').allTextContents();
+  const lessonLabels = () => panel().locator('.bt-actions .bt-btn-lesson').allTextContents();
+  const rejectSuggestion = () => panel().getByRole('button', { name: "No, I'm not talking about this", exact: true }).click();
 
   async function ask(question) {
     const input = panel().locator('.bt-bar input, .bt-bar textarea').first();
@@ -183,8 +205,10 @@ async function report() {
 
   async function reset() {
     bridgeState.generateCalls = [];
+    bridgeState.matchCalls = [];
     bridgeState.mode = 'ok';
     bridgeState.delayMs = 60;
+    bridgeState.match = 'unavailable';
     await page.goto(url);
     await panel().locator('.bt-bar').waitFor();
     await pause(250);   // let the module graph settle before typing
@@ -215,13 +239,116 @@ async function report() {
     assert.equal(bridgeState.generateCalls.length, 0, 'a confident match must not reach the bridge');
   });
 
-  await test('With no bridge running the panel degrades to the plain picker', async () => {
+  await test('With no bridge running an unrelated question is refused honestly, not padded with lessons', async () => {
     bridgeState.mode = 'down';
     await ask('how do I schedule a post for later');
     await panel().locator('.bt-card-picker').waitFor();
     const labels = await actionLabels();
     assert.ok(!labels.includes('Work it out for me'), `must not offer generation with no bridge, got ${JSON.stringify(labels)}`);
-    assert.ok(labels.length > 0, 'the existing lessons must still be offered');
+    assert.deepEqual(labels, [], `unrelated lessons must not be offered as near misses, got ${JSON.stringify(labels)}`);
+    const body = await panel().locator('.bt-card-picker .bt-card-body').textContent();
+    assert.match(body, /npm run bridge/, 'the card must say how to make generation available');
+    // The card has no buttons; the question box must be usable again.
+    await panel().locator('.bt-bar input:not([disabled])').waitFor();
+  });
+
+  await test('A near miss offers only the related lesson, plus a way to say it is none of them', async () => {
+    await ask('make my document have chapters');
+    await panel().locator('.bt-card-picker').waitFor();
+    const labels = await actionLabels();
+    const lessons = await lessonLabels();
+    // Related lessons only — the contents lesson, and any other lesson that is
+    // genuinely about headings — never the date, image or version lessons.
+    assert.ok(lessons.includes('Add an automatic table of contents'), `expected the contents lesson, got ${JSON.stringify(labels)}`);
+    assert.ok(lessons.length <= 3 && lessons.every(label => /heading|contents/i.test(label)), `expected only heading-related lessons, got ${JSON.stringify(labels)}`);
+    assert.ok(labels.includes("No, I'm not talking about this"), `expected a rejection action, got ${JSON.stringify(labels)}`);
+  });
+
+  await test("The bridge's model ruling a lesson out still leaves the near miss on offer", async () => {
+    bridgeState.match = 'none';
+    await ask('make my document have chapters');
+    await panel().locator('.bt-card-picker').waitFor();
+    assert.equal(bridgeState.matchCalls.length, 1, 'an unconfident question must be checked with the bridge');
+    assert.ok(bridgeState.matchCalls[0].candidates.some(c => c.id === 'styles-toc'), 'every saved lesson is a candidate');
+    // The model says none of them; local search still says this one is in the
+    // same family. Showing it lets the user decide, and costs one glance —
+    // hiding it is how a question near an existing lesson started answering
+    // "I don't know that one yet".
+    const labels = await actionLabels();
+    assert.ok((await lessonLabels()).includes('Add an automatic table of contents'),
+      `expected the near miss to survive the model's "none", got ${JSON.stringify(labels)}`);
+    assert.ok(labels.includes("No, I'm not talking about this"), `expected a rejection action, got ${JSON.stringify(labels)}`);
+  });
+
+  await test('A ruled-out question with no near miss offers nothing but generation', async () => {
+    bridgeState.match = 'none';
+    await ask('how do i mail merge from a spreadsheet');
+    await panel().locator('.bt-card-picker').waitFor();
+    assert.deepEqual(await actionLabels(), ['Work it out for me'], 'nothing in the library is about this');
+  });
+
+  await test("The bridge's model can pick a lesson, and its preamble offers a way out to generation", async () => {
+    bridgeState.match = 'pick:styles-toc';
+    // Keep the generation in progress: at the default 60ms the job is already
+    // done on the first poll and the trail is replaced by the lesson before it
+    // can be read.
+    bridgeState.delayMs = 2500;
+    await ask('make my document have chapters');
+    await panel().locator('.bt-card-preamble').waitFor();
+    const labels = await actionLabels();
+    assert.ok(labels.includes("No, I'm not talking about this"), `expected a rejection action on the preamble, got ${JSON.stringify(labels)}`);
+    assert.equal(bridgeState.generateCalls.length, 0);
+    await rejectSuggestion();
+    await panel().locator('.bt-trail li').first().waitFor({ timeout: 8000 });
+    assert.equal(bridgeState.generateCalls.length, 1, 'refusing the picked lesson must send the question to be worked out');
+    assert.equal(bridgeState.generateCalls[0].goal, 'make my document have chapters');
+  });
+
+  await test('An ambiguous question keeps only the best two or three related saved tasks', async () => {
+    bridgeState.match = 'none';
+    await ask('change font size and color');
+    await panel().locator('.bt-card-picker').waitFor();
+    const labels = await lessonLabels();
+    assert.ok(labels.length >= 2 && labels.length <= 3, JSON.stringify(labels));
+    assert.ok(labels.some(label => /font size/.test(label)));
+    assert.ok(labels.some(label => /color/.test(label)));
+    assert.ok(labels.every(label => !/date|image|version|zoom/.test(label)), JSON.stringify(labels));
+    assert.ok((await actionLabels()).includes("No, I'm not talking about this"));
+  });
+
+  await test('Rejecting a selected near match preserves the original question for generation', async () => {
+    bridgeState.delayMs = 2500;
+    const question = 'make my document have chapters';
+    await ask(question);
+    await panel().locator('.bt-btn-lesson').first().click();
+    await panel().locator('.bt-card-preamble').waitFor();
+    await rejectSuggestion();
+    await panel().locator('.bt-trail li').first().waitFor();
+    assert.deepEqual(bridgeState.generateCalls.map(call => call.goal), [question]);
+  });
+
+  await test('Related suggestions can be rejected when the authoring bridge is offline', async () => {
+    bridgeState.mode = 'down';
+    await ask('make my document have chapters');
+    await panel().locator('.bt-btn-lesson').first().waitFor();
+    await rejectSuggestion();
+    await page.waitForFunction(() => /npm run bridge/.test(
+      document.querySelector('#browser-teacher-root').shadowRoot.querySelector('.bt-card-body')?.textContent || ''
+    ));
+    assert.deepEqual(await lessonLabels(), []);
+    assert.equal(bridgeState.generateCalls.length, 0);
+    await panel().locator('.bt-bar input:not([disabled])').waitFor();
+  });
+
+  await test('A new question replaces old suggestions instead of accumulating them', async () => {
+    await ask('make my document have chapters');
+    await panel().locator('.bt-btn-lesson').first().waitFor();
+    await ask('change font size and color');
+    await panel().locator('.bt-btn-lesson', { hasText: 'font size' }).waitFor();
+    assert.ok(!(await lessonLabels()).includes('Add an automatic table of contents'));
+    await ask('how do i mail merge from a spreadsheet');
+    await panel().locator('.bt-btn-generate').waitFor();
+    assert.deepEqual(await lessonLabels(), []);
   });
 
   await test("The agent's trail streams into the panel while it works", async () => {

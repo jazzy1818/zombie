@@ -1,12 +1,12 @@
 # Loaded extension integration results
 
-Run: 2026-09-13T04:07:04.225Z
+Run: 2026-09-13T09:52:37.686Z
 
-Browser: 153.0.8010.12
+Browser: 141.0.7390.122
 
-Unpacked extension: hnknlggfefibmljpnjiodlliinakjhio
+Unpacked extension: mceappcmffpcojpdpkoalpgelpfidbbl
 
-Result: **38/38 checks passed**.
+Result: **45/45 checks passed**.
 
 The browser loaded the extension directory through the manifest content script, then its real module graph in the extension isolated world. Tests use the actual panel, teaching adapter, resolver/fallback and paint implementations. The publication check additionally loads a temporary copy of the same production files with one locally replayed fixture lesson added by the real publisher. No lesson-success, click, resolver or browser API mocks are installed.
 
@@ -14,7 +14,7 @@ The browser loaded the extension directory through the manifest content script, 
 - PASS: Packaged lesson index discovers and validates every published lesson
 - PASS: Typed question launches the packaged Styles lesson and waits for the real first click
 - PASS: Typed version-history question selects the actual bundled preamble
-- PASS: An unknown typed question offers published lesson choices and opens the chosen lesson
+- PASS: An unknown typed question is refused honestly, and a near miss offers only the related lesson
 - PASS: A measured fixture replay publishes into a copied extension and launches through its question box
 - PASS: Guided lesson waits for a real correct click and clears every effect
 - PASS: Synthetic page clicks do not advance the lesson
@@ -40,6 +40,13 @@ The browser loaded the extension directory through the manifest content script, 
 - PASS: ARIA-disabled target waits for document readiness before highlighting or moving the ghost
 - PASS: A replaced Styles button verifies the richer inner aria-label after the user selects a heading
 - PASS: A dropdown that opens on mousedown still counts as a correct click
+- PASS: Free-choice font steps ignore blank space, disabled options and list tools
+- PASS: Free-choice list options stay correct when mouseup hides the popup
+- PASS: Free-choice sibling options stay correct when mouseup hides the popup
+- PASS: A free choice needs no row roles: plain rows in a menu the page removes on mousedown
+- PASS: A font step without free choice still requires its named value
+- PASS: Docs font free choice completes with duplicate Arial checkbox rows and mouseup dismissal
+- PASS: Free-choice duplicate names may share a menu but cannot span different menus
 - PASS: Existing textContent label outcomes still verify after a real user action
 - PASS: Ambiguous targets do not silently select the first matching control
 - PASS: Explicit nth disambiguates visible matches

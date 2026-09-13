@@ -2,7 +2,7 @@
 import { RESOLVE_TIMEOUT_MS } from '../constants.js';
 import { isVisible } from './visible.js';
 import { toolbarMatch, menuMatch } from './match.js';
-import { isEnabled, isStateReadout, isTeacherUI, roleOf, collapseNested } from './eligibility.js';
+import { isEnabled, isStateReadout, isTeacherUI, roleOf, collapseNested, samePeerGroup } from './eligibility.js';
 
 // Ladder (every tier filters through isVisible() FIRST):
 //   1  #docs-toolbar-wrapper [aria-label]   → toolbarMatch
@@ -37,15 +37,19 @@ function normalizeTarget(target) {
   if (typeof scope !== 'string' || !Object.hasOwn(TIERS_BY_SCOPE, scope)) return null;
 
   if (target.role !== undefined && (typeof target.role !== 'string' || !target.role.trim())) return null;
-  return { name: target.name.trim(), scope, nth: target.nth, role: target.role?.trim() };
+  if (target.any !== undefined && typeof target.any !== 'boolean' && typeof target.any !== 'string') return null;
+  return { name: target.name.trim(), scope, nth: target.nth, role: target.role?.trim(), any: Boolean(target.any) };
 }
 
-function pick(matches, nth) {
+function pick(matches, { nth, any }) {
   // Docs sometimes gives a combobox and its nested input the same aria-label.
   // Treat that nested pair as one control, preferring the outer hit target.
   const controls = collapseNested(matches);
 
   if (nth !== undefined) return controls[nth] ?? null;
+  // Repeated examples within one choice group still identify that group.
+  // Duplicates in separate menus remain ambiguous, even for a free choice.
+  if (any && controls.every(element => samePeerGroup(element, controls[0]))) return controls[0];
   return controls.length === 1 ? controls[0] : null;
 }
 
@@ -62,7 +66,7 @@ function resolveOnce(target, { requireEnabled = true, allowReadouts = false } = 
 
     // A tier with matches owns the result. If it is ambiguous or nth is out
     // of range, fail safely instead of falling through to a different control.
-    if (matches.length) return pick(matches, target.nth);
+    if (matches.length) return pick(matches, target);
   }
 
   return null;

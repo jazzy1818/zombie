@@ -8,6 +8,22 @@ import { zodOutputFormat } from '@anthropic-ai/sdk/helpers/zod';
 import { z } from 'zod';
 import { candidatePool, canonicalTarget, isStateName } from './target-policy.js';
 
+// A trailing keyboard-shortcut run. A chord begins at a modifier word followed
+// by "+" (Ctrl+, Alt+…) or a lone glyph (⌘⌥⇧⌃), and the run reaches the end
+// over shortcut characters and chord separators. Requiring the "+"/glyph is
+// what stops real words like "Alternative" or "Align" from reading as Alt.
+// Docs glues one or two chords to the label: "Find and replaceCtrl+H",
+// "HeaderCtrl+Alt+O, Ctrl+Alt+H". The old `[^\s]*$` stripped only the last
+// space-delimited run and left "HeaderCtrl+Alt+O," behind, which the shortcut
+// guard in validate() then rejected — that is the "name still carries a
+// shortcut" failure. Mirrored in dom-probe.js bare(); keep them identical.
+const SHORTCUT = /(?:(?:Ctrl|Control|Alt|Option|Shift|Meta|Cmd|Command|Fn)\s*\+|[⌘⌥⇧⌃])[A-Za-z0-9+\s,⌘⌥⇧⌃]*$/;
+const stripShortcut = s => s.replace(SHORTCUT, '').replace(/[\s,]+$/, '').trim();
+
+// A name that still carries a shortcut chord or a submenu arrow is never a real
+// control name — the ladder must not emit one even as a last resort.
+const DIRTY = /(?:Ctrl|Control|Alt|Option|Shift|Meta|Cmd|Command|⌘|⌥|⇧|⌃)\s*\+|[▶▸►‣]/;
+
 // Progressively gentler strips, so an over-trimmed name can back off instead of failing.
 function stripLadder(raw, scope) {
   const t = String(raw).trim();
@@ -17,16 +33,11 @@ function stripLadder(raw, scope) {
   const noArrow = t.replace(/[▶▸►‣]\s*$/, '').trim();
   // "Page elementsUpdated" — Docs appends promo badges to menu labels.
   const noBadge = noArrow.replace(/(?:Updated|New)$/, '').trim();
-  return [
-    noBadge
-      .replace(/\s*\([A-Za-z0-9]{1,3}\)\s*$/, '')
-      .replace(/(?:Ctrl|Alt|Shift|Cmd|⌘|⌥|⇧|⌃)[^\s]*$/, '')
-      .trim(),
-    noBadge,
-    noArrow.replace(/\s*\([A-Za-z0-9]{1,3}\)\s*$/, '').trim(),
-    noArrow,
-    t,
-  ];
+  const noShortcut = stripShortcut(noBadge);
+  const noAccel = noShortcut.replace(/\s*\([A-Za-z0-9]{1,3}\)\s*$/, '').trim();
+  // Cleanest first, then gentler fallbacks. deriveTarget skips any that a
+  // shortcut or arrow survived into, so these can safely include noisy forms.
+  return [noAccel, noShortcut, noBadge, noArrow, t];
 }
 
 function matchesIn(pool, name, scope, options) {
@@ -42,7 +53,7 @@ export function deriveTarget(step) {
   const pool = step.pre[target.scope] ?? [];
 
   for (const name of stripLadder(target.raw, target.scope)) {
-    if (!name) continue;
+    if (!name || DIRTY.test(name)) continue;          // never emit a shortcut/arrow name
     const hits = matchesIn(pool, name, target.scope);
     if (!hits.length) continue;                       // over-stripped — back off
     const clicked = pool.find(candidate => candidate.id === target.id) || target;
@@ -100,29 +111,117 @@ export function deriveVerify(step, nextStep) {
   return { kind: 'none' };
 }
 
+// A terminal step that lands on one of many interchangeable options — a font, a
+// heading level, a line-spacing value — can only record whichever one the
+// explorer happened to click. Shipping that as the target turns every other
+// legitimate choice into a wrong click: pick Georgia when the trace clicked
+// Arial and the lesson tells you you're wrong. Mark the target `any` instead
+// and the runtime widens to the whole list — see findTarget in
+// extension/src/teaching/resolution.js.
+//
+// Selection roles only. "Upload from computer" and "Search the web" sit side by
+// side in one menu but are not the same move; option, radio and checkbox items
+// mean the page itself presents these as values of one setting. Checkbox items
+// are in because Docs draws its font rows that way, and the runtime already
+// treats them as choices — an emitter that did not would pin the explorer's
+// font again on every regeneration.
+const SELECTION_ROLES = new Set(['option', 'menuitemradio', 'menuitemcheckbox', 'radio']);
+const MIN_PEERS = 3;
+
+const words = value => String(value || '').toLowerCase().match(/[a-z0-9]+/g) || [];
+
+// "how do I change the page zoom to 200%" asked for 200% specifically, so that
+// step is not a free choice however many other percentages are on offer.
+function goalNamesChoice(goal, name) {
+  const asked = new Set(words(goal));
+  const chosen = words(name);
+  return chosen.length > 0 && chosen.every(word => asked.has(word));
+}
+
+/** The clicked control and the other options it sits among, or null when it is not one of a set. */
+export function choiceGroup(step) {
+  const clicked = step.target;
+  const pool = step.pre[clicked.scope] ?? [];
+  const self = pool.find(candidate => candidate.id === clicked.id) || clicked;
+  const ancestors = self.ancestors ?? [];
+  // Candidates are document-ordered, so the innermost containing one is last.
+  const container = pool.find(candidate => candidate.id === ancestors[ancestors.length - 1]);
+  if (!SELECTION_ROLES.has(self.role) && !(self.role === 'menuitem' && container?.role === 'listbox')) return null;
+  const signature = ancestors.join(',');
+  const peers = pool.filter(candidate => candidate.id !== self.id && candidate.role === self.role
+    && (candidate.ancestors ?? []).join(',') === signature);
+  return { self, peers };
+}
+
+const escapeRe = value => value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+const label = candidate => candidate.name || candidate.raw;
+
+/**
+ * What the last step's free choice accepts: false for a pinned value, true for
+ * any row in the list, or a pattern naming the rows that are the kind of thing
+ * the goal asked for. "Change the heading" among Normal text, Title and
+ * Heading 1–3 accepts the headings — the goal names the kind, and only some
+ * rows are that kind — so Heading 2 is right while Title keeps its correction.
+ * Nothing here knows Docs: the kind comes from the goal's own words.
+ */
+export function freeChoice(step, goal) {
+  if (!goal) return false;              // nothing to rule the choice in or out
+  const group = choiceGroup(step);
+  if (!group || group.peers.length < MIN_PEERS) return false;
+  const all = [group.self, ...group.peers];
+  if (all.some(candidate => goalNamesChoice(goal, label(candidate)))) return false;
+  const asked = new Set(words(goal).filter(word => word.length >= 4));
+  const ofKind = candidate => words(label(candidate)).some(word => asked.has(word));
+  const kind = all.filter(ofKind);
+  if (kind.length >= 2 && kind.length < all.length && ofKind(group.self)) {
+    return `^(?:${[...new Set(kind.map(label))].map(escapeRe).join('|')})$`;
+  }
+  return true;
+}
+
+export const isFreeChoice = (step, goal) => Boolean(freeChoice(step, goal));
+
+/** The peer names a free choice accepts — the ones no wrongHint may name. */
+export function acceptedPeers(any, step) {
+  const peers = choiceGroup(step)?.peers ?? [];
+  if (any === true) return new Set(peers.map(label));
+  if (typeof any !== 'string') return new Set();
+  const pattern = new RegExp(any);
+  return new Set(peers.map(label).filter(name => pattern.test(name)));
+}
+
 function deriveMode(i, total) {
   if (i === 0) return 'demo';                 // step 1 establishes the pattern
   if (total > 2 && i === total - 1) return 'solo';   // never end a 2-step lesson on solo
   return 'guided';
 }
 
-export function skeleton(kept) {
-  return kept.map((step, i) => ({
-    id: `s${i + 1}`,
-    mode: deriveMode(i, kept.length),
+export function skeleton(kept, meta = {}) {
+  return kept.map((step, i) => {
     // Never null here — instruct-only steps need a human, the doc body is canvas.
-    target: deriveTarget(step),
-    action: 'click',
-    verify: deriveVerify(step, kept[i + 1]),
-    _trace: {
-      reasoning: step.action.reasoning,
-      expectation: step.action.expectation,
-      observed: [
-        step.delta.appeared.length && `${step.delta.appeared.length} controls appeared`,
-        ...step.delta.changed.map(c => `${c.name} now reads "${c.to}"`),
-      ].filter(Boolean).join('; ') || 'no visible change',
-    },
-  }));
+    const target = deriveTarget(step);
+    const free = i === kept.length - 1 ? freeChoice(step, meta.goal) : false;
+    if (free) target.any = free;
+    return {
+      id: `s${i + 1}`,
+      mode: deriveMode(i, kept.length),
+      target,
+      action: 'click',
+      // Whatever changed on a free choice named the value that was chosen
+      // ("Font list. Georgia selected."), so it cannot be the outcome a
+      // different, equally correct choice has to produce.
+      verify: free ? { kind: 'none' } : deriveVerify(step, kept[i + 1]),
+      _trace: {
+        reasoning: step.action.reasoning,
+        expectation: step.action.expectation,
+        accepted: free ? [target.name, ...acceptedPeers(free, step)] : [],
+        observed: [
+          step.delta.appeared.length && `${step.delta.appeared.length} controls appeared`,
+          ...step.delta.changed.map(c => `${c.name} now reads "${c.to}"`),
+        ].filter(Boolean).join('; ') || 'no visible change',
+      },
+    };
+  });
 }
 
 // Flat types only. Structured outputs rejects tuples and records — they emit JSON Schema
@@ -167,7 +266,16 @@ async function narrate(client, skel, meta, exemplars) {
     '',
     'The fixed path (you cannot change these):',
     ...skel.map(s => [
-      `${s.id}  [${s.mode}]  click "${s.target.name}" (${s.target.scope})`,
+      s.target.any
+        ? `${s.id}  [${s.mode}]  choose from the list — the trace happened to pick "${s.target.name}" (${s.target.scope})`
+        : `${s.id}  [${s.mode}]  click "${s.target.name}" (${s.target.scope})`,
+      // The runtime accepts every one of these, so prose that steers the
+      // learner to one of them, or corrects them for picking another, would be
+      // contradicted by the lesson itself the moment they choose differently.
+      ...(s.target.any ? [
+        `      free choice: ${s._trace.accepted.map(name => `"${name}"`).join(', ')} are all equally correct.`,
+        '      Do not tell the learner which of these to pick, and do not write wrongHints for any of them.',
+      ] : []),
       `      the agent's reason: ${s._trace.reasoning}`,
       `      what happened:      ${s._trace.observed}`,
     ].join('\n')),
@@ -193,7 +301,7 @@ async function narrate(client, skel, meta, exemplars) {
 }
 
 export async function emit(pruned, meta) {
-  const skel = skeleton(pruned.kept);
+  const skel = skeleton(pruned.kept, meta);
   const client = meta.client ?? new Anthropic();
   const exemplars = await loadExemplars();
   const prose = await narrate(client, skel, meta, exemplars);
@@ -210,9 +318,11 @@ export async function emit(pruned, meta) {
       ...(pruned.kept[i].pre.dialog ?? []),
     ].map(c => c.name));
 
+    // On a free choice the accepted peers are right answers, whatever the model wrote.
+    const peerNames = acceptedPeers(s.target.any, pruned.kept[i]);
     const wrongHints = Object.fromEntries(
       (p.wrongHints ?? [])
-        .filter(w => visibleNames.has(w.name))
+        .filter(w => visibleNames.has(w.name) && !peerNames.has(w.name))
         .map(w => [w.name, w.message]),
     );
 
@@ -259,6 +369,11 @@ const Lesson = z.object({
       scope: z.enum(['toolbar', 'menu', 'any']).optional(),
       name: z.string().min(1),
       nth: z.number().int().nonnegative().optional(),
+      // One example from a list of interchangeable choices; the runtime accepts
+      // any row in the same list, or any row whose label matches the pattern.
+      // Additive to PLAN.md §5 — a reader that does not know the flag still
+      // resolves the named control.
+      any: z.union([z.boolean(), z.string()]).optional(),
     }).nullable(),
     action: z.literal('click'),
     verify: z.discriminatedUnion('kind', [
