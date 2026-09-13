@@ -18,6 +18,7 @@ globalThis.location = { href: 'https://analytics.google.com/analytics/web/#/repo
 
 const { siteKey, siteLabel, lessonSites, lessonRunsHere, isDevHost, LEGACY_SITE, ANY_SITE }
   = await import('../extension/src/sites.js');
+const { pageKey, watchNavigation } = await import('../extension/src/paint/navigation.js');
 
 let failures = 0;
 const test = (name, fn) => {
@@ -113,6 +114,71 @@ test('the whole library is offered on a fixture', () =>
 console.log('siteLabel');
 test('names a known app', () => assert.equal(siteLabel('mail.google.com'), 'Gmail'));
 test('falls back to the host', () => assert.equal(siteLabel('example.org'), 'example.org'));
+
+console.log('page identity during editor navigation');
+test('Docs editor tabs, fragments and trailing views keep the same document identity', () => {
+  for (const kind of ['document', 'spreadsheets', 'presentation', 'forms']) {
+    const base = `https://docs.google.com/${kind}/d/document-one`;
+    assert.equal(pageKey(`${base}/edit?tab=t.0#heading=h.one`), pageKey(`${base}/edit?tab=t.1#heading=h.two`));
+    assert.equal(pageKey(`${base}/view?usp=sharing`), pageKey(`${base}/edit`));
+  }
+});
+test('a different document or editor type changes page identity', () => {
+  const current = pageKey('https://docs.google.com/document/d/one/edit?tab=t.0');
+  assert.notEqual(current, pageKey('https://docs.google.com/document/d/two/edit?tab=t.0'));
+  assert.notEqual(current, pageKey('https://docs.google.com/spreadsheets/d/one/edit?tab=t.0'));
+});
+test('the Docs exception never swallows other sites or ordinary routes', () => {
+  for (const base of [
+    'https://example.org/document/d/one/edit',
+    'https://docs.google.com.evil.example/document/d/one/edit',
+    'https://docs.google.com/templates',
+    'https://github.com/a/b',
+  ]) assert.notEqual(pageKey(`${base}?tab=one`), pageKey(`${base}?tab=two`), base);
+  assert.equal(pageKey('https://example.org/page?q=one#first'), pageKey('https://example.org/page?q=one#second'));
+});
+test('the navigation watcher ignores Docs tab updates but cancels once for a new document', () => {
+  const previousLocation = globalThis.location;
+  const previousWindow = globalThis.window;
+  const navigation = new EventTarget();
+  const events = new EventTarget();
+  globalThis.window = Object.assign(events, { navigation });
+  globalThis.location = { href: 'https://docs.google.com/document/d/one/edit?tab=t.0' };
+  let stopped = 0;
+  const dispose = watchNavigation(() => stopped++);
+  try {
+    globalThis.location.href = 'https://docs.google.com/document/d/one/edit?tab=t.1';
+    navigation.dispatchEvent(new Event('currententrychange'));
+    assert.equal(stopped, 0);
+    globalThis.location.href = 'https://docs.google.com/document/d/two/edit?tab=t.1';
+    navigation.dispatchEvent(new Event('currententrychange'));
+    events.dispatchEvent(new Event('pagehide'));
+    assert.equal(stopped, 1);
+  } finally {
+    dispose();
+    globalThis.location = previousLocation;
+    globalThis.window = previousWindow;
+  }
+});
+test('a full document navigation still cancels even when the normalized Docs key matches', () => {
+  const previousWindow = globalThis.window;
+  const previousLocation = globalThis.location;
+  const navigation = new EventTarget();
+  globalThis.window = Object.assign(new EventTarget(), { navigation });
+  globalThis.location = { href: 'https://docs.google.com/document/d/one/edit?tab=t.0' };
+  let stopped = 0;
+  const dispose = watchNavigation(() => stopped++);
+  try {
+    const event = new Event('navigate');
+    Object.defineProperty(event, 'destination', { value: { sameDocument: false, url: 'https://docs.google.com/document/d/one/edit?tab=t.1' } });
+    navigation.dispatchEvent(event);
+    assert.equal(stopped, 1);
+  } finally {
+    dispose();
+    globalThis.location = previousLocation;
+    globalThis.window = previousWindow;
+  }
+});
 
 console.log(failures ? `\n${failures} failing` : '\nall passing');
 process.exit(failures ? 1 : 0);

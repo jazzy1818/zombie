@@ -19,6 +19,7 @@
 // explores GitHub. DEMO_DOC_URL is only the fallback for a panel that didn't
 // send one.
 //   GET  /jobs/:id                                           -> job state
+//   POST /jobs/:id/cancel                                    -> cancel job
 //   GET  /lessons                                            -> saved lesson ids
 //   GET  /health                                             -> { ok: true }
 //
@@ -109,7 +110,12 @@ async function saveLesson(lesson) {
 
 function newJob(goal) {
   const id = `j_${Math.random().toString(36).slice(2, 10)}`;
-  const job = { id, goal, state: 'running', progress: [], startedAt: Date.now() };
+  const job = {
+    id, goal, state: 'running', progress: [], startedAt: Date.now(),
+    abort: new AbortController(),
+    handle: null,        // the live Steel session, so cancel can release it now
+    polledAt: Date.now(),
+  };
   createJobViewer(job);
   jobs.set(id, job);
 
@@ -125,6 +131,47 @@ const note = (job, text) => {
   console.log(`  [${job.id}] ${text}`);
 };
 
+// Cancellation and normal finally blocks can race. They share the same release
+// promise so the server stays busy until cleanup finishes, without releasing a
+// paid session twice. Weak keys do not keep browser handles alive with job history.
+const handleReleases = new WeakMap();
+function releaseOnce(handle, close = closeSession) {
+  if (!handle) return Promise.resolve();
+  if (!handleReleases.has(handle)) {
+    handleReleases.set(handle, Promise.resolve().then(() => close(handle)));
+  }
+  return handleReleases.get(handle);
+}
+
+/**
+ * Stop a job and release its cloud browser now. Closing the session interrupts
+ * pending Playwright waits; the signal stops model output at its next safe point.
+ */
+export async function cancelJob(job, why) {
+  if (job.state !== 'running') return false;
+  job.state = 'cancelled';
+  job.error = why;
+  job.abort.abort();
+  note(job, why);
+  const handle = job.handle;
+  job.handle = null;
+  if (handle) await (job.releaseHandle ?? releaseOnce)(handle).catch(() => {});
+  return true;
+}
+
+// A closed tab, a crashed browser, a shut laptop: none of them send anything. Without
+// this the session runs to its Steel timeout and blocks every later question.
+const ABANDONED_MS = 60_000;
+
+setInterval(() => {
+  for (const job of jobs.values()) {
+    if (job.state !== 'running') continue;
+    if (Date.now() - job.polledAt < ABANDONED_MS) continue;
+    cancelJob(job, 'Nobody was waiting for this any more, so I stopped it.')
+      .catch(err => console.error(`  [${job.id}] cleanup failed:`, err.message));
+  }
+}, 10_000).unref();
+
 /**
  * The whole pipeline, for one goal.
  *
@@ -137,9 +184,29 @@ export async function runJob(job, spec, overrides = {}) {
   const { goal, docUrl, check, verify, local } = spec;
   const services = { openExploreSession, closeSession, explore, prune, emit, verifyLesson, uniqueId, saveLesson, ...overrides };
   const viewer = createJobViewer(job, { registerRecording: overrides.registerRecording ?? replays.register });
-  // Explore whatever the panel was open on. A question asked on GitHub is a
-  // question about GitHub, and sending it to a Google Doc would produce a
-  // lesson for the wrong app that the panel would then refuse to offer.
+  job.abort ??= new AbortController();
+  const signal = job.abort.signal;
+  const releaseHandle = handle => releaseOnce(handle, services.closeSession);
+  job.releaseHandle = releaseHandle;
+  const checkCancelled = () => signal.throwIfAborted();
+
+  // Cancelling clears the live link immediately, including while an opener is
+  // still pending. A later close callback may retain its recording, but a late
+  // ready callback must never bring a cancelled browser back into the panel.
+  let closeViewer = () => {};
+  const onAbort = () => closeViewer();
+  signal.addEventListener('abort', onAbort);
+  function beginViewer(options) {
+    const update = viewer.begin(options);
+    closeViewer = () => update({ ...job.viewer,
+      status: job.viewer.sessionId ? 'closed' : 'unavailable', url: null });
+    return state => {
+      if (!signal.aborted || state.status === 'closed') update(state);
+    };
+  }
+
+  // Explore the app the panel was open on, preserving its auth policy through
+  // retries and the optional fresh verification session.
   const app = appFor(docUrl);
   job.app = app.id;
   let trace = null;
@@ -147,7 +214,8 @@ export async function runJob(job, spec, overrides = {}) {
 
   try {
     for (let attempt = 1; attempt <= 2 && !trace; attempt++) {
-      const onViewer = viewer.begin({ attempt: ++browserNumber, local: !!local });
+      checkCancelled();
+      const onViewer = beginViewer({ attempt: ++browserNumber, local: !!local });
       note(job, attempt === 1
         ? `Opening a ${local ? 'local' : 'cloud'} browser on ${app.label}…`
         : `Retrying (attempt ${attempt})…`);
@@ -156,6 +224,8 @@ export async function runJob(job, spec, overrides = {}) {
         // Public pages can use an anonymous browser when no saved profile is
         // available. The observer travels through every auth/local path.
         handle = await services.openExploreSession({ app, local: !!local, auth: spec.auth ?? 'auto', onViewer });
+        job.handle = handle;
+        checkCancelled(); // cancellation may have arrived while opening
         job.anonymous = !!handle.anonymous;
         if (handle.anonymous) note(job, `Browsing ${app.label} signed out.`);
         if (attempt === 1 && spec.pageUrl && spec.pageUrl !== docUrl) {
@@ -165,8 +235,10 @@ export async function runJob(job, spec, overrides = {}) {
           goal,
           docUrl,
           app,
+          signal,
           goalCheck: check ?? { kind: 'none' },
           onStep(ev) {
+            if (signal.aborted) return;
             if (ev.phase === 'opening') note(job, `Loading ${ev.docUrl ?? app.label}…`);
             if (ev.phase === 'click') note(job, `Tried "${ev.name}" — ${ev.reasoning}`);
             if (ev.phase === 'checking') note(job, 'Checking whether that worked…');
@@ -175,13 +247,16 @@ export async function runJob(job, spec, overrides = {}) {
             if (ev.phase === 'login-wall') note(job, `That page wants a sign-in: ${ev.reason}.`);
           },
         });
+        checkCancelled();
         if (result.ok) trace = result;
         else note(job, `That attempt did not reach the goal (${result.reason}).`);
       } finally {
-        if (handle) await services.closeSession(handle);
+        if (job.handle === handle) job.handle = null;
+        if (handle) await releaseHandle(handle);
       }
     }
 
+    checkCancelled();
     if (!trace) throw new Error(`I explored but couldn't find a reliable way to do "${goal}".`);
 
     note(job, 'Removing the wrong turns…');
@@ -189,25 +264,42 @@ export async function runJob(job, spec, overrides = {}) {
 
     note(job, 'Writing the explanation…');
     const id = spec.id ?? await services.uniqueId(goal);
+    checkCancelled();
     const lesson = await services.emit(pruned, { id, goal, app });
+    checkCancelled();
 
     if (verify) {
       note(job, 'Replaying it in a fresh browser to be sure…');
-      const onViewer = viewer.begin({ attempt: ++browserNumber, phase: 'verifying', local: !!local });
-      const report = await services.verifyLesson(lesson, { docUrl, local: !!local, auth: spec.auth ?? 'auto', app, onViewer });
+      const onViewer = beginViewer({ attempt: ++browserNumber, phase: 'verifying', local: !!local });
+      const report = await services.verifyLesson(lesson, {
+        docUrl, local: !!local, auth: spec.auth ?? 'auto', app, onViewer, signal,
+        // Verification owns a fresh session. Make it reachable by cancellation
+        // as soon as it opens and share release with its own finally block.
+        onHandle: handle => { job.handle = handle; },
+        releaseHandle,
+      });
+      checkCancelled();
       if (!report.ok) throw new Error('The lesson did not replay cleanly, so I threw it away.');
     }
 
+    checkCancelled();
     note(job, 'Saving it for next time…');
     await services.saveLesson(lesson);
+    checkCancelled();
 
     job.lesson = lesson;
     job.state = 'done';
     note(job, `Done — ${lesson.steps.length} steps.`);
   } finally {
-    // No live link survives completion, errors, or an opener that failed before
-    // it could notify us. This does not stop or pause generation for the UI.
-    viewer.finish();
+    try {
+      if (job.handle) await releaseHandle(job.handle);
+    } finally {
+      job.handle = null;
+      delete job.releaseHandle;
+      signal.removeEventListener('abort', onAbort);
+      // Keep closed recordings for the same 24-hour window as job history.
+      viewer.finish();
+    }
   }
 }
 
@@ -267,8 +359,21 @@ const server = createServer(async (req, res) => {
   }
 
   if (url.pathname.startsWith('/jobs/')) {
-    const job = jobs.get(url.pathname.slice('/jobs/'.length));
+    const rest = url.pathname.slice('/jobs/'.length);
+    const cancelling = rest.endsWith('/cancel');
+    const job = jobs.get(cancelling ? rest.slice(0, -'/cancel'.length) : rest);
     if (!job) return send(res, 404, { error: 'no such job' });
+
+    // sendBeacon can only POST, and it is the only thing that survives a closing tab.
+    if (cancelling) {
+      if (req.method !== 'POST') return send(res, 405, { error: 'cancel requires POST' });
+      const stopped = await cancelJob(job, 'Cancelled — the cloud browser has been released.');
+      return send(res, 200, { id: job.id, state: job.state, stopped });
+    }
+
+    if (req.method !== 'GET') return send(res, 405, { error: 'job polling requires GET' });
+    // Polling is the liveness signal: it is what tells the reaper someone still cares.
+    job.polledAt = Date.now();
     return send(res, 200, {
       id: job.id, state: job.state, progress: job.progress,
       viewer: job.viewer, viewerUrl: job.viewerUrl, recordings: job.recordings, lesson: job.lesson, error: job.error,
@@ -301,11 +406,18 @@ const server = createServer(async (req, res) => {
       auth: body.auth === 'none' || body.auth === 'required' ? body.auth : 'auto',
     })
       .catch(err => {
+        // A cancelled job already has its state and its reason; the throw that got us
+        // out of the loop is the mechanism, not news.
+        if (job.state === 'cancelled') return;
         job.state = 'error';
         job.error = err.message;
         note(job, `Failed: ${err.message}`);
       })
-      .finally(() => { running = false; });
+      .finally(async () => {
+        if (job.handle) await (job.releaseHandle ?? releaseOnce)(job.handle).catch(() => {});
+        job.handle = null;
+        running = false;
+      });
     return;
   }
 

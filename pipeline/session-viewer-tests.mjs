@@ -6,7 +6,8 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { embedViewerUrl, createSessionViewer, createJobViewer } from './session-viewer.js';
 import { closeSession } from './session.js';
-import { runJob } from './bridge.js';
+import { runJob, cancelJob } from './bridge.js';
+import { verifyLesson } from './verify.js';
 
 const debugUrl = id => `https://api.steel.dev/v1/sessions/${id}/player`;
 const publicSession = id => ({
@@ -107,8 +108,8 @@ test('local job metadata always remains unavailable', async () => {
   assert.equal(job.viewer.status, 'unavailable');
 });
 
-function jobFixture({ results = [{ ok: true }], openError, exploreError, verifyError, verifyOk = true, saveError, anonymous = false } = {}) {
-  const job = { id: 'viewer-test', state: 'running', progress: [] };
+function jobFixture({ results = [{ ok: true }], openError, exploreError, verifyError, verifyOk = true, saveError, anonymous = false, hooks = {} } = {}) {
+  const job = { id: 'viewer-test', state: 'running', progress: [], abort: new AbortController(), handle: null };
   const snapshots = [];
   const released = [];
   const inputs = { open: [], explore: [], emit: [], verify: [] };
@@ -120,6 +121,7 @@ function jobFixture({ results = [{ ok: true }], openError, exploreError, verifyE
     const { onViewer } = options;
     inputs.open.push(options);
     snapshot('opening');
+    await hooks.open?.(options);
     if (openError) throw openError;
     const session = publicSession(`session-${++serial}`);
     const viewer = createSessionViewer(state => { onViewer(state); snapshot('viewer'); });
@@ -135,6 +137,7 @@ function jobFixture({ results = [{ ok: true }], openError, exploreError, verifyE
     explore: async (_handle, options) => {
       inputs.explore.push(options);
       snapshot('explore');
+      await hooks.explore?.(_handle, options);
       if (exploreError) throw exploreError;
       return results[explorations++];
     },
@@ -143,16 +146,22 @@ function jobFixture({ results = [{ ok: true }], openError, exploreError, verifyE
     emit: async (_pruned, options) => {
       inputs.emit.push(options);
       snapshot('emit');
+      await hooks.emit?.(options);
       return { id: 'test-lesson', app: options.app.id, steps: [{ id: 's1' }] };
     },
     verifyLesson: async (_lesson, options) => {
       inputs.verify.push(options);
       const handle = await open(options);
       try {
+        options.onHandle?.(handle);
         snapshot('verify');
+        await hooks.verify?.(handle, options);
         if (verifyError) throw verifyError;
         return { ok: verifyOk };
-      } finally { await closeSession(handle); }
+      } finally {
+        await (options.releaseHandle ?? closeSession)(handle);
+        options.onHandle?.(null);
+      }
     },
     saveLesson: async () => {
       snapshot('save');
@@ -250,3 +259,153 @@ test('bridge save failure cannot leave the completed exploration viewer live', a
   assert.equal(fixture.job.viewerUrl, null);
   assert.equal(fixture.saved, false);
 });
+
+function pause() {
+  let entered, resume;
+  const enteredPromise = new Promise(resolve => { entered = resolve; });
+  const resumed = new Promise(resolve => { resume = resolve; });
+  return { entered: enteredPromise, resume, wait: async () => { entered(); await resumed; } };
+}
+
+function assertCancelled(fixture) {
+  assert.equal(fixture.job.state, 'cancelled');
+  assert.equal(fixture.job.abort.signal.aborted, true);
+  assert.equal(fixture.saved, false);
+  assert.equal(fixture.job.lesson, undefined);
+  assert.equal(fixture.job.viewerUrl, null);
+  assert.notEqual(fixture.job.viewer.status, 'live');
+  assert.notEqual(fixture.job.viewer.status, 'starting');
+  assert.equal(fixture.job.handle, null);
+  assert.equal(fixture.job.progress.some(item => /^(Saving|Done)/.test(item.text)), false);
+}
+
+test('cancellation before opening performs no authoring work and is idempotent', async () => {
+  const fixture = jobFixture();
+  assert.equal(await cancelJob(fixture.job, 'fixture cancelled'), true);
+  assert.equal(await cancelJob(fixture.job, 'second cancellation'), false);
+  await assert.rejects(runJob(fixture.job, { goal: 'fixture' }, fixture.services), { name: 'AbortError' });
+  assertCancelled(fixture);
+  assert.deepEqual(fixture.inputs.open, []);
+  assert.equal(fixture.job.error, 'fixture cancelled');
+});
+
+test('cancellation during opening ignores late live metadata and releases the acquired session once', async () => {
+  const gate = pause();
+  const fixture = jobFixture({ hooks: { open: gate.wait } });
+  const finished = assert.rejects(runJob(fixture.job, { goal: 'fixture' }, fixture.services), { name: 'AbortError' });
+  await gate.entered;
+  await cancelJob(fixture.job, 'fixture cancelled while opening');
+  assert.equal(fixture.job.viewer.status, 'unavailable');
+  const cancelledAt = fixture.snapshots.length;
+  gate.resume();
+  await finished;
+  assertCancelled(fixture);
+  assert.deepEqual(fixture.released, ['session-1']);
+  assert.deepEqual(fixture.inputs.explore, []);
+  assert.equal(fixture.snapshots.slice(cancelledAt).some(event => event.status === 'live' || event.viewerUrl), false);
+  assert.deepEqual(fixture.job.recordings.map(item => item.sessionId), ['session-1']);
+});
+
+test('cancellation during exploration releases immediately, suppresses late progress, and never emits', async () => {
+  const gate = pause();
+  const fixture = jobFixture({ hooks: { explore: gate.wait } });
+  const finished = assert.rejects(runJob(fixture.job, { goal: 'fixture' }, fixture.services), { name: 'AbortError' });
+  await gate.entered;
+  assert.equal(fixture.inputs.explore[0].signal, fixture.job.abort.signal);
+  const cancellation = cancelJob(fixture.job, 'fixture cancelled while exploring');
+  assert.equal(fixture.job.viewer.status, 'closed');
+  assert.equal(fixture.job.viewerUrl, null);
+  await cancellation;
+  assert.deepEqual(fixture.released, ['session-1']);
+  const progressCount = fixture.job.progress.length;
+  fixture.inputs.explore[0].onStep({ phase: 'reached' });
+  assert.equal(fixture.job.progress.length, progressCount);
+  gate.resume();
+  await finished;
+  assertCancelled(fixture);
+  assert.deepEqual(fixture.inputs.emit, []);
+  assert.deepEqual(fixture.released, ['session-1']);
+  assert.equal(fixture.job.recordings.length, 1);
+});
+
+test('cancellation during lesson writing cannot start verification, save, or become done', async () => {
+  const gate = pause();
+  const fixture = jobFixture({ hooks: { emit: gate.wait } });
+  const finished = assert.rejects(runJob(fixture.job, { goal: 'fixture', verify: true }, fixture.services), { name: 'AbortError' });
+  await gate.entered;
+  await cancelJob(fixture.job, 'fixture cancelled while writing');
+  gate.resume();
+  await finished;
+  assertCancelled(fixture);
+  assert.deepEqual(fixture.inputs.verify, []);
+  assert.deepEqual(fixture.released, ['session-1']);
+});
+
+test('cancellation during a successful verification releases its separate browser and cannot publish', async () => {
+  const gate = pause();
+  const fixture = jobFixture({ hooks: { verify: gate.wait } });
+  const finished = assert.rejects(runJob(fixture.job, { goal: 'fixture', verify: true }, fixture.services), { name: 'AbortError' });
+  await gate.entered;
+  assert.equal(fixture.job.handle.session.id, 'session-2');
+  assert.equal(fixture.inputs.verify[0].signal, fixture.job.abort.signal);
+  await cancelJob(fixture.job, 'fixture cancelled while verifying');
+  assert.deepEqual(fixture.released, ['session-1', 'session-2']);
+  assert.equal(fixture.job.viewer.phase, 'verifying');
+  assert.equal(fixture.job.viewer.status, 'closed');
+  gate.resume();
+  await finished;
+  assertCancelled(fixture);
+  assert.deepEqual(fixture.released, ['session-1', 'session-2']);
+  assert.deepEqual(fixture.job.recordings.map(item => item.phase), ['exploring', 'verifying']);
+});
+
+// These exercise the production verifier with only browser/session I/O replaced.
+// A delayed probe deliberately succeeds after abort to catch accidental clicks or
+// a false successful report from an already cancelled replay.
+for (const phase of ['opening', 'navigation', 'resolve', 'check']) {
+  test(`production verification cancels during ${phase} without later actions or a successful report`, async () => {
+    const gate = pause();
+    const abort = new AbortController();
+    const owned = [];
+    const actions = [];
+    let releases = 0;
+    const handle = {
+      viewerUrl: 'fixture viewer',
+      page: {
+        goto: async () => { actions.push('navigate'); if (phase === 'navigation') await gate.wait(); },
+        evaluate: async () => '1280x720',
+        waitForTimeout: async () => {},
+        click: async () => { actions.push('click'); },
+      },
+      probe: async kind => {
+        actions.push(kind);
+        if (phase === kind) await gate.wait();
+        return kind === 'resolve' ? { id: 'fixture-target', count: 1 } : true;
+      },
+    };
+    const finished = assert.rejects(verifyLesson({
+      id: 'cancel-fixture', app: 'github',
+      steps: [{ id: 'first', target: { name: 'Watch' }, verify: { kind: 'dom', selector: '#result' } }],
+    }, {
+      docUrl: 'https://github.com/example/repo', signal: abort.signal,
+      keepOpen: true, // cancellation must still release even with this CLI option
+      onHandle: value => { owned.push(value); },
+    }, {
+      openExploreSession: async () => { if (phase === 'opening') await gate.wait(); return handle; },
+      closeSession: async () => { releases++; },
+      waitForApp: async () => {}, whoami: async () => null,
+    }), { name: 'AbortError' });
+    await gate.entered;
+    abort.abort();
+    // Allow the abort listener's cleanup promise to settle while browser I/O is
+    // still paused. An opening session cannot be released until it is acquired.
+    await new Promise(resolve => setImmediate(resolve));
+    assert.equal(releases, phase === 'opening' ? 0 : 1);
+    const actionsAtAbort = [...actions];
+    gate.resume();
+    await finished;
+    assert.deepEqual(actions, actionsAtAbort);
+    assert.equal(releases, 1);
+    assert.deepEqual(owned, [handle, null]);
+  });
+}

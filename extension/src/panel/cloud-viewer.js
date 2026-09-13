@@ -422,7 +422,8 @@ export function createCloudViewer(root, raise) {
         if (selection !== 'current' && !recordings.some(item => item.sessionId === selection)) selection = 'current';
       }
       const next = job.viewer || { status: job.viewerUrl ? 'live' : 'unavailable', url: job.viewerUrl };
-      const finished = job.state === 'done' || job.state === 'error';
+      const finished = job.state === 'done' || job.state === 'error' || job.state === 'cancelled';
+      if (job.state === 'cancelled') { this.reset({ forgetRecordings: true }); return; }
       const url = !finished && next.status === 'live' ? cloudPlayerUrl(next.url) : null;
       viewer = { ...next, url, status: finished ? 'closed' : next.status === 'live' && !url ? 'unavailable' : next.status };
       if (finished && !recordings.length) { this.reset(); return; }

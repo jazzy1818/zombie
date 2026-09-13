@@ -1,0 +1,78 @@
+{
+  "id": "underline-text",
+  "app": "google-docs",
+  "goal": "how to underline text?",
+  "preamble": "Underlining looks like a one-button job, and there is a button for it. But a button hides where the thing lives and what it belongs to. The menus show you the shape of the program: underline isn't its own feature, it's one of a small family of changes you can make to a run of text — bold, italic, strikethrough, superscript. Walk the menu once and you'll know where all its siblings live too.",
+  "generalization": "Toolbar buttons are shortcuts to menu items, never the other way round. When you can't find something, or you want to know what else is near it, walk the menu — the grouping tells you how the program thinks. Everything that changes the characters themselves sits under Format > Text; everything that changes the shape of the paragraph sits a little further down the same menu.",
+  "steps": [
+    {
+      "id": "s1",
+      "intent": "You're not adding anything to the document and you're not changing the document itself — you're changing how existing characters appear. That's what Format is for: it acts on what's already selected.",
+      "mode": "demo",
+      "target": {
+        "scope": "menu",
+        "name": "Format"
+      },
+      "action": "click",
+      "verify": {
+        "kind": "visible",
+        "name": "Text",
+        "scope": "menu"
+      },
+      "hints": [
+        "The text is already there. You're altering its appearance, not creating or inserting anything.",
+        "In the menu bar along the top, between Insert and Tools."
+      ],
+      "wrongHints": {
+        "Insert": "Insert is for putting something new into the document — an image, a link, a page break. Your text already exists; you're only changing how it's drawn.",
+        "Edit": "Edit handles moving text around — cut, copy, paste, undo. It doesn't touch appearance.",
+        "View": "View changes how you see the whole document on screen, not how the document itself is stored. An underline is part of the document, not part of your window."
+      }
+    },
+    {
+      "id": "s2",
+      "intent": "Format covers a lot: paragraphs, images, tables, columns. The Text submenu narrows it to changes that apply to the characters themselves — the ones that travel with the letters wherever you move them.",
+      "mode": "guided",
+      "target": {
+        "scope": "menu",
+        "name": "Text"
+      },
+      "action": "click",
+      "verify": {
+        "kind": "visible",
+        "name": "Underline",
+        "scope": "menu"
+      },
+      "hints": [
+        "Format is split by what you're acting on. You're acting on letters, not on paragraphs or images.",
+        "Near the top of the Format menu, the first entry with an arrow beside it."
+      ],
+      "wrongHints": {
+        "Paragraph styles": "Styles set what a line *is* — a heading, body text. Underlining a few words isn't a change of meaning, it's a change to the characters.",
+        "Align & indent": "That moves the whole paragraph around on the page. Underline stays with the letters, so it belongs with the text options.",
+        "Bullets & numbering": "That's list structure, applied to whole lines. You want the group that acts on the characters inside a line."
+      }
+    },
+    {
+      "id": "s3",
+      "intent": "Now you can see the family: bold, italic, underline, strikethrough, superscript. They all do the same kind of thing — mark a run of characters — which is why Docs keeps them together. Pick the one you came for, and note the keyboard shortcut listed beside it, since that's the fast route next time.",
+      "mode": "solo",
+      "target": {
+        "scope": "menu",
+        "name": "Underline"
+      },
+      "action": "click",
+      "verify": {
+        "kind": "none"
+      },
+      "hints": [
+        "One of these marks text with a line beneath it rather than through it.",
+        "Third in the list, below Bold and Italic."
+      ],
+      "wrongHints": {
+        "Strikethrough": "Also a line, but drawn through the middle — it conventionally means deleted or no longer true. Underline sits just above it.",
+        "Bold": "Bold is the neighbour, and a reasonable place to land if you're scanning fast. Underline is two below it."
+      }
+    }
+  ]
+}

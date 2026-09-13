@@ -53,11 +53,17 @@ export function installProbe(SEL) {
     const t = el.textContent.trim();
     if (t === name) return true;
     if (!t.startsWith(name)) return false;
-    const suffix = t.slice(name.length).trim();
+    const rest = t.slice(name.length);
+    const suffix = rest.trim();
     return /^(?:(?:Updated|New)\s*)?[►▸▶›»]$/.test(suffix) || /^(?:Updated|New)$/.test(suffix)
       || /^(?:\(?\s*(?:Ctrl|Control|Alt|Option|Shift|Meta|Cmd|Command|⌘|⌥|⇧|F\d{1,2})(?:\b|[+⌘⌥⇧]).*\)?)$/i.test(suffix)
+      // A single-key accelerator, glued on: Docs ships "Text(S)", "Details(B)".
+      || /^\([^\s()]\)$/.test(suffix)
       // A count badge, the non-Docs equivalent of a concatenated shortcut.
-      || /^\(?\d[\d,.\u202f\u00a0]*\+?k?\)?$/i.test(suffix);
+      //
+      // Whitespace-separated, or "Heading 1" swallows "Heading 10": the suffix "0"
+      // reads as a badge, the two collapse into one match, and neither resolves.
+      || (/^\s/.test(rest) && /^\(?\d[\d,.\u202f\u00a0]*\+?k?\)?$/i.test(suffix));
   }
 
   // Only visible elements get stamped, so a model addressing elements by id cannot

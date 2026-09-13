@@ -85,14 +85,20 @@ function matchesName(element, wanted) {
   // Bare lesson names may omit keyboard shortcuts or a submenu arrow. Do not
   // use an unrestricted prefix ("Save" must not silently become "Save as").
   if (!name.startsWith(expected)) return false;
-  const suffix = name.slice(expected.length).trim();
+  const rest = name.slice(expected.length);
+  const suffix = rest.trim();
   return /^(?:Updated|New)\s*[►▸▶›»]?$/i.test(suffix)
     || /^(?:[►▸▶›»]|\(?\s*(?:Ctrl|Control|Alt|Option|Shift|Meta|Cmd|Command|⌘|⌥|⇧|F\d{1,2})(?:\b|[+⌘⌥⇧]).*\)?)$/i.test(suffix)
+    // A single-key accelerator, glued on: Docs ships "Text(S)", "Details(B)".
+    || /^\([^\s()]\)$/.test(suffix)
     // Outside Docs the noise glued to a label is usually a count badge rather
     // than a keyboard shortcut: GitHub's "Issues 12" tab, Gmail's "Inbox 1,203".
     // Same problem, same fix — a lesson names the control, not the number, and
     // the number changes between authoring the lesson and teaching it anyway.
-    || /^\(?\d[\d,.\u202f\u00a0]*\+?k?\)?$/i.test(suffix);
+    //
+    // Whitespace-separated, or "Heading 1" swallows "Heading 10": the suffix "0"
+    // reads as a badge, the two collapse into one match, and neither resolves.
+    || (/^\s/.test(rest) && /^\(?\d[\d,.\u202f\u00a0]*\+?k?\)?$/i.test(suffix));
 }
 
 export function findTarget(target, resolver, { requireEnabled = true, allowReadouts = false } = {}) {

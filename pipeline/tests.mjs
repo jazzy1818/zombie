@@ -11,6 +11,7 @@ import { PROBE_SOURCE } from './dom-probe.js';
 import { diff } from './explore.js';
 import { prune } from './prune.js';
 import { skeleton, deriveTarget, validate } from './emit.js';
+import { matchesCandidate } from './target-policy.js';
 import { validatePublishable, verificationEvidence, recordVerification, runRecordedVerification, publishLesson } from './publish.js';
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), '..');
@@ -29,6 +30,7 @@ const fixture = `<!doctype html><meta charset="utf-8"><title>Pipeline local fixt
 </div>
 <div id="zoom-menu" role="listbox" aria-label="Zoom choices" hidden><button id="zoom100" role="option">100%</button><button id="zoom150" role="option">150%</button></div>
 <div role="menu"><button id="page-elements" role="menuitem">Page elementsUpdated►</button><button id="heading1" role="menuitem">Heading 1</button><button id="heading10" role="menuitem">Heading 10</button></div>
+<div role="menu"><button id="text-accelerator" role="menuitem">Text(S)</button><button role="menuitem">Text(Style)</button><button id="details-accelerator" role="menuitem">Details(B)</button><button id="drive-accelerator" role="menuitem">Add shortcut to Drive(,)</button><button id="issues-count" role="menuitem">Issues 12</button><button id="inbox-count" role="menuitem">Inbox 1,203</button><button id="stars-count" role="menuitem">Stars 1.2k</button><button role="menuitem">Tasks12</button></div>
 <div id="hidden-readout" hidden aria-label="Verified result">Verified result</div><div aria-label="Disabled result" aria-disabled="true">Disabled result</div>
 <fieldset disabled><legend><button id="legend" aria-label="Legend exception">Legend exception</button></legend><button id="disabled-field" aria-label="Field control">Field control</button></fieldset>
 <script>window.activations={zoom:0,selected:0};document.querySelector('#zoom').onclick=()=>{activations.zoom++;document.querySelector('#zoom-menu').hidden=false};document.querySelector('#zoom150').onclick=()=>{activations.selected++;document.querySelector('#zoom-readout').setAttribute('aria-label','Zoom list. 150% selected.');document.querySelector('#zoom-menu').hidden=true};</script>`;
@@ -89,6 +91,35 @@ try {
     assert.deepEqual(await compare({ scope: 'menu', name: 'Page elements' }), { pipeline: 'page-elements', runtime: 'page-elements' });
     await page.locator('#zoom').click();
     assert.deepEqual(await compare({ scope: 'menu', name: '150%' }), { pipeline: 'zoom150', runtime: 'zoom150' });
+  });
+  const compareNames = async (name, expected) => {
+    const target = { scope: 'menu', name };
+    const actual = await page.evaluate(target => {
+      const candidate = __PROBE.resolve(target);
+      return {
+        probe: candidate ? __PROBE.el(candidate.id).id : null,
+        resolver: runtime.findSync(target)?.id || null,
+        fallback: adapter.findTarget(target)?.id || null,
+        candidates: __PROBE.observe().menu.map(item => ({ ...item, elementId: __PROBE.el(item.id).id })),
+      };
+    }, target);
+    const policy = actual.candidates.filter(candidate => matchesCandidate(candidate, name, 'menu')).map(candidate => candidate.elementId);
+    assert.deepEqual({ probe: actual.probe, resolver: actual.resolver, fallback: actual.fallback, policy },
+      { probe: expected, resolver: expected, fallback: expected, policy: expected ? [expected] : [] }, name);
+  };
+  await test('Single-key menu accelerators agree across probe, resolver, fallback and authoring policy', async () => {
+    for (const [name, id] of [['Text', 'text-accelerator'], ['Details', 'details-accelerator'], ['Add shortcut to Drive', 'drive-accelerator']]) {
+      await compareNames(name, id);
+    }
+  });
+  await test('Heading 1 and Heading 10 remain distinct across all name matchers', async () => {
+    await compareNames('Heading 1', 'heading1');
+    await compareNames('Heading 10', 'heading10');
+  });
+  await test('Separated count badges match while glued semantic digits do not', async () => {
+    for (const [name, id] of [['Issues', 'issues-count'], ['Inbox', 'inbox-count'], ['Stars', 'stars-count'], ['Tasks', null]]) {
+      await compareNames(name, id);
+    }
   });
   await test('Native fieldset exception and rendered label checks agree', async () => {
     assert.deepEqual(await compare({ name: 'Legend exception' }), { pipeline: 'legend', runtime: 'legend' });

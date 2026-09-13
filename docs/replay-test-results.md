@@ -33,7 +33,7 @@ interrupting an already playable recording.
 
 ## Offline backend checks
 
-**20/20 passed** across the session lifecycle and replay suites:
+**29/29 passed** across the session lifecycle and replay suites:
 
 ```powershell
 node --test --test-isolation=none pipeline/session-viewer-tests.mjs pipeline/session-replay-tests.mjs

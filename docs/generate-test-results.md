@@ -1,12 +1,12 @@
 # Runtime lesson generation results
 
-Run: 2026-09-13T07:52:17.797Z
+Run: 2026-09-13T08:06:52.578Z
 
 Browser: 151.0.7922.34
 
-Unpacked extension: ooeejodeleomehdkhfiaoiphpecnoomg
+Unpacked extension: clkbdhplbpomdacjflgfiiefkegjcfjn
 
-Result: **56/56 checks passed**.
+Result: **58/58 checks passed**.
 
 The real extension is loaded from its manifest in a disposable copy. Only the bridge base URL is changed to a local server on an operating-system-assigned port. The production extension files and live bridge on port 7777 are untouched. The panel, matcher, lesson index, teaching adapter, paint and viewer are the production implementations. Stub job responses replace cloud authoring; deterministic live-player and recording-player HTML exercise the real iframe lifecycle and controls without paid cloud sessions.
 
@@ -24,6 +24,8 @@ For the public HTTPS fixture only, authoring JSON routes (`/health`, `/generate`
 - PASS: Asking again is answered from the index without a second cloud run
 - PASS: A failing generation reports the reason instead of hanging
 - PASS: Stop during generation cancels and leaves nothing running
+- PASS: A bridge-cancelled job closes the viewer without an error or another cancellation request
+- PASS: Stop closes immediately while a delayed job ID is later cancelled without polling
 - PASS: The cloud viewer opens while waiting, then becomes live without a new progress entry
 - PASS: The viewer loads cross-origin content even when the website CSP disallows frames and connections
 - PASS: A public HTTPS website can open and reopen a completed recording under restrictive CSP

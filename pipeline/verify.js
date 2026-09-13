@@ -4,15 +4,24 @@ import { openExploreSession, closeSession, whoami } from './session.js';
 import { RESOLVE_TIMEOUT_MS, VERIFY_TIMEOUT_MS } from './config.js';
 import { appById, appFor, waitForApp } from './apps.js';
 
-export async function verifyLesson(lesson, opts = {}) {
-  const { docUrl = process.env.DEMO_DOC_URL, keepOpen = false, local = false, auth = 'auto', onViewer } = opts;
+export async function verifyLesson(lesson, opts = {}, overrides = {}) {
+  const { docUrl = process.env.DEMO_DOC_URL, keepOpen = false, local = false, auth = 'auto', onViewer, signal, onHandle } = opts;
+  // Service overrides keep lifecycle tests offline; normal callers use the
+  // same session/app functions as authoring.
+  const services = { openExploreSession, closeSession, whoami, waitForApp, ...overrides };
+  const checkCancelled = () => signal?.throwIfAborted();
+  checkCancelled();
   if (!docUrl) throw new Error('no page URL — pass { docUrl } or set DEMO_DOC_URL');
 
   // Replay in the same app the lesson was authored for. The lesson's own `app`
   // wins over the URL: a lesson replayed against the wrong app should fail
   // loudly on its first descriptor, not quietly against a mismatched probe.
   const app = opts.app ?? appById(lesson.app) ?? appFor(docUrl);
-  const handle = await openExploreSession({ app, local, auth, onViewer });
+  const handle = await services.openExploreSession({ app, local, auth, onViewer });
+  let releasePromise;
+  const release = () => releasePromise ??= Promise.resolve().then(() => (opts.releaseHandle ?? services.closeSession)(handle));
+  const onAbort = () => { release().catch(() => {}); };
+  signal?.addEventListener('abort', onAbort);
   const steps = [];
   let failedAt;
 
@@ -22,17 +31,22 @@ export async function verifyLesson(lesson, opts = {}) {
   let viewport = '?';
 
   try {
+    onHandle?.(handle);
+    checkCancelled(); // an opener may finish after cancellation
     await handle.page.goto(docUrl, { waitUntil: 'domcontentloaded' });
-    await waitForApp(handle, app);
+    checkCancelled();
+    await services.waitForApp(handle, app);
     viewport = await handle.page.evaluate(() => `${innerWidth}x${innerHeight}`);
     await handle.page.waitForTimeout(1500);   // apps wire their menus after first paint
 
-    const account = await whoami(handle.page);
+    checkCancelled();
+    const account = await services.whoami(handle.page);
     console.log(account
       ? `  signed in as ${account}`
       : `  no signed-in account detected — anything in ${app.label} that needs one will be disabled`);
 
     for (const step of lesson.steps) {
+      checkCancelled();
       const t0 = Date.now();
 
       // Instruct-only: the doc body is canvas, so there's nothing to resolve or replay.
@@ -52,7 +66,8 @@ export async function verifyLesson(lesson, opts = {}) {
         continue;
       }
 
-      const hit = await pollResolve(handle, step.target, RESOLVE_TIMEOUT_MS);
+      const hit = await pollResolve(handle, step.target, RESOLVE_TIMEOUT_MS, signal);
+      checkCancelled();
 
       // Resolved but greyed out. Clicking would just time out, and a learner could not
       // complete the step either — the lesson is wrong for this document.
@@ -84,7 +99,8 @@ export async function verifyLesson(lesson, opts = {}) {
       await handle.page.click(`[data-bt-id="${hit.id}"]`, { timeout: 5000 });
 
       if (step.verify && step.verify.kind !== 'none') {
-        const passed = await pollCheck(handle, step.verify, VERIFY_TIMEOUT_MS);
+        const passed = await pollCheck(handle, step.verify, VERIFY_TIMEOUT_MS, signal);
+        checkCancelled();
         if (!passed) {
           steps.push({
             id: step.id, status: 'verify-failed', name: step.target.name,
@@ -105,10 +121,17 @@ export async function verifyLesson(lesson, opts = {}) {
         ...(step.verify?.kind === 'none' ? { note: 'click only (verify: none)' } : {}),
       });
     }
+    checkCancelled();
   } finally {
-    if (!keepOpen) await closeSession(handle);
+    try {
+      if (!keepOpen || signal?.aborted) await release();
+    } finally {
+      signal?.removeEventListener('abort', onAbort);
+      onHandle?.(null);
+    }
   }
 
+  checkCancelled();
   return {
     ok: !failedAt && !skipped,
     incomplete: skipped,
@@ -153,11 +176,13 @@ async function dumpScope(handle, scope) {
 
 // Prefer an enabled match, but keep a disabled one so the caller can say which it was.
 // Docs ships its menubar disabled during load, so the wait matters.
-async function pollResolve(handle, target, timeoutMs) {
+async function pollResolve(handle, target, timeoutMs, signal) {
   const start = Date.now();
   let fallback = null;
   do {
+    signal?.throwIfAborted();
     const hit = await handle.probe('resolve', target);
+    signal?.throwIfAborted();
     if (hit && !hit.disabled) return hit;
     const visible = hit || await handle.probe('resolve', target, { actionable: false });
     if (visible?.disabled) fallback = visible;
@@ -166,10 +191,13 @@ async function pollResolve(handle, target, timeoutMs) {
   return fallback;
 }
 
-async function pollCheck(handle, verify, timeoutMs) {
+async function pollCheck(handle, verify, timeoutMs, signal) {
   const start = Date.now();
   do {
-    if (await handle.probe('check', verify)) return true;
+    signal?.throwIfAborted();
+    const passed = await handle.probe('check', verify);
+    signal?.throwIfAborted();
+    if (passed) return true;
     await handle.page.waitForTimeout(100);
   } while (Date.now() - start < timeoutMs);
   return false;

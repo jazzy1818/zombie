@@ -261,8 +261,12 @@ through local routes; the extension receives no API key.
 The bridge's panel-generation path saves the lesson into the extension library
 and teaches it immediately. Its default skips automatic replay; the CLI authoring
 and verified-publication flow in section 4 remains available. Confirm the actual
-website outcome yourself. **Stop** ends the panel's wait and clears the viewer and recording history;
-it does not cancel the already-running backend job. Minimizing only hides the view.
+website outcome yourself. **Stop** ends the panel's wait, clears the viewer and
+recording history, and asks the bridge to cancel the active job and release its
+cloud browser. Closing the panel, replacing the task, and leaving the page also
+cancel active generation. Minimizing only hides the view. If a tab disappears
+before it can send cancellation, the bridge stops jobs after 60 seconds without
+a poll (checked every 10 seconds).
 
 The live embed uses Steel's documented `debugUrl` and `interactive=false` option.
 Completed-session playback uses Steel's HLS recording API with the packaged

@@ -227,7 +227,11 @@ export async function mountPanel() {
       await Promise.race([work({ active, options }), cancelled]);
       return { status: active() ? 'completed' : 'cancelled' };
     } catch (err) {
-      if (err?.name === 'AbortError' || !active()) return { status: 'cancelled' };
+      if (err?.name === 'AbortError') {
+        if (active()) cancel({ forgetRecordings: true });
+        return { status: 'cancelled' };
+      }
+      if (!active()) return { status: 'cancelled' };
       console.error('[browser-teacher]', err);
       ui.fail(err);
       return { status: 'error', message: err?.message || String(err) };

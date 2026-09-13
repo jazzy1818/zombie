@@ -94,7 +94,7 @@ const GENERATED = {
   ],
 };
 
-const freshBridgeState = () => ({ generateCalls: [], pollCalls: [], playerCalls: [], playerPollCalls: [],
+const freshBridgeState = () => ({ generateCalls: [], cancelCalls: [], pollCalls: [], playerCalls: [], playerPollCalls: [],
   mode: 'ok', delayMs: 60, viewer: null, recordings: [], autoViewerReady: true, playerMode: 'ready', liveLoads: {}, livePlaybackPlans: {} });
 let bridgeState = freshBridgeState();
 const jobs = new Map();
@@ -152,11 +152,25 @@ const bridge = http.createServer(async (request, response) => {
   if (url.pathname === '/generate') {
     let raw = '';
     for await (const chunk of request) raw += chunk;
-    bridgeState.generateCalls.push(JSON.parse(raw || '{}'));
-    bridgeState.startedAt = Date.now();
-    bridgeState.jobId = `j_test_${++nextJob}`;
-    jobs.set(bridgeState.jobId, bridgeState);
-    response.writeHead(202, cors).end(JSON.stringify({ jobId: bridgeState.jobId }));
+    const job = bridgeState;
+    job.generateCalls.push(JSON.parse(raw || '{}'));
+    job.startedAt = Date.now();
+    job.jobId = `j_test_${++nextJob}`;
+    jobs.set(job.jobId, job);
+    if (job.generateResponseDelayMs) await pause(job.generateResponseDelayMs);
+    job.generateResponded = true;
+    response.writeHead(202, cors).end(JSON.stringify({ jobId: job.jobId }));
+    return;
+  }
+
+  const cancelPath = url.pathname.match(/^\/jobs\/([^/]+)\/cancel$/);
+  if (cancelPath) {
+    const job = jobs.get(cancelPath[1]);
+    if (!job) { response.writeHead(404, cors).end(JSON.stringify({ error: 'no such job' })); return; }
+    if (request.method !== 'POST') { response.writeHead(405, cors).end(); return; }
+    job.cancelCalls.push({ jobId: cancelPath[1], method: request.method });
+    job.cancelled = true;
+    response.writeHead(200, cors).end(JSON.stringify({ ok: true, state: 'cancelled' }));
     return;
   }
 
@@ -176,7 +190,8 @@ const bridge = http.createServer(async (request, response) => {
     }
     const done = elapsed > job.delayMs;
     const payload = JSON.stringify({ id: job.jobId, progress, viewer: job.viewer, recordings: job.recordings,
-      ...(job.mode === 'error' ? { state: 'error', error: 'I explored but could not find a reliable way to do that.' }
+      ...(job.cancelled ? { state: 'cancelled' }
+        : job.mode === 'error' ? { state: 'error', error: 'I explored but could not find a reliable way to do that.' }
         : done ? { state: 'done', lesson: GENERATED } : { state: 'running' }) });
     if (job.pollDelayMs) await pause(job.pollDelayMs);
     response.writeHead(200, cors).end(payload);
@@ -342,6 +357,10 @@ async function report() {
       await pause(60);
     }
     throw new Error(message);
+  }
+  async function cancelledOnce(job = bridgeState) {
+    await until(() => job.cancelCalls.length > 0, 'The active authoring job must receive a cancellation request');
+    assert.deepEqual(job.cancelCalls, [{ jobId: job.jobId, method: 'POST' }], 'Only one cancellation request may be sent for the active job');
   }
   async function startGeneration({ viewer = { status: 'starting', url: null, attempt: 1, phase: 'explore' }, question = 'how do I schedule a post for later' } = {}) {
     bridgeState.delayMs = 120000;
@@ -575,8 +594,42 @@ async function report() {
     await panel().locator('.bt-trail li').first().waitFor();
     await panel().locator('.bt-actions .bt-btn', { hasText: 'Stop' }).click();
     await pause(600);
+    await cancelledOnce();
     assert.equal(await panel().locator('.bt-card-step').count(), 0, 'no lesson may start after Stop');
     assert.equal(await panel().locator('.bt-trail').count(), 0, 'the trail must be cleared');
+  });
+
+  await test('A bridge-cancelled job closes the viewer without an error or another cancellation request', async () => {
+    await startGeneration({ viewer: { status: 'live', url: VIEWER_URL, attempt: 1, phase: 'explore' } });
+    await watch().click();
+    await viewerReady();
+    bridgeState.cancelled = true;
+    await noViewer();
+    assert.equal(await panel().locator('.bt-card-error, .bt-card-preamble, .bt-card-step').count(), 0);
+    assert.equal(await panel().locator('.bt-bar input').isEnabled(), true);
+    const finalPolls = bridgeState.pollCalls.length;
+    await pause(1100);
+    assert.equal(bridgeState.pollCalls.length, finalPolls);
+    assert.deepEqual(bridgeState.cancelCalls, [], 'A terminal cancelled response must not trigger another cancel');
+  });
+
+  await test('Stop closes immediately while a delayed job ID is later cancelled without polling', async () => {
+    bridgeState.generateResponseDelayMs = 2500;
+    await startGeneration();
+    await until(() => bridgeState.generateCalls.length === 1, 'The bridge must accept the job before Stop');
+    await watch().click();
+    await cloudWindow().waitFor();
+    await panel().locator('.bt-actions .bt-btn', { hasText: 'Stop' }).click();
+    await noViewer();
+    assert.equal(await panel().locator('.bt-bar input').isEnabled(), true);
+    assert.notEqual(bridgeState.generateResponded, true, 'Stop must close the UI before the delayed job ID arrives');
+    await cancelledOnce();
+    await pause(1100);
+    assert.equal(bridgeState.pollCalls.length, 0, 'The cancelled job must never begin polling after its ID arrives');
+    assert.equal(await watch().count(), 0, 'A late creation response must not restore generating UI');
+    assert.equal(await panel().locator('.bt-card-error, .bt-card-preamble, .bt-card-step').count(), 0);
+    assert.deepEqual(viewerRequests, [], 'A late job ID must not produce a viewer metadata update');
+    await cancelledOnce();
   });
 
   await test('The cloud viewer opens while waiting, then becomes live without a new progress entry', async () => {
@@ -760,6 +813,7 @@ async function report() {
     await viewerReady();
     assert.equal(bridgeState.generateCalls.length, 1, 'Reopen must not create another job');
     assert.equal(await cloudWindow().count(), 1, 'Reopen must reuse one viewer window');
+    assert.deepEqual(bridgeState.cancelCalls, [], 'Minimize and reopen must leave the active cloud job running');
   });
 
   await test('A retry replaces the live URL without requiring more progress or another generation request', async () => {
@@ -1021,6 +1075,8 @@ async function report() {
     assert.equal(await history().count(), 0, 'Done must remove the completed task recording history');
     assert.equal(bridgeState.pollCalls.length, completedPolls, 'Job polling must end when the lesson arrives');
     assert.equal(bridgeState.generateCalls.length, 1, 'Replaying after the lesson must not generate again');
+    await pause(250);
+    assert.deepEqual(bridgeState.cancelCalls, [], 'Lesson completion and recording Done must not cancel a completed authoring job');
   });
 
   await test('A failed generation retains its recording after closing the error panel', async () => {
@@ -1038,6 +1094,7 @@ async function report() {
     await recordingReady();
     assert.equal(bridgeState.pollCalls.length, completedPolls);
     assert.equal(bridgeState.generateCalls.length, 1);
+    assert.deepEqual(bridgeState.cancelCalls, [], 'Closing a terminal error and replaying its recording must not send a stale cancellation');
   }, { expectedConsole: /^\[browser-teacher\] Error: I explored but could not find a reliable way to do that\./ });
 
   await test('Switching a completed viewer to its recording preserves the website focus', async () => {
@@ -1199,6 +1256,7 @@ async function report() {
     bridgeState.delayMs = 0;
     await pause(1500);
     assert.equal(bridgeState.pollCalls.length, stoppedAt);
+    await cancelledOnce();
     assert.equal(await history().count(), 0, 'A later job result must not restore recordings after Stop');
     assert.equal(await panel().locator('.bt-card-preamble, .bt-card-step').count(), 0);
     assert.equal(bridgeState.generateCalls.length, 1);
@@ -1260,6 +1318,8 @@ async function report() {
     assert.notEqual(bridgeState.jobId, previous.jobId);
     assert.equal(bridgeState.generateCalls.length, 1);
     assert.equal(previous.generateCalls.length, 1);
+    await cancelledOnce(previous);
+    assert.deepEqual(bridgeState.cancelCalls, [], 'Cancelling an old run must not cancel its replacement job');
   });
 
   await test('Late recording readiness cannot restore history after a new generation replaces it', async () => {
@@ -1387,6 +1447,7 @@ async function report() {
     bridgeState.delayMs = 0;
     await pause(1600);
     assert.equal(bridgeState.pollCalls.length, stoppedAt, 'Stop must abort future job polls');
+    await cancelledOnce();
     assert.equal(await panel().locator('.bt-card-preamble, .bt-card-step').count(), 0);
     assert.equal(await panel().locator('.bt-bar input').isEnabled(), true);
   });
@@ -1400,6 +1461,7 @@ async function report() {
     const stoppedAt = bridgeState.pollCalls.length;
     await pause(1500);
     assert.equal(bridgeState.pollCalls.length, stoppedAt);
+    await cancelledOnce();
   });
 
   await test('Replacing generation with a lesson removes the viewer and blocks old job callbacks', async () => {
@@ -1416,6 +1478,7 @@ async function report() {
     assert.equal(bridgeState.pollCalls.length, stoppedAt);
     assert.equal(await watch().count(), 0);
     assert.equal(await panel().locator('.bt-card-preamble').count(), 1);
+    await cancelledOnce();
   });
 
   await test('Same-page route navigation clears the viewer and prevents stale job updates', async () => {
@@ -1430,6 +1493,7 @@ async function report() {
     await pause(1500);
     assert.equal(bridgeState.pollCalls.length, stoppedAt);
     assert.equal(await panel().locator('.bt-trail').count(), 0);
+    await cancelledOnce();
   });
 
   await test('A full page redirect removes the previous cloud browsing context and polling', async () => {
@@ -1445,6 +1509,7 @@ async function report() {
     await pause(1500);
     assert.equal(bridgeState.pollCalls.length, stoppedAt);
     assert.equal(await watch().count(), 0);
+    await cancelledOnce();
   });
 
   await test('Untrusted, credential-bearing and non-HTTPS viewer URLs never become iframe requests', async () => {
