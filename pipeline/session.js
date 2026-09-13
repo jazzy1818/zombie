@@ -220,9 +220,46 @@ export async function openAuthedSession(opts = {}) {
   return openSession({ ...opts, profileId, sessionContext });
 }
 
+// Drive a local Chrome started with --remote-debugging-port. Same probe, same verify
+// logic, but it runs in the browser the demo actually uses — and without Steel's
+// datacenter IP, which Google degrades Drive features on.
+export async function openLocalSession(opts = {}) {
+  const { cdpUrl = 'http://localhost:9222', injectProbe = true } = opts;
+
+  let browser;
+  try {
+    browser = await chromium.connectOverCDP(cdpUrl);
+  } catch (err) {
+    throw new Error(
+      `no Chrome listening on ${cdpUrl} (${err.message}).\n\n  Start one with:\n` +
+      `    chrome.exe --remote-debugging-port=9222 --user-data-dir="%TEMP%\\bt-chrome"\n\n` +
+      `  Then sign into Google in that window and open the demo doc.`,
+    );
+  }
+
+  const context = browser.contexts()[0];
+  const page = context.pages()[0] ?? await context.newPage();
+  if (injectProbe) await context.addInitScript(PROBE_SOURCE);
+
+  const handle = {
+    steel: null, session: null, browser, context, page,
+    local: true,
+    viewerUrl: '(local Chrome)',
+    probe: (fn, ...args) => callProbe(page, fn, args),
+  };
+
+  await assertViewport(page);
+  return handle;
+}
+
 // Always in a finally — a leaked session runs to its timeout and bills for it.
+// A local handle owns no session and the browser is the user's, so only disconnect.
 export async function closeSession(handle) {
   if (!handle) return;
+  if (handle.local) {
+    try { await handle.browser?.close(); } catch { /* already gone */ }
+    return;
+  }
   try { await handle.browser?.close(); } catch { /* already gone */ }
-  try { await handle.steel.sessions.release(handle.session.id); } catch { /* already released */ }
+  try { await handle.steel?.sessions.release(handle.session.id); } catch { /* already released */ }
 }

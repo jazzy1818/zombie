@@ -1,13 +1,13 @@
 // [C] Stage 5 — replay a lesson in a fresh session using only its emitted descriptors.
 // Completes → ship. Fails → descriptors too fragile, re-run.
-import { openAuthedSession, closeSession } from './session.js';
+import { openAuthedSession, openLocalSession, closeSession } from './session.js';
 import { RESOLVE_TIMEOUT_MS, VERIFY_TIMEOUT_MS } from './config.js';
 
 export async function verifyLesson(lesson, opts = {}) {
-  const { docUrl = process.env.DEMO_DOC_URL, keepOpen = false } = opts;
+  const { docUrl = process.env.DEMO_DOC_URL, keepOpen = false, local = false } = opts;
   if (!docUrl) throw new Error('no doc URL — pass { docUrl } or set DEMO_DOC_URL');
 
-  const handle = await openAuthedSession();
+  const handle = local ? await openLocalSession() : await openAuthedSession();
   const steps = [];
   let failedAt;
 

@@ -135,7 +135,7 @@ const commands = {
     let allOk = true;
     for (const p of paths) {
       const lesson = JSON.parse(await readFile(p, 'utf8'));
-      const report = await verifyLesson(lesson, { docUrl: str(flags.doc) });
+      const report = await verifyLesson(lesson, { docUrl: str(flags.doc), local: !!flags.local });
       allOk = printReport(lesson, report) && allOk;
     }
     if (!allOk) process.exitCode = 1;
