@@ -12,8 +12,6 @@ export function installProbe() {
     return r.width > 0 && r.height > 0;
   }
 
-  // Docs ships its menubar disabled until the doc finishes loading. A disabled control is
-  // never a valid target, and resolve's retry window covers the wait.
   function isEnabled(el) {
     return el.getAttribute('aria-disabled') !== 'true';
   }
@@ -121,12 +119,13 @@ export function installProbe() {
   function resolve(target) {
     if (!target || !target.name) return null;
     for (const tier of tiers(target.scope)) {
-      const hits = qsa(tier.sel)
-        .filter(el => isVisible(el) && isEnabled(el) && tier.match(el, target.name));
+      // Disabled items still resolve — §5's `visible` verify means visible, not clickable.
+      // Callers about to click check `disabled` themselves.
+      const hits = qsa(tier.sel).filter(el => isVisible(el) && tier.match(el, target.name));
       if (!hits.length) continue;
       const el = hits[target.nth ?? 0];
       if (!el) continue;
-      return { id: stamp(el), count: hits.length, tier: tier.sel };
+      return { id: stamp(el), count: hits.length, tier: tier.sel, disabled: !isEnabled(el) };
     }
     return null;
   }

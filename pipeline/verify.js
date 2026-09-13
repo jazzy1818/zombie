@@ -41,6 +41,20 @@ export async function verifyLesson(lesson, opts = {}) {
       }
 
       const hit = await pollResolve(handle, step.target, RESOLVE_TIMEOUT_MS);
+
+      // Resolved but greyed out. Clicking would just time out, and a learner could not
+      // complete the step either — the lesson is wrong for this document.
+      if (hit?.disabled) {
+        steps.push({
+          id: step.id, status: 'disabled', name: step.target.name, ms: Date.now() - t0,
+          note: `"${step.target.name}" is present but disabled on this document`,
+          visible: await dumpScope(handle, step.target.scope),
+          afterSkip: skipped,
+        });
+        failedAt = step.id;
+        break;
+      }
+
       if (!hit) {
         steps.push({
           id: step.id, status: 'unresolved', name: step.target.name, ms: Date.now() - t0,
@@ -100,14 +114,18 @@ async function dumpScope(handle, scope) {
   }
 }
 
+// Prefer an enabled match, but keep a disabled one so the caller can say which it was.
+// Docs ships its menubar disabled during load, so the wait matters.
 async function pollResolve(handle, target, timeoutMs) {
   const start = Date.now();
+  let fallback = null;
   do {
     const hit = await handle.probe('resolve', target);
-    if (hit) return hit;
+    if (hit && !hit.disabled) return hit;
+    fallback ??= hit;
     await handle.page.waitForTimeout(100);
   } while (Date.now() - start < timeoutMs);
-  return null;
+  return fallback;
 }
 
 async function pollCheck(handle, verify, timeoutMs) {
@@ -119,7 +137,10 @@ async function pollCheck(handle, verify, timeoutMs) {
   return false;
 }
 
-const MARK = { ok: '  ok  ', unresolved: ' FAIL ', 'verify-failed': ' FAIL ', skipped: ' skip ' };
+const MARK = {
+  ok: '  ok  ', unresolved: ' FAIL ', 'verify-failed': ' FAIL ',
+  disabled: ' FAIL ', skipped: ' skip ',
+};
 
 export function printReport(lesson, report) {
   console.log(`\n  ${lesson.id} — ${lesson.goal}`);
