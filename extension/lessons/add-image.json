@@ -1,0 +1,77 @@
+{
+  "id": "add-image",
+  "app": "google-docs",
+  "goal": "how do i add an image?",
+  "preamble": "Adding an image looks like one action, but Docs is really asking you two questions: what kind of thing are you adding, and where is it coming from. The second one matters more than it seems — some sources put a copy of the picture inside the document, and some only leave a pointer to a file that lives somewhere else. You're about to walk through both questions in order.",
+  "generalization": "Anything that isn't text you typed gets added from the Insert menu — images, tables, drawings, page numbers, all of it. And whenever Docs offers you a list of sources, it's asking whether the document should own a copy or borrow from elsewhere. Uploading means the picture travels with the document; a URL or a linked account means the document depends on something outside itself still being there.",
+  "steps": [
+    {
+      "id": "s1",
+      "intent": "Nothing in the document needs changing — you're putting something in it that isn't there yet. Docs keeps that distinction strictly: menus for altering what exists, and one menu for adding what doesn't.",
+      "mode": "demo",
+      "target": {
+        "scope": "menu",
+        "name": "Insert"
+      },
+      "action": "click",
+      "verify": {
+        "kind": "visible",
+        "name": "Image",
+        "scope": "menu"
+      },
+      "hints": [
+        "You're not formatting or editing anything. You're bringing in something new.",
+        "The menu bar at the top, between View and Format."
+      ],
+      "wrongHints": {
+        "Format": "Format works on things that already exist in the document — it can resize and align your image later, but it can't bring one in.",
+        "Edit": "Edit handles actions on existing content: undo, copy, paste, find. Pasting an image can work, but it skips the choice of source that we want you to see."
+      }
+    },
+    {
+      "id": "s2",
+      "intent": "This menu is a list of every kind of thing that can go into a document — a table, a chart, a footnote, a page break. Pick the one that says what you're adding, and the little arrow will tell you Docs isn't done asking questions yet.",
+      "mode": "guided",
+      "target": {
+        "scope": "menu",
+        "name": "Image"
+      },
+      "action": "click",
+      "verify": {
+        "kind": "visible",
+        "name": "Upload from computer",
+        "scope": "menu"
+      },
+      "hints": [
+        "Everything in this menu is a type of object. You want the one for pictures.",
+        "Near the top of the Insert menu, above Table."
+      ],
+      "wrongHints": {
+        "Drawing": "Drawing opens a blank canvas for you to make something from shapes and lines. That's for creating an image, not for bringing one in.",
+        "Chart": "A chart is a picture too, but Docs builds it from numbers you supply. You already have the image."
+      }
+    },
+    {
+      "id": "s3",
+      "intent": "Your turn. This last list is the 'where from' question — each option is a different place a picture might live, and each one carries a different consequence for the document. Choose the one that takes a file off your own machine and puts a copy inside the document, so it stays there no matter what happens to the original.",
+      "mode": "solo",
+      "target": {
+        "scope": "menu",
+        "name": "Upload from computer"
+      },
+      "action": "click",
+      "verify": {
+        "kind": "none"
+      },
+      "hints": [
+        "Some of these options leave the picture where it is and point at it. One of them brings it in for good.",
+        "The first entry in the submenu that just opened."
+      ],
+      "wrongHints": {
+        "By URL": "A URL is a reasonable guess — it's fast and needs no file. But the document only remembers the address. If that page moves or goes offline, the image goes with it.",
+        "Drive": "Drive is close, and it does keep the file safe. It's still a separate file though, with its own sharing settings — someone who can open the document may not be able to see the image.",
+        "Photos": "Same idea as Drive: the picture stays in your account and the document reaches out for it. Uploading takes a copy instead."
+      }
+    }
+  ]
+}

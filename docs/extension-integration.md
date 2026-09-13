@@ -7,6 +7,9 @@ isolated world. The webpage's `window.__TEACH` is deliberately separate.
 
 ## Install and try it
 
+For the complete Windows setup, normal question-based launch, and verified lesson
+publication sequence, use [testing-workflow.md](testing-workflow.md).
+
 1. Open `chrome://extensions` in Chrome and turn on Developer mode.
 2. Choose **Load unpacked** and select the repository's `extension/` directory.
    For an existing installation, use its **Reload** button.
@@ -42,10 +45,10 @@ named targets and outcomes describe that site.
 - `teach.js` replaces the fake-success stub with the real composition. It
   sequences smooth spotlight positioning and pointer animation, listens for real
   activation, and clears pending visual work on cancellation.
-- `teaching/` contains a separate semantic adapter for the portions of A's
-  resolver that are still stubs. It prefers an Element returned by A's live
-  `findSync()` and otherwise finds rendered named controls. A's files remain
-  unchanged. It never accepts an immediate fake click success from the old stub.
+- `teaching/` contains the compatibility and lifecycle adapter around A's now
+  implemented resolver. It prefers an eligible Element returned by A's live
+  `findSync()` and retains generic matching for supported native/ARIA controls.
+  It preserves trusted-click handling, cancellation and real outcome checks.
 - `panel/machine.js` owns lesson order. Click listening begins before animations.
   Each user activation completes one step; menus and modals open through the
   website's own click handler. Demonstrations point to the control and wait for
@@ -54,7 +57,7 @@ named targets and outcomes describe that site.
   cancellation controls stay above the scrim. Neither layer focuses the target.
 
 The fallback is an integration adapter, not a second site-specific resolver.
-Before A replaces it, run the loaded-extension tests against the replacement and
+When changing which A methods it delegates to, run the loaded-extension tests and
 preserve trusted-event handling, exclusion of teacher UI clicks, abortable waits,
 hidden-target filtering, ambiguity handling, and real verification outcomes.
 
@@ -87,17 +90,26 @@ Run from the repository root with Node and Playwright available:
 node docs/paint-tests.cjs
 node docs/extension-tests.cjs
 node docs/teaching-tests.cjs
+node docs/resolver-tests.cjs
 ```
 
 The first suite checks standalone paint behavior. The second launches a separate
 persistent Chromium profile with the actual `extension/` loaded, serves a local
 fixture, and drives trusted browser input. It does not replace the resolver,
 teach bridge or paint with mocks. `__BT_DEV.runLesson(lesson)` supplies fixture
-lesson data through the same panel and runner used by bundled lessons.
+lesson data through the same panel and runner used by bundled lessons. Additional
+checks read the actual packaged lesson index and launch the shipped lessons by
+typing into the real chat bar; an unknown question exercises the lesson picker.
+One additional check collects success from a trusted local fixture replay, publishes
+that lesson with the real pipeline publisher into a temporary copy of the extension,
+and selects/completes it through the copied extension's normal question box. That
+copy changes lesson data only; it does not replace production runtime code or run
+cloud authoring.
 
 The third suite checks semantic adapter edge cases in a real browser. Its one
 explicit A handoff double checks returned-Element precedence; all remaining
-checks use actual DOM elements and the production adapter.
+checks use actual DOM elements and the production adapter. The fourth suite checks
+A's resolver contract and its target/click/outcome edge cases.
 
 Set `NODE_PATH` to an existing Playwright installation when necessary. For loaded
 extension tests, use Playwright's Chromium (`npx playwright install chromium`) or
@@ -108,21 +120,18 @@ the persistent-context requirement and supported browser configuration.
 
 Reports: [standalone paint](paint-test-results.md) and
 [loaded extension](extension-test-results.md), plus
-[semantic adapter checks](teaching-test-results.md).
-
-The pipeline-findings follow-up passed **59/59 checks** (32 loaded extension,
-27 semantic adapter), with zero reported browser/extension errors in Chromium
-151.0.7922.34. The extension report records an earlier shadow-modal timeout
-that did not recur in focused checks or the final full run; its cause is not
-established. Paint source is unchanged from the separate passing 46-check run
-in Chrome 153.0.8010.36. The modal screenshot was also inspected to verify that
-the target stays bright and the panel remains readable.
+[semantic adapter checks](teaching-test-results.md) and
+[resolver checks](resolver-test-results.md). Consult each report's run date,
+browser version and selected-test scope; an earlier passing run is not a claim
+that a later merge has already been checked.
 
 ## Limits
 
-Live signed-in Google Docs lessons still require a separate rehearsal with C's
-verified descriptors. Browser fixtures verify extension behavior, not the
-current labels or menu structure of an external application. Cross-frame targets,
+Live signed-in Google Docs lessons still require a separate human rehearsal.
+C reports cloud replay observations in [pipeline findings](../pipeline/findings-c.md);
+browser fixtures verify extension behavior, not the current labels or menu structure
+of an external application. The four-step version-history lesson finishes at the
+naming control and does not verify entry/submission of a name. Cross-frame targets,
 canvas internals, closed shadow roots without an existing target reference, and
 complex nonrectangular clipping still need appropriate adapters. Hash-only SPA
 routers need an explicit cancellation hook; ordinary same-document anchor links

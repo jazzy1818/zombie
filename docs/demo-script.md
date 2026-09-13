@@ -1,10 +1,35 @@
 # Demo script
 
-Full script in [PLAN.md §14](../PLAN.md). This file is the rehearsal notes.
+The original pitch script is in [PLAN.md §14](../PLAN.md). Use
+[testing-workflow.md](testing-workflow.md) for current setup and commands; the
+sequence below reflects the integrated extension and current lesson files.
+
+## Integrated extension rehearsal
+
+1. Reload the unpacked `extension/` in Chrome and refresh the website tab.
+2. On the local extension fixture, run the practice JSON through the Browser Teacher
+   console context as shown in the testing guide. The normal button, nested scroller,
+   menu, two-step modal and redirect exercise the real extension's panel and paint.
+3. On a prepared editable Google Doc, type **How do I add an automatic table of
+   contents?** in the chat bar and choose **Teach me**, then **Show me**.
+4. The user clicks every highlighted control, including the first demonstration.
+   At the document-title instruction, click the actual title line, then **Got it**.
+5. At s3, deliberately click Font once, then follow the correction. Continue through
+   Heading 1 and Heading 2. The solo sequence is **s7 Insert → s8 Page elements →
+   s9 Table of contents**. Check the resulting document; reaching the ending card
+   alone is not proof that its contents are correct.
+6. Rehearse **Stop** during guidance and restart through the chat bar. Confirm no
+   old cursor or later step reappears.
+7. For the version-history lesson, ask **How can I find and name a version of my
+   document?** Its four steps reach **Name this version**. The current final step
+   verifies only the click, so entering/saving a name remains a manual outcome check.
+
+These live application steps are a rehearsal checklist, not a claim that this
+checkout has been tested in a signed-in Google Docs session.
 
 ## D's standalone visual demonstration
 
-Before the integrated extension is ready, serve the repository root and open
+For renderer-only diagnosis, serve the repository root and open
 `docs/paint-harness.html` as described in [paint-integration.md](paint-integration.md).
 
 1. Click **Highlight primary action**. Explain that A will supply this element;
@@ -16,7 +41,8 @@ Before the integrated extension is ready, serve the repository root and open
    cursor track the button, disappear out of view, and return when it reappears.
    The page stays dimmed throughout.
 4. Try **Wrong-click pulse** to show D's red effect. This manually invokes paint;
-   the integrated wrong-location route needs the team decision in the handoff.
+   the integrated teaching adapter obtains the actual wrong control from the
+   trusted click event and supplies it to the same effect.
 5. Click **Switch website layout**, then highlight the primary action again.
    The same paint code handles the changed presentation.
 6. Click **Clear visuals**. Both spotlight and cursor disappear.
@@ -33,8 +59,9 @@ resolver, generated lesson, or completed Chrome extension.
 
 ## Setup checklist
 
-- [ ] Normal Chrome window, **1440×900**. Measure it. A collapsed toolbar reads
-      as a resolver bug on stage.
+- [ ] Measure the local **viewport**, targeting **1440×900**. C measured Steel's
+      current viewport at **1435×809**, so record both rather than assuming the
+      requested window size equals page content size.
 - [ ] Prepared Google Doc open, headings NOT yet applied
 - [ ] Extension loaded unpacked, panel mounts, no console errors
 - [ ] Steel session pre-warmed (or the live run already kicked off — see below)
@@ -50,7 +77,7 @@ trackpad, we've won.
 ## Deliberate mistakes
 
 - Step **s3**: click the **Font** box on purpose → shows the wrong-click correction
-- Step **s6** is `solo` — no highlight, hunt for `Insert → Table of contents` unaided
+- Steps **s7–s9** are `solo` — hunt through `Insert → Page elements → Table of contents`
 
 ## Live Steel segment
 

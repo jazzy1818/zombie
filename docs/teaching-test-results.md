@@ -1,12 +1,12 @@
 # Teaching adapter checks
 
-Run: 2026-09-13T03:48:59.357Z
+Run: 2026-09-13T04:01:45.769Z
 
 Browser: 153.0.8010.37
 
-Result: **35/35 checks passed**.
+Result: **40/40 checks passed**.
 
-These checks import the actual semantic adapter in a real browser and use ordinary DOM controls. Explicitly named A handoff checks inject small findSync doubles to validate Element precedence and disabled-element rejection; they do not claim to test A’s unfinished resolver. The separate loaded-extension suite tests the real manifest, content script, panel and teaching interaction.
+These checks import the actual semantic adapter and completed A resolver in a real browser. Explicitly named handoff-double checks isolate Element precedence and rejection; checks labelled "real A" use A’s production resolver. The loaded-extension suites separately test the manifest, panel and teaching interaction.
 
 - PASS: A menu container cannot impersonate its only named child
 - PASS: A shortcut suffix is allowed without confusing Export with Export as
@@ -22,6 +22,13 @@ These checks import the actual semantic adapter in a real browser and use ordina
 - PASS: A direct disabled Element is not an actionable target
 - PASS: An explicit nth counts eligible controls after both disabled variants are removed
 - PASS: Two eligible controls remain ambiguous even when disabled duplicates exist
+- PASS: Real A applies nth after disabled filtering before the adapter accepts its Element
+- PASS: Real A and fallback collapse nested same-name controls before nth
+- PASS: Unlabelled listboxes cannot impersonate either a sole option or aggregated options
+- PASS: Real A and fallback accept C option-role descriptors in menu scope
+- PASS: Known promo badges match authored menu names in both resolvers
+- PASS: Stateful selected readouts are not action targets in real A or fallback
+- PASS: Stateful readouts remain available for visible outcome verification
 - PASS: Teacher UI cannot resolve as the website target
 - PASS: Ambiguous visible matches require explicit disambiguation
 - PASS: An explicit nth chooses the requested visible match
@@ -35,14 +42,12 @@ These checks import the actual semantic adapter in a real browser and use ordina
 - PASS: Label verification does not accept a hidden richer label
 - PASS: Visible verification remains about visibility when the rendered control is disabled
 - PASS: DOM and text outcomes remain readable on a rendered disabled control
-- PASS: A state readout resolves to the control that owns it
 - PASS: A state readout is recognised whatever the value reads
-- PASS: An ordinary control name is not mistaken for a state readout
-- PASS: Clicking the readout counts as clicking the control the step asked for
-- PASS: A readout belonging to a different dropdown is still a wrong click
-- PASS: A readout inside the teacher UI never counts as the control
-- PASS: An Element target has no name, so the readout fallback stays out of it
+- PASS: An ordinary control is not mistaken for a state readout
+- PASS: A state readout cannot be resolved as an action target
+- PASS: Verification may still read a readout that actions cannot target
 - PASS: The readout does not widen target resolution or create ambiguity
+- PASS: A gesture tracker refuses synthetic input
 
 Uncaught page errors: 0.
 

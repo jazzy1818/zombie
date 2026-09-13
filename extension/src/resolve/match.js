@@ -8,7 +8,9 @@ export function toolbarMatch(el, name) {
   const expected = name.trim();
   if (!expected) return false;
 
-  const label = el.getAttribute('aria-label');
+  const labelledBy = el.getAttribute('aria-labelledby');
+  const label = el.getAttribute('aria-label') || (labelledBy && labelledBy.split(/\s+/)
+    .map(id => el.getRootNode().getElementById?.(id)?.textContent || '').join(' '));
   if (!label) return false;
 
   return label.replace(/\s*\([^)]*\)\s*$/, '').trim() === expected;
@@ -23,6 +25,11 @@ export function menuMatch(el, name) {
 
   const expected = name.trim();
   if (!expected) return false;
+
+  // Options may be icon-only or name themselves in aria-label rather than text.
+  if (toolbarMatch(el, expected)) return true;
+  // A listbox owns options; its concatenated option text is not its own name.
+  if (el.getAttribute('role') === 'listbox') return false;
 
   const text = el.textContent?.trim();
   if (!text) return false;
@@ -43,5 +50,8 @@ export function menuMatch(el, name) {
   // Docs glues shortcuts and submenu arrows directly to the label. A longer
   // semantic label starts with whitespace ("Table" vs "Table of contents")
   // and must not be treated as the same control.
-  return !/^\s/.test(text.slice(radioExpected.length));
+  const suffix = text.slice(radioExpected.length).trim();
+  return /^[►▸▶›»]$/.test(suffix)
+    || /^(?:Updated|New)\s*[►▸▶›»]?$/i.test(suffix)
+    || /^(?:\(?\s*(?:Ctrl|Control|Alt|Option|Shift|Meta|Cmd|Command|⌘|⌥|⇧|F\d{1,2})(?:\b|[+⌘⌥⇧]).*\)?)$/i.test(suffix);
 }

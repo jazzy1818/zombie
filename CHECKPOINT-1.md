@@ -1,5 +1,28 @@
 # Checkpoint 1 — what B needs from A and D
 
+> **Historical checklist; current integration is implemented.** Start with
+> [the current testing workflow](docs/testing-workflow.md) and
+> [extension integration](docs/extension-integration.md). The original checkpoint
+> text below is retained as project history, not a description of the current checkout.
+
+Current behavior supersedes these earlier assumptions:
+
+- A's resolver and D's renderer are implemented; `teach.js` composes the real runtime.
+- `content.js` is a classic bootstrap; the module import order lives in `main.js`.
+- Paint and panel coordinate manual popovers in the browser top layer. DOM order
+  alone is insufficient; panel controls also remain usable inside native modals.
+- Every targeted step, including `demo`, waits for a real user click. **Show me where**
+  adds visual help; it never activates website controls. Do not copy the original
+  plan's `el.click()` demonstration into the runtime.
+- Wrong clicks re-arm immediately, including while an animation is running.
+  Stop/Close and navigation abort loading, resolution, visuals, waits and verification.
+- The current Styles lesson has nine steps; s1 waits for a click and can show hints,
+  s2 is an instruction with **Got it**, and s7–s9 are the solo menu sequence.
+
+---
+
+## Original checkpoint notes
+
 B's layer (`panel/`, `content.js`, `manifest.json`) is done and running in Chrome against the
 `teach.js` stub. Full lessons play start to finish, hints escalate, wrong clicks get corrected.
 

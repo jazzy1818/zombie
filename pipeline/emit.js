@@ -6,6 +6,7 @@ import { readFile } from 'node:fs/promises';
 import Anthropic from '@anthropic-ai/sdk';
 import { zodOutputFormat } from '@anthropic-ai/sdk/helpers/zod';
 import { z } from 'zod';
+import { candidatePool, canonicalTarget, isStateName } from './target-policy.js';
 
 // Progressively gentler strips, so an over-trimmed name can back off instead of failing.
 function stripLadder(raw, scope) {
@@ -28,16 +29,15 @@ function stripLadder(raw, scope) {
   ];
 }
 
-function matchesIn(pool, name, scope) {
-  return pool.filter(c => scope === 'toolbar'
-    ? c.name === name
-    : c.raw === name || c.raw.startsWith(name));
+function matchesIn(pool, name, scope, options) {
+  return candidatePool(pool, name, scope, options);
 }
 
 // Proven, not just derived: replay §8.1's matcher against step.pre, the visible set at
 // click time, so nth counts what the resolver will actually match.
 export function deriveTarget(step) {
   const { target } = step;
+  if (target.disabled || target.state || isStateName(target.raw)) throw new Error('Cannot author a disabled control or changing state readout as an action target.');
   const scope = target.scope === 'dialog' ? 'any' : target.scope;
   const pool = step.pre[target.scope] ?? [];
 
@@ -45,10 +45,13 @@ export function deriveTarget(step) {
     if (!name) continue;
     const hits = matchesIn(pool, name, target.scope);
     if (!hits.length) continue;                       // over-stripped — back off
+    const clicked = pool.find(candidate => candidate.id === target.id) || target;
+    const canonical = canonicalTarget(hits, clicked);
+    if (!canonical) continue;
 
     const out = { scope, name };
     if (hits.length > 1) {
-      const nth = hits.findIndex(h => h.id === target.id);
+      const nth = hits.findIndex(h => h.id === canonical.id);
       if (nth < 0) continue;                          // ambiguous AND unfindable — back off
       out.nth = nth;
     }
@@ -69,7 +72,7 @@ export function deriveVerify(step, nextStep) {
     const want = nextStep.target;
     if (step.delta.appeared.some(c => c.raw === want.raw && c.scope === want.scope)) {
       const name = stripLadder(want.raw, want.scope)
-        .find(n => matchesIn(step.post[want.scope] ?? [], n, want.scope).length);
+        .find(n => matchesIn(step.post[want.scope] ?? [], n, want.scope, { actionable: false }).length);
       if (name) return { kind: 'visible', name, scope: want.scope };
     }
   }
@@ -277,6 +280,7 @@ export function validate(lesson) {
   // §5 authoring rules the schema cannot express.
   for (const s of lesson.steps) {
     if (!s.target) continue;
+    if (isStateName(s.target.name)) throw new Error(`${s.id}: target name contains a changing state readout`);
     if (/[▶▸►‣]/.test(s.target.name)) throw new Error(`${s.id}: name still carries a submenu arrow`);
     if (/(Ctrl|Alt|Shift|⌘|⌥|⇧|⌃)\+/.test(s.target.name)) throw new Error(`${s.id}: name still carries a shortcut`);
   }

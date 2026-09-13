@@ -4,10 +4,12 @@
 // Cached still drives a real cloud browser through a real Doc — only the model's
 // decisions are replayed. Say that out loud on stage.
 import { readFile, writeFile, mkdir } from 'node:fs/promises';
-import { openAuthedSession, closeSession } from './session.js';
+import { openAuthedSession, openLocalSession, closeSession } from './session.js';
 import { explore } from './explore.js';
 import { prune } from './prune.js';
 import { emit } from './emit.js';
+import { validatePublishable } from './publish.js';
+import { RESOLVE_TIMEOUT_MS, VERIFY_TIMEOUT_MS } from './config.js';
 
 const CACHE_DIR = new URL('./cache/', import.meta.url);
 
@@ -23,6 +25,7 @@ export const SHALLOW_GOAL = {
 export async function fallbackDemo(opts = {}) {
   const {
     live = false,
+    local = false,
     spec = SHALLOW_GOAL,
     docUrl = process.env.DEMO_DOC_URL,
     dwellMs = 1200,
@@ -30,7 +33,10 @@ export async function fallbackDemo(opts = {}) {
 
   if (!docUrl) throw new Error('no doc URL — pass { docUrl } or set DEMO_DOC_URL');
 
-  const handle = await openAuthedSession();
+  // Validate the local recording before allocating a billed cloud session.
+  const cached = live ? null : await loadCache(spec.id);
+  if (cached) validatePublishable(cached.lesson);
+  const handle = local ? await openLocalSession() : await openAuthedSession();
   console.log(`\n  Watch it here:  ${handle.viewerUrl}\n`);
 
   try {
@@ -44,26 +50,26 @@ export async function fallbackDemo(opts = {}) {
       return { lesson, viewerUrl: handle.viewerUrl };
     }
 
-    const cached = await loadCache(spec.id);
-
     await handle.page.goto(docUrl, { waitUntil: 'domcontentloaded' });
     await handle.page.waitForSelector('#docs-toolbar-wrapper', { timeout: 30_000 });
     await handle.page.waitForTimeout(1500);
 
-    for (const step of cached.trace.steps) {
+    for (const step of cached.lesson.steps) {
+      if (!step.target) throw new Error('Cached replay cannot perform an instruct-only step. Rehearse this lesson with a learner.');
       console.log(`\n  → ${step.target.name}`);
-      console.log(`    ${step.action.reasoning}`);
+      console.log(`    ${step.intent}`);
       await handle.page.waitForTimeout(dwellMs);
 
-      const hit = await handle.probe('resolve', {
-        scope: step.target.scope, name: step.target.name,
-      });
-      if (!hit) {
-        console.warn(`    (could not resolve "${step.target.name}" — skipping)`);
-        continue;
-      }
+      const hit = await poll(handle, 'resolve', step.target, RESOLVE_TIMEOUT_MS,
+        value => value && !value.disabled);
+      if (!hit) throw new Error(`Cached replay could not resolve enabled target ${JSON.stringify(step.target)}.`);
       await handle.page.click(`[data-bt-id="${hit.id}"]`, { timeout: 5000 });
+      if (!await poll(handle, 'check', step.verify, VERIFY_TIMEOUT_MS)) {
+        throw new Error(`Cached replay failed outcome verification at ${step.id}.`);
+      }
     }
+
+    if (!await poll(handle, 'check', spec.goalCheck, VERIFY_TIMEOUT_MS)) throw new Error('Cached replay did not reach the requested goal.');
 
     console.log('\n  ...and here is the file it wrote:\n');
     console.log(JSON.stringify(cached.lesson, null, 2));
@@ -71,6 +77,16 @@ export async function fallbackDemo(opts = {}) {
   } finally {
     await closeSession(handle);
   }
+}
+
+async function poll(handle, method, argument, timeout, accepts = Boolean) {
+  const deadline = Date.now() + timeout;
+  do {
+    const value = await handle.probe(method, argument);
+    if (accepts(value)) return value;
+    await handle.page.waitForTimeout(80);
+  } while (Date.now() < deadline);
+  return null;
 }
 
 async function cache(id, payload) {

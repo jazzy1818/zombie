@@ -437,7 +437,9 @@ function createUI(els, raise, speech) {
       if (onGenerate) {
         const b = document.createElement('button');
         b.type = 'button';
-        b.className = 'bt-btn';
+        // Its own class: this is not one of the published lessons, and anything
+        // counting the choices on offer must be able to tell the difference.
+        b.className = 'bt-btn bt-btn-generate';
         b.textContent = 'Work it out for me';
         noFocusSteal(b);
         b.addEventListener('click', () => onGenerate());

@@ -2,7 +2,9 @@ import { DEMO_DWELL_MS } from '../constants.js';
 import { onUnmount } from '../paint/host.js';
 import { watchNavigation } from '../paint/navigation.js';
 import { abortError, abortable, checkAbort, delay } from './async.js';
-import { resolveTarget, findTarget, isTeacherUI, accessibleName, actionFromPath, pathActivates, pathHitsReadoutFor, readoutOwner, verifyOutcome } from './resolution.js';
+import { resolveTarget, findTarget, actionFromPath, verifyOutcome } from './resolution.js';
+import { createGestureTracker } from '../resolve/gesture.js';
+import { clickedLabel } from '../resolve/click.js';
 
 export function createTeaching({ paint, resolver }) {
   if (!paint) throw new Error('Paint must be initialized before teaching.');
@@ -85,8 +87,10 @@ export function createTeaching({ paint, resolver }) {
     signal.addEventListener('abort', abort, { once: true });
     return new Promise((resolve, reject) => {
       let settleTimer = null;
+      const tracker = createGestureTracker(target, descriptor => findTarget(descriptor, resolver), actionFromPath);
       function cleanup() {
         document.removeEventListener('click', click, true);
+        tracker.dispose();
         signal.removeEventListener('abort', abort);
         controller.signal.removeEventListener('abort', cancelled);
         if (settleTimer !== null) clearTimeout(settleTimer);
@@ -94,25 +98,18 @@ export function createTeaching({ paint, resolver }) {
       }
       function cancelled() { cleanup(); reject(controller.signal.reason || abortError()); }
       function click(event) {
-        if (!event.isTrusted || event.button !== 0) return;
-        const path = event.composedPath();
-        if (path.some(node => node?.nodeType === 1 && isTeacherUI(node))) return;
-        const element = findTarget(target, resolver);
+        const activation = tracker.read(event);
+        if (!activation) return;
         let result;
-        // The readout check is the fallback for a control that removed itself
-        // in response to this very click — the menu it opened is already there.
-        if (pathActivates(path, element) || pathHitsReadoutFor(path, target)) {
+        if (activation.target) {
           stopVisual('activated');
           paint.clear();
           result = 'correct';
         } else {
-          const wrong = actionFromPath(path);
+          const wrong = activation.action;
           if (!wrong) return;
           paint.flashWrong(wrong);
-          // Name it the way the lesson would: "Zoom", not "Zoom list. 150%
-          // selected." — otherwise the correction reads as nonsense.
-          const name = accessibleName(wrong);
-          result = { wrong: readoutOwner(name) || name || roleName(wrong) };
+          result = { wrong: clickedLabel(activation.path, target) };
           // Re-arm in the caller's next microtask, without waiting for a cursor
           // animation or a timer that could lose the next real click.
           cleanup();
@@ -130,17 +127,14 @@ export function createTeaching({ paint, resolver }) {
     });
   }
 
-  function roleName(element) { return element.getAttribute('role') || element.localName; }
-
   return {
     highlight: target => show(target, 'highlight'),
     clear,
     moveCursor: async target => { await show(target, 'cursor'); },
     demo: async target => { await show(target, 'demo'); },
     waitForClick,
-    // A's current verify/wait stubs report success unconditionally. Keep this
-    // adapter until A supplies real cancellable implementations; never advance
-    // an outcome check because a stub returned true.
+    // Preserve cancellable verification, open-shadow lookups and labelled
+    // readouts while the same evidence rules are shared with A.
     verify: verification => verifyOutcome(verification, { signal: ensureSession(), resolver }),
     flashCorrect: () => paint.flashCorrect(),
     setCursorVisible: visible => { cursorVisible = Boolean(visible); paint.setCursorVisible(cursorVisible); },

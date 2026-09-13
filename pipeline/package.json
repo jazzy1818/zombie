@@ -9,7 +9,9 @@
     "verify": "node --env-file=.env author.js verify",
     "prune": "node --env-file=.env author.js prune",
     "demo": "node --env-file=.env author.js demo",
-    "bridge": "node --env-file=.env bridge.js"
+    "publish": "node author.js publish",
+    "bridge": "node --env-file=.env bridge.js",
+    "test": "node tests.mjs"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.125.0",

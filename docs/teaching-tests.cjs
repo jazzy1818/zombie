@@ -23,9 +23,14 @@ const fixture = `<!doctype html><html><head><meta charset="utf-8"><title>Teachin
 <fieldset disabled><button id="fieldset-disabled">Fieldset disabled example</button></fieldset>
 <fieldset disabled><legend><button id="legend-enabled">Legend enabled example</button></legend><button>Disabled outside legend</button></fieldset>
 <div aria-disabled="true"><button id="ancestor-disabled">Ancestor disabled example</button></div>
-<button disabled id="eligible-native-disabled">Eligible example</button>
-<button aria-disabled="true" id="eligible-aria-disabled">Eligible example</button>
-<button id="eligible1">Eligible example</button><button id="eligible2">Eligible example</button>
+<button disabled id="eligible-native-disabled" aria-label="Eligible example">Eligible example</button>
+<button aria-disabled="true" id="eligible-aria-disabled" aria-label="Eligible example">Eligible example</button>
+<button id="eligible1" aria-label="Eligible example">Eligible example</button><button id="eligible2" aria-label="Eligible example">Eligible example</button>
+<div id="nested-zoom" role="combobox" aria-label="Zoom"><input aria-label="Zoom" value="100%" readonly></div>
+<div role="listbox"><button role="option" id="single-option">Single option</button></div>
+<div role="listbox"><button role="option" id="first-list-option">First option</button><button role="option">Second option</button></div>
+<div role="listbox" aria-label="Zoom choices"><button role="option" id="option-150" aria-label="150%">150%</button></div>
+<div role="menuitem" id="badge-menuitem">Page elementsUpdated►</div>
 <span id="rich-label" aria-label="Styles list. Heading 1 selected.">Icon only</span>
 <span id="hidden-label" aria-label="Styles list. Heading 2 selected." hidden>Icon only</span>
 <div data-browser-teacher="ui"><button>UI example</button><span id="ui-readout" aria-label="Zoom list. 100% selected.">Icon only</span></div>
@@ -49,7 +54,7 @@ async function report() {
   await fs.writeFile(path.join(__dirname, 'teaching-test-results.md'), [
     '# Teaching adapter checks', '', `Run: ${new Date().toISOString()}`, '',
     `Browser: ${browserVersion}`, '', `Result: **${passed}/${results.length} checks passed**.`, '',
-    'These checks import the actual semantic adapter in a real browser and use ordinary DOM controls. Explicitly named A handoff checks inject small findSync doubles to validate Element precedence and disabled-element rejection; they do not claim to test A’s unfinished resolver. The separate loaded-extension suite tests the real manifest, content script, panel and teaching interaction.', '',
+    'These checks import the actual semantic adapter and completed A resolver in a real browser. Explicitly named handoff-double checks isolate Element precedence and rejection; checks labelled "real A" use A’s production resolver. The loaded-extension suites separately test the manifest, panel and teaching interaction.', '',
     ...results.map(result => `- ${result.passed ? 'PASS' : 'FAIL'}: ${result.name}${result.error ? ` — ${result.error.replace(/\n/g, ' ')}` : ''}`), '',
     `Uncaught page errors: ${errors.length}.`, ...errors.map(error => `- ${error}`), '',
     'Run: `node docs/teaching-tests.cjs` with Playwright available (for the bundled runtime, set NODE_PATH to its node_modules directory). The default uses installed Chrome; set CHROME_PATH for another Chromium executable. No preview server needs to be running.', '',
@@ -63,7 +68,12 @@ async function report() {
   const page = await browser.newPage();
   page.on('pageerror', error => errors.push(error.message));
   await page.goto(`http://127.0.0.1:${server.address().port}/`);
-  await page.evaluate(async () => { window.adapter = await import('/extension/src/teaching/resolution.js'); });
+  await page.evaluate(async () => {
+    window.adapter = await import('/extension/src/teaching/resolution.js');
+    window.eligibility = await import('/extension/src/resolve/eligibility.js');
+    window.gesture = await import('/extension/src/resolve/gesture.js');
+    window.actualResolver = await import('/extension/src/resolve/resolver.js');
+  });
   async function test(name, expression, expected) {
     try {
       assert.deepEqual(await page.evaluate(expression), expected);
@@ -86,6 +96,28 @@ async function report() {
   await test('A direct disabled Element is not an actionable target', () => adapter.findTarget(document.querySelector('#disabled')), null);
   await test('An explicit nth counts eligible controls after both disabled variants are removed', () => [0, 1, 2].map(nth => adapter.findTarget({ name: 'Eligible example', nth })?.id || null), ['eligible1', 'eligible2', null]);
   await test('Two eligible controls remain ambiguous even when disabled duplicates exist', () => adapter.findTarget({ name: 'Eligible example' }), null);
+  await test('Real A applies nth after disabled filtering before the adapter accepts its Element', () => adapter.findTarget({ name: 'Eligible example', nth: 1 }, () => actualResolver)?.id, 'eligible2');
+  await test('Real A and fallback collapse nested same-name controls before nth', () => [undefined, 0, 1].map(nth => ({
+    A: adapter.findTarget({ name: 'Zoom', ...(nth === undefined ? {} : { nth }) }, () => actualResolver)?.id || null,
+    fallback: adapter.findTarget({ name: 'Zoom', ...(nth === undefined ? {} : { nth }) })?.id || null,
+  })), [{ A: 'nested-zoom', fallback: 'nested-zoom' }, { A: 'nested-zoom', fallback: 'nested-zoom' }, { A: null, fallback: null }]);
+  await test('Unlabelled listboxes cannot impersonate either a sole option or aggregated options', () => ['Single option', 'First option'].map(name => [
+    adapter.findTarget({ scope: 'menu', name })?.id,
+    adapter.findTarget({ scope: 'menu', name }, () => actualResolver)?.id,
+  ]), [['single-option', 'single-option'], ['first-list-option', 'first-list-option']]);
+  await test('Real A and fallback accept C option-role descriptors in menu scope', () => [
+    adapter.findTarget({ scope: 'menu', role: 'option', name: '150%' })?.id,
+    adapter.findTarget({ scope: 'menu', role: 'option', name: '150%' }, () => actualResolver)?.id,
+  ], ['option-150', 'option-150']);
+  await test('Known promo badges match authored menu names in both resolvers', () => [
+    adapter.findTarget({ scope: 'menu', name: 'Page elements' })?.id,
+    adapter.findTarget({ scope: 'menu', name: 'Page elements' }, () => actualResolver)?.id,
+  ], ['badge-menuitem', 'badge-menuitem']);
+  await test('Stateful selected readouts are not action targets in real A or fallback', () => [
+    adapter.findTarget({ name: 'Styles list. Heading 1 selected.' }),
+    adapter.findTarget({ name: 'Styles list. Heading 1 selected.' }, () => actualResolver),
+  ], [null, null]);
+  await test('Stateful readouts remain available for visible outcome verification', () => adapter.verifyOutcome({ kind: 'visible', name: 'Styles list. Heading 1 selected.' }, { signal: new AbortController().signal, resolver: () => actualResolver, timeout: 0 }), true);
   await test('Teacher UI cannot resolve as the website target', () => adapter.findTarget({ name: 'UI example' }), null);
   await test('Ambiguous visible matches require explicit disambiguation', () => adapter.findTarget({ name: 'Dupe example' }), null);
   await test('An explicit nth chooses the requested visible match', () => adapter.findTarget({ name: 'Dupe example', nth: 1 })?.id, 'dupe2');
@@ -103,20 +135,38 @@ async function report() {
     adapter.verifyOutcome({ kind: 'label', selector: '#disabled', match: 'Disabled example' }, { signal: new AbortController().signal, timeout: 0 }),
   ]), [true, true]);
 
-  // A dropdown that swaps itself for a value-stating readout the moment it is
-  // clicked. Without these, a correct click on Styles reads as a wrong click on
-  // "Styles list. Normal text selected." and the learner is stuck on a step
-  // they already did. See pipeline/findings-c.md.
-  await test('A state readout resolves to the control that owns it', () => adapter.readoutOwner('Styles list. Normal text selected.'), 'Styles');
-  await test('A state readout is recognised whatever the value reads', () => adapter.readoutOwner('Zoom list. 150% selected.'), 'Zoom');
-  await test('An ordinary control name is not mistaken for a state readout', () => [adapter.readoutOwner('Normal text'), adapter.readoutOwner('Styles'), adapter.readoutOwner('')], [null, null, null]);
-  await test('Clicking the readout counts as clicking the control the step asked for', () => adapter.pathHitsReadoutFor([document.querySelector('#rich-label')], { name: 'Styles' }), true);
-  await test('A readout belonging to a different dropdown is still a wrong click', () => adapter.pathHitsReadoutFor([document.querySelector('#rich-label')], { name: 'Zoom' }), false);
-  await test('A readout inside the teacher UI never counts as the control', () => adapter.pathHitsReadoutFor([document.querySelector('#ui-readout')], { name: 'Zoom' }), false);
-  await test('An Element target has no name, so the readout fallback stays out of it', () => adapter.pathHitsReadoutFor([document.querySelector('#rich-label')], document.querySelector('#rich-label')), false);
-  // The regression this must not cause: readouts stay out of the candidate set,
-  // so a target that was unambiguous before does not become ambiguous now.
+  // A dropdown whose inner list states the current value. Authored steps must
+  // never target one — the name changes with the value — but verification still
+  // has to be able to read it. See pipeline/findings-c.md.
+  await test('A state readout is recognised whatever the value reads', () => [
+    eligibility.isStateReadout(document.querySelector('#rich-label')),
+    eligibility.isStateReadout(document.querySelector('#ui-readout')),
+  ], [true, true]);
+  await test('An ordinary control is not mistaken for a state readout', () => [
+    eligibility.isStateReadout(document.querySelector('#labelled')),
+    eligibility.isStateReadout(document.querySelector('#shortcut')),
+    eligibility.isStateReadout(null),
+  ], [false, false, false]);
+  await test('A state readout cannot be resolved as an action target', () => adapter.findTarget(document.querySelector('#rich-label')), null);
+  await test('Verification may still read a readout that actions cannot target', () => adapter.findTarget(document.querySelector('#rich-label'), undefined, { allowReadouts: true })?.id, 'rich-label');
+  // The regression the readout rules must not cause: they stay out of the
+  // candidate set, so a target that was unambiguous before does not become
+  // ambiguous now.
   await test('The readout does not widen target resolution or create ambiguity', () => adapter.findTarget({ name: 'Styles' }), null);
+
+  // A page cannot complete a step on the learner's behalf. Synthetic input is
+  // refused outright, which is also why the tracker's remembering behaviour is
+  // exercised with real browser input in extension-tests.cjs instead of here.
+  await test('A gesture tracker refuses synthetic input', () => {
+    const button = document.querySelector('#shortcut');
+    const tracker = gesture.createGestureTracker({ name: 'Export' }, () => button);
+    button.dispatchEvent(new PointerEvent('pointerdown', { bubbles: true, composed: true, button: 0 }));
+    const click = new PointerEvent('click', { bubbles: true, composed: true, button: 0 });
+    button.dispatchEvent(click);
+    const seen = tracker.read(click);
+    tracker.dispose();
+    return seen;
+  }, null);
 })().catch(error => {
   results.push({ name: 'Test runner completed', passed: false, error: error.stack || error.message });
   console.error(error);
