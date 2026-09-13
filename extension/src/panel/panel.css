@@ -383,6 +383,41 @@
   border-color: rgba(255, 154, 144, 0.3);
 }
 
+/* ------------------------------------------------- authoring progress trail */
+
+/* The cloud agent's reasoning while it explores. Quieter than a note: this is
+   something to glance at during a wait, not something to read. */
+.bt-trail {
+  margin: 14px 0 0;
+  padding: 0;
+  list-style: none;
+  font-size: 13px;
+  line-height: 1.45;
+}
+
+.bt-trail li {
+  position: relative;
+  margin: 0 0 6px;
+  padding-left: 16px;
+  opacity: 0.62;
+}
+
+.bt-trail li::before {
+  content: '';
+  position: absolute;
+  left: 2px;
+  top: 7px;
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background: currentColor;
+}
+
+/* The newest line is the one that's actually happening. */
+.bt-trail li:last-child {
+  opacity: 1;
+}
+
 /* ---------------------------------------------------------------- buttons */
 
 .bt-btn {

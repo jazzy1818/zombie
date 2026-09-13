@@ -1,0 +1,55 @@
+{
+  "id": "change-page-zoom-200",
+  "app": "google-docs",
+  "goal": "how do I change the page zoom to 200%",
+  "preamble": "Zoom feels like a formatting change, but nothing about the document changes when you use it. The text stays the same size on paper, the page breaks stay where they were, and anyone else in the document sees it exactly as before. Zoom is a setting on your eyes, not on the file — which is why it lives in the toolbar next to the other view controls rather than anywhere in Format.",
+  "generalization": "Controls that change how you see a document sit apart from controls that change the document. Zoom, the outline pane, ruler visibility, print layout — none of them travel with the file or reach anyone else. When you're wondering where a control lives, it helps to ask first whether it would still matter if you closed the tab. If the answer is no, it's a view setting.",
+  "steps": [
+    {
+      "id": "s1",
+      "intent": "The Zoom box shows the magnification you're currently viewing at — usually 100%, meaning the page is drawn at roughly its printed size. Opening it gives you the fixed set of magnifications Docs offers, plus the options that size the page to your window. It sits at the left end of the toolbar with the other controls that affect your view rather than your text.",
+      "mode": "demo",
+      "target": {
+        "scope": "toolbar",
+        "name": "Zoom",
+        "nth": 1
+      },
+      "action": "click",
+      "verify": {
+        "kind": "visible",
+        "name": "200%",
+        "scope": "menu"
+      },
+      "hints": [
+        "You're not changing the document, only how large it's drawn for you — so look among the controls that describe your view, not the ones that describe text.",
+        "Toolbar, near the left end, just past the undo and redo arrows and the print icon. It reads 100%."
+      ],
+      "wrongHints": {
+        "Font size": "Font size would genuinely make the letters bigger — bigger on screen and bigger on paper, for everyone. Zoom only magnifies your own view and leaves the document untouched.",
+        "Print": "Reasonable thought, since zoom feels tied to how a page appears. But print preview shows you the page at a fixed size; the Zoom box is what changes the size you work at."
+      }
+    },
+    {
+      "id": "s2",
+      "intent": "Pick 200%. These are preset magnifications — doubling the drawn size of the page, without any effect on the document itself. The percentage you choose sticks with you for this document, so it will still be at 200% next time you open it on this account.",
+      "mode": "guided",
+      "target": {
+        "scope": "menu",
+        "name": "200%"
+      },
+      "action": "click",
+      "verify": {
+        "kind": "dom",
+        "selector": "[aria-label=\"Zoom list. 200% selected.\"]"
+      },
+      "hints": [
+        "You want the page drawn at twice its normal size, so look for the multiple of 100 that says exactly that.",
+        "Near the bottom of the list, below 150% and above the Fit options."
+      ],
+      "wrongHints": {
+        "150%": "Closer than 100%, but still not double. The list is a set of fixed steps — 200% is further down.",
+        "Fit": "Fit sizes the page to your window, so the number changes whenever the window does. You want a magnification you chose, not one Docs recalculates."
+      }
+    }
+  ]
+}

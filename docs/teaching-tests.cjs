@@ -28,7 +28,7 @@ const fixture = `<!doctype html><html><head><meta charset="utf-8"><title>Teachin
 <button id="eligible1">Eligible example</button><button id="eligible2">Eligible example</button>
 <span id="rich-label" aria-label="Styles list. Heading 1 selected.">Icon only</span>
 <span id="hidden-label" aria-label="Styles list. Heading 2 selected." hidden>Icon only</span>
-<div data-browser-teacher="ui"><button>UI example</button></div>
+<div data-browser-teacher="ui"><button>UI example</button><span id="ui-readout" aria-label="Zoom list. 100% selected.">Icon only</span></div>
 <button id="dupe1">Dupe example</button><button id="dupe2">Dupe example</button>
 </body></html>`;
 
@@ -102,6 +102,21 @@ async function report() {
     adapter.verifyOutcome({ kind: 'dom', selector: '#disabled' }, { signal: new AbortController().signal, timeout: 0 }),
     adapter.verifyOutcome({ kind: 'label', selector: '#disabled', match: 'Disabled example' }, { signal: new AbortController().signal, timeout: 0 }),
   ]), [true, true]);
+
+  // A dropdown that swaps itself for a value-stating readout the moment it is
+  // clicked. Without these, a correct click on Styles reads as a wrong click on
+  // "Styles list. Normal text selected." and the learner is stuck on a step
+  // they already did. See pipeline/findings-c.md.
+  await test('A state readout resolves to the control that owns it', () => adapter.readoutOwner('Styles list. Normal text selected.'), 'Styles');
+  await test('A state readout is recognised whatever the value reads', () => adapter.readoutOwner('Zoom list. 150% selected.'), 'Zoom');
+  await test('An ordinary control name is not mistaken for a state readout', () => [adapter.readoutOwner('Normal text'), adapter.readoutOwner('Styles'), adapter.readoutOwner('')], [null, null, null]);
+  await test('Clicking the readout counts as clicking the control the step asked for', () => adapter.pathHitsReadoutFor([document.querySelector('#rich-label')], { name: 'Styles' }), true);
+  await test('A readout belonging to a different dropdown is still a wrong click', () => adapter.pathHitsReadoutFor([document.querySelector('#rich-label')], { name: 'Zoom' }), false);
+  await test('A readout inside the teacher UI never counts as the control', () => adapter.pathHitsReadoutFor([document.querySelector('#ui-readout')], { name: 'Zoom' }), false);
+  await test('An Element target has no name, so the readout fallback stays out of it', () => adapter.pathHitsReadoutFor([document.querySelector('#rich-label')], document.querySelector('#rich-label')), false);
+  // The regression this must not cause: readouts stay out of the candidate set,
+  // so a target that was unambiguous before does not become ambiguous now.
+  await test('The readout does not widen target resolution or create ambiguity', () => adapter.findTarget({ name: 'Styles' }), null);
 })().catch(error => {
   results.push({ name: 'Test runner completed', passed: false, error: error.stack || error.message });
   console.error(error);

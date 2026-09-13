@@ -3,6 +3,7 @@
   "name": "Browser Teacher",
   "version": "0.1.0",
   "description": "A teacher that lives in your browser. It points at things and waits for you to click them.",
+  "host_permissions": ["http://localhost/*", "http://127.0.0.1/*"],
   "content_scripts": [
     {
       "matches": ["http://*/*", "https://*/*"],

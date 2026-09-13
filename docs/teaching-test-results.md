@@ -1,10 +1,10 @@
 # Teaching adapter checks
 
-Run: 2026-09-12T23:57:58.409Z
+Run: 2026-09-13T03:48:59.357Z
 
-Browser: 151.0.7922.34
+Browser: 153.0.8010.37
 
-Result: **27/27 checks passed**.
+Result: **35/35 checks passed**.
 
 These checks import the actual semantic adapter in a real browser and use ordinary DOM controls. Explicitly named A handoff checks inject small findSync doubles to validate Element precedence and disabled-element rejection; they do not claim to test A’s unfinished resolver. The separate loaded-extension suite tests the real manifest, content script, panel and teaching interaction.
 
@@ -35,6 +35,14 @@ These checks import the actual semantic adapter in a real browser and use ordina
 - PASS: Label verification does not accept a hidden richer label
 - PASS: Visible verification remains about visibility when the rendered control is disabled
 - PASS: DOM and text outcomes remain readable on a rendered disabled control
+- PASS: A state readout resolves to the control that owns it
+- PASS: A state readout is recognised whatever the value reads
+- PASS: An ordinary control name is not mistaken for a state readout
+- PASS: Clicking the readout counts as clicking the control the step asked for
+- PASS: A readout belonging to a different dropdown is still a wrong click
+- PASS: A readout inside the teacher UI never counts as the control
+- PASS: An Element target has no name, so the readout fallback stays out of it
+- PASS: The readout does not widen target resolution or create ambiguity
 
 Uncaught page errors: 0.
 

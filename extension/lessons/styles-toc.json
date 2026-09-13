@@ -8,7 +8,7 @@
     {
       "id": "s1",
       "mode": "demo",
-      "intent": "This box in the toolbar always shows the style of whatever line your cursor is on. Right now it says 'Normal text'. Watch it as I move around.",
+      "intent": "This box in the toolbar always shows the style of whatever line your cursor is on. Take note of what it reads right now — in a moment you'll watch it change as you move around the document.",
       "target": {
         "scope": "toolbar",
         "name": "Styles"

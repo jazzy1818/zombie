@@ -2,7 +2,7 @@ import { DEMO_DWELL_MS } from '../constants.js';
 import { onUnmount } from '../paint/host.js';
 import { watchNavigation } from '../paint/navigation.js';
 import { abortError, abortable, checkAbort, delay } from './async.js';
-import { resolveTarget, findTarget, isTeacherUI, accessibleName, actionFromPath, pathActivates, verifyOutcome } from './resolution.js';
+import { resolveTarget, findTarget, isTeacherUI, accessibleName, actionFromPath, pathActivates, pathHitsReadoutFor, readoutOwner, verifyOutcome } from './resolution.js';
 
 export function createTeaching({ paint, resolver }) {
   if (!paint) throw new Error('Paint must be initialized before teaching.');
@@ -99,7 +99,9 @@ export function createTeaching({ paint, resolver }) {
         if (path.some(node => node?.nodeType === 1 && isTeacherUI(node))) return;
         const element = findTarget(target, resolver);
         let result;
-        if (pathActivates(path, element)) {
+        // The readout check is the fallback for a control that removed itself
+        // in response to this very click — the menu it opened is already there.
+        if (pathActivates(path, element) || pathHitsReadoutFor(path, target)) {
           stopVisual('activated');
           paint.clear();
           result = 'correct';
@@ -107,7 +109,10 @@ export function createTeaching({ paint, resolver }) {
           const wrong = actionFromPath(path);
           if (!wrong) return;
           paint.flashWrong(wrong);
-          result = { wrong: accessibleName(wrong) || roleName(wrong) };
+          // Name it the way the lesson would: "Zoom", not "Zoom list. 150%
+          // selected." — otherwise the correction reads as nonsense.
+          const name = accessibleName(wrong);
+          result = { wrong: readoutOwner(name) || name || roleName(wrong) };
           // Re-arm in the caller's next microtask, without waiting for a cursor
           // animation or a timer that could lose the next real click.
           cleanup();

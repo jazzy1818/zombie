@@ -149,6 +149,38 @@ export async function resolveTarget(target, { signal, resolver, timeout = RESOLV
   }
 }
 
+// A dropdown is often an outer button ("Styles") wrapping an inner list whose
+// accessible name states the current value ("Styles list. Normal text
+// selected."). Two things then conspire: the outer button is absent while its
+// own menu is open, and the application opens the menu on mousedown — so by the
+// time the click is classified, the only named thing left in the path is the
+// readout. Reading that as a different control turns a correct click into a
+// wrong one, and strands the learner on a step they just completed.
+//
+// pipeline/dom-probe.js flags the same strings with the same pattern, and
+// pipeline/findings-c.md records the measurements behind it.
+const STATE_READOUT = /^(.*?)\s+(?:list|menu)\.\s.+\sselected\.\s*$/;
+
+/** "Styles list. Normal text selected." -> "Styles". Anything else -> null. */
+export function readoutOwner(name) {
+  const match = STATE_READOUT.exec(normalize(name));
+  return match && match[1] ? normalize(match[1]) : null;
+}
+
+/**
+ * Did this click land on the state readout belonging to the wanted control?
+ *
+ * Only ever consulted after a normal match has already failed, so it cannot
+ * widen the candidate set or make an otherwise unambiguous target ambiguous.
+ */
+export function pathHitsReadoutFor(path, target) {
+  const wanted = normalize(target?.name);
+  if (!wanted) return false;
+  return path.some(node => node?.nodeType === 1
+    && !isTeacherUI(node)
+    && readoutOwner(accessibleName(node)) === wanted);
+}
+
 export function actionFromPath(path) {
   return path.find(element => element?.nodeType === 1 && usable(element)
     && isEnabled(element)

@@ -160,6 +160,23 @@ async function getIndex() {
   return index;
 }
 
+/**
+ * Fold a freshly generated lesson into the running panel.
+ *
+ * The bridge has already written it to lessons/ and added it to index.json, so
+ * it's there permanently after a reload. This makes it findable *now* — the
+ * user just waited three minutes for it, and asking a near-identical question
+ * a minute later should hit the index rather than build it a second time.
+ */
+export function addLesson(lesson) {
+  validateLesson(lesson);
+  cache.set(lesson.id, lesson);
+  const known = listLessons();
+  idsPromise = known.then(ids => (ids.includes(lesson.id) ? ids : [...ids, lesson.id]));
+  index = null;   // rebuilt on the next search, with this lesson in it
+  return lesson;
+}
+
 /** Ranked lessons for a question, best first. Exported for the dev console. */
 export async function scoreLessons(question) {
   return search(question, await getIndex());

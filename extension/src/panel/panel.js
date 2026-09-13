@@ -14,7 +14,8 @@
 import { PANEL_WIDTH, PANEL_SIDE, OVERLAY_Z } from '../constants.js';
 import { mountBar } from './launcher.js';
 import { makeFloating } from './floating.js';
-import { loadLesson, loadAll, matchLesson, listLessons, validateLesson} from './lessons.js';
+import { loadLesson, loadAll, matchLesson, listLessons, validateLesson, addLesson } from './lessons.js';
+import { generateLesson, bridgeAvailable } from './generate.js';
 import { runLesson, ACTION } from './machine.js';
 import { createSpeech } from './speech.js';
 import { installDev } from './dev.js';
@@ -226,9 +227,39 @@ export async function mountPanel() {
     return session(async ({ active, options }) => {
       const { id, confident, ranked } = await matchLesson(question);
       if (!active()) return;
-      if (!confident) return ui.showPicker(question, ranked, { signal: options.signal });
-      const lesson = await loadLesson(id);
-      if (active()) await runLesson(lesson, ui, options);
+
+      if (confident) {
+        const lesson = await loadLesson(id);
+        if (active()) await runLesson(lesson, ui, options);
+        return;
+      }
+
+      // Semantic search came up empty. Offer the near misses — and, if an
+      // authoring bridge happens to be running, offer to go and learn it for
+      // real. Deliberately a button rather than automatic: generation costs a
+      // cloud browser and a few minutes, which is a bad thing to spend on a
+      // typo, mid-demo.
+      const canGenerate = await bridgeAvailable();
+      if (!active()) return;
+      return ui.showPicker(question, ranked, {
+        signal: options.signal,
+        onGenerate: canGenerate ? () => generate(question) : null,
+      });
+    });
+  }
+
+  /** Send the question to the cloud browser, then teach whatever comes back. */
+  function generate(question) {
+    return session(async ({ active, options }) => {
+      ui.generating(question);
+      const lesson = await generateLesson(question, {
+        signal: options.signal,
+        onProgress: text => { if (active()) ui.generatingNote(text); },
+      });
+      if (!active()) return;
+      // Findable by search from here on, so asking again doesn't rebuild it.
+      addLesson(lesson);
+      await runLesson(lesson, ui, options);
     });
   }
 
@@ -379,7 +410,7 @@ function createUI(els, raise, speech) {
     },
 
     /** Matcher wasn't confident. Ask rather than confidently teach the wrong thing. */
-    async showPicker(question, ranked, { signal } = {}) {
+    async showPicker(question, ranked, { signal, onGenerate } = {}) {
       raise();
       setOpen(true);
       const lessons = await loadAll();
@@ -392,21 +423,70 @@ function createUI(els, raise, speech) {
         .slice(0, PICKER_LIMIT);
       renderCard({
         kind: 'picker',
-        title: 'I know two things so far',
+        title: onGenerate ? "I don't know that one yet" : 'Not sure I know that one',
         body: question
-          ? `I'm not sure "${question}" is either of these — which did you mean?`
+          ? onGenerate
+            ? `I have no lesson for "${question}". I can go and work it out, or you can pick one of these.`
+            : `I'm not sure "${question}" is one of these — which did you mean?`
           : 'Which would you like?',
       });
       els.actions.replaceChildren();
-      for (const id of order) {
+
+      // First, and not subtle: when it's offered, it's the answer to what they
+      // actually asked. The others are consolation prizes.
+      if (onGenerate) {
         const b = document.createElement('button');
         b.type = 'button';
         b.className = 'bt-btn';
+        b.textContent = 'Work it out for me';
+        noFocusSteal(b);
+        b.addEventListener('click', () => onGenerate());
+        els.actions.appendChild(b);
+      }
+
+      for (const id of order) {
+        const b = document.createElement('button');
+        b.type = 'button';
+        b.className = onGenerate ? 'bt-btn bt-btn-subtle' : 'bt-btn';
         b.textContent = lessons.find(l => l.id === id)?.goal || id;
         noFocusSteal(b);
         b.addEventListener('click', () => ui.onPickLesson(id));
         els.actions.appendChild(b);
       }
+    },
+
+    /**
+     * A cloud browser is off learning this. Minutes, not seconds — so show the
+     * agent's own reasoning as it goes. A narrated wait reads as the product
+     * working; the same wait behind a spinner reads as a hang.
+     */
+    generating(question) {
+      raise();
+      bar?.setEnabled(false);
+      setOpen(true);
+      els.progress.hidden = true;
+      renderCard({
+        kind: 'loading',
+        title: 'Working it out',
+        body: `I don't have a lesson for "${question}", so I'm opening a cloud browser and finding out. This takes a minute or two.`,
+      });
+      renderActions([{ label: 'Stop', value: ACTION.QUIT, subtle: true }]);
+    },
+
+    /** One line of the agent's trail. Deliberately not spoken — it would never stop talking. */
+    generatingNote(text) {
+      let trail = els.body.querySelector('.bt-trail');
+      if (!trail) {
+        trail = document.createElement('ol');
+        trail.className = 'bt-trail';
+        els.body.appendChild(trail);
+      }
+      const li = document.createElement('li');
+      li.textContent = text;
+      trail.appendChild(li);
+      // Older lines stop being interesting once they scroll; keep the tail.
+      while (trail.children.length > 6) trail.removeChild(trail.firstElementChild);
+      els.body.scrollTop = els.body.scrollHeight;
     },
 
     lessonStarted() {

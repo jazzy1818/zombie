@@ -7,8 +7,9 @@
     "capture-profile": "node --env-file=.env author.js capture-profile",
     "author": "node --env-file=.env author.js run",
     "verify": "node --env-file=.env author.js verify",
-    "prune": "node author.js prune",
-    "demo": "node --env-file=.env author.js demo"
+    "prune": "node --env-file=.env author.js prune",
+    "demo": "node --env-file=.env author.js demo",
+    "bridge": "node --env-file=.env bridge.js"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.125.0",

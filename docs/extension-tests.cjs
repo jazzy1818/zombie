@@ -466,6 +466,26 @@ async function report() {
     assert.equal(await page.locator('#style-readout').textContent(), '◈');
     assert.equal(await count('styles-open'), 1); assert.equal(await count('heading-one'), 1);
   });
+  // The bug this guards: the dropdown opens on mousedown, so by click time the
+  // control the step named no longer carries that name, and the only labelled
+  // element left states the current value. Classifying that as a different
+  // control reported a wrong click for a correct one and stranded the learner
+  // on a step they had just done, with the highlight still up.
+  await test('A dropdown that opens on mousedown still counts as a correct click', async () => {
+    await begin([
+      step('Zoom', { target: target('Zoom', 'toolbar'), verify: { kind: 'visible', name: '150%', scope: 'menu' } }),
+      step('150%', { target: target('150%', 'menu'), verify: { kind: 'label', selector: '#zoom-slot [aria-label^="Zoom list."]', match: '150%' } }),
+    ]);
+    await cursorAligned('#zoom-open');
+    assert.equal(await page.locator('#zoom-menu').isVisible(), false);
+    await page.locator('#zoom-open').click();
+    // The name is gone and the readout is all that is left — and it advanced anyway.
+    assert.equal(await page.locator('#zoom-open').getAttribute('aria-label'), null);
+    await cursorAligned('#zoom-150');
+    assert.equal(await progress(), '2 / 2', 'a correct click must advance, not report a wrong control');
+    await page.locator('#zoom-150').click(); await completed();
+    assert.equal(await count('zoom-open'), 1); assert.equal(await count('zoom-150'), 1);
+  });
   await test('Existing textContent label outcomes still verify after a real user action', async () => {
     await begin([step('Start verification', { verify: { kind: 'label', selector: '#verify-state', match: 'Verified' } })]);
     await cursorAligned('#verify');

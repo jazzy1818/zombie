@@ -67,6 +67,15 @@
     <div id="styles-menu" role="menu" aria-label="Formatting styles" hidden>
       <button id="heading-one" role="menuitem" aria-label="Apply Heading 1">Heading 1</button>
     </div>
+    <!-- The harder shape: this dropdown opens on mousedown, so the named control
+         has already lost its name by the time the click is classified, and the
+         only labelled thing left in the path states the current value. -->
+    <div id="zoom-slot">
+      <button id="zoom-open" aria-label="Zoom"><span id="zoom-readout" aria-label="Zoom list. 100% selected.">◈</span></button>
+    </div>
+    <div id="zoom-menu" role="menu" aria-label="Zoom levels" hidden>
+      <button id="zoom-150" role="menuitem" aria-label="150%">150%</button>
+    </div>
   </section>
   <details>
     <summary>Manual practice with the loaded extension</summary>
@@ -121,6 +130,17 @@
       }, 900);
     });
   }
+  // Opens on mousedown, the way a real toolbar dropdown does. The outer name is
+  // gone before the click lands, leaving only the inner value readout.
+  document.querySelector('#zoom-open').addEventListener('mousedown', () => {
+    document.querySelector('#zoom-open').removeAttribute('aria-label');
+    document.querySelector('#zoom-menu').hidden = false;
+  });
+  document.querySelector('#zoom-150').addEventListener('click', () => {
+    document.querySelector('#zoom-menu').hidden = true;
+    document.querySelector('#zoom-open').setAttribute('aria-label', 'Zoom');
+    document.querySelector('#zoom-readout').setAttribute('aria-label', 'Zoom list. 150% selected.');
+  });
   document.querySelector('#styles-open').addEventListener('click', () => {
     document.querySelector('#styles-slot').innerHTML = '<div id="style-readout" role="listbox" aria-label="Styles list. Normal text selected."><span>◈</span></div>';
     document.querySelector('#styles-menu').hidden = false;

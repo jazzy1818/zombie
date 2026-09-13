@@ -1,0 +1,34 @@
+{
+  "id": "wanna-increase-font-size",
+  "app": "google-docs",
+  "goal": "i wanna increase my font size",
+  "preamble": "Font size feels like a number you have to know in advance — 12, 14, 18 — and most people open the size box and guess. But you rarely want a specific number; you want the text a bit bigger than it is now. Docs has a control for exactly that: a nudge, one notch at a time, with the page in front of you while you do it. One more thing before you start: size applies to whatever is selected. Select the text you want to grow first, or if nothing is selected, the change waits for whatever you type next.",
+  "generalization": "Anywhere you see a number box flanked by a minus and a plus, you're being offered two ways to work: name the value, or adjust it by eye. Naming it is faster when you know what you want; nudging is better when you don't, because you get to judge each step against the thing itself. Font size, zoom, line spacing, image dimensions — the stepper is always there for the times you'd otherwise be guessing.",
+  "steps": [
+    {
+      "id": "s1",
+      "intent": "This is the plus beside the font size box, and each click moves the selection up one step on the size ladder Docs uses. You are not setting a size, you are raising it — which means you can watch the text and stop when it looks right, instead of deciding on a number and then living with it. Notice the box itself tick over as you click.",
+      "mode": "demo",
+      "target": {
+        "scope": "toolbar",
+        "name": "Increase font size"
+      },
+      "action": "click",
+      "verify": {
+        "kind": "dom",
+        "selector": "[aria-label=\"Font size list. 17 selected.\"]"
+      },
+      "hints": [
+        "Size is a property of text, so it sits with the other text controls rather than in a menu. Look for something that changes a value by a step rather than asking you to name one.",
+        "In the toolbar, the small number box right of the font name — the plus on its right-hand side."
+      ],
+      "wrongHints": {
+        "Font size": "That opens the number itself, which does work — but it asks you to pick a size before you can see it. The plus beside it makes the same change one notch at a time, so you can judge by eye.",
+        "Decrease font size": "Same control, opposite direction — that one is the minus. They sit either side of the number box, so it is an easy pair to mix up. The plus is on the right.",
+        "Font": "That changes the typeface — which letterforms are used. The size is a separate property, and it lives in the box just to the right.",
+        "Bold": "Bold makes text heavier, not larger. It is a common stand-in for emphasis, but it will not change the size at all.",
+        "Styles": "Styles set size as part of a larger package — heading, subtitle, normal text. Useful when you want meaning as well as size, but here you only want the text bigger."
+      }
+    }
+  ]
+}

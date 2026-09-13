@@ -1,0 +1,31 @@
+{
+  "id": "wanna-change-color-of-current",
+  "app": "google-docs",
+  "goal": "i wanna change color of my current text",
+  "preamble": "Colour in Docs isn't a setting you turn on for the document — it's a property carried by individual characters. So the real question isn't \"where is the colour control\", it's \"which characters am I about to repaint\". Whatever you have selected right now is the answer. If nothing is selected, Docs holds the colour ready and applies it to the next thing you type.",
+  "generalization": "Everything in that stretch of the toolbar works the same way: it acts on the selection, and nothing else. Bold, font, size, colour — none of them are document settings, they're properties you paint onto the characters you've highlighted. That's why the habit worth keeping is selecting first and reaching for the toolbar second: the selection is the real instruction, the button is only the paint.",
+  "steps": [
+    {
+      "id": "s1",
+      "intent": "The toolbar holds the controls that change how your selected text looks, and one of them is for the colour of the letters themselves. Clicking it doesn't apply anything yet — it opens a palette, so you can see the choice before you commit to it.",
+      "mode": "demo",
+      "target": {
+        "scope": "toolbar",
+        "name": "Text color"
+      },
+      "action": "click",
+      "verify": {
+        "kind": "none"
+      },
+      "hints": [
+        "You're changing the appearance of characters, not the structure of the document — so it's in the toolbar, not a menu. Look for the control that shows a colour rather than a word.",
+        "Toolbar, in the group with Bold and Italic — the letter A with a coloured bar underneath it."
+      ],
+      "wrongHints": {
+        "Highlight color": "Easy to mix up, since they sit side by side and both open a palette of colours. That one paints the background behind the text, like a marker pen. You want the one that paints the letters themselves.",
+        "Styles": "Styles describe what a line of text is — a heading, a subtitle, body text — and the colour comes along as a side effect. Useful when you want every heading to match, but heavy-handed when you only want to recolour what you've selected.",
+        "Font": "That changes the shape of the letters, not their colour. It's a neighbour in the same toolbar group because both are about appearance, but each one touches a different property."
+      }
+    }
+  ]
+}
