@@ -125,10 +125,10 @@
     {
       "id": "s7",
       "mode": "solo",
-      "intent": "Your turn, no highlight this time. Your headings are set — now insert the table of contents itself. Have a look through the menus.",
+      "intent": "Your turn, and no highlight this time. Your headings are set, so the contents can build itself — you just have to ask for it. Which menu would you use to add something new to the document?",
       "target": {
         "scope": "menu",
-        "name": "Table of contents"
+        "name": "Insert"
       },
       "action": "click",
       "verify": {
@@ -137,8 +137,25 @@
         "scope": "menu"
       },
       "hints": [
-        "You're adding something new to the document — which menu handles that?",
-        "It's in the Insert menu, near the bottom."
+        "You're not formatting anything now — you're adding something that wasn't there.",
+        "The Insert menu, in the menu bar."
+      ]
+    },
+    {
+      "id": "s8",
+      "mode": "solo",
+      "intent": "There it is, at the bottom. Click it and watch what Docs builds from the headings you set.",
+      "target": {
+        "scope": "menu",
+        "name": "Table of contents"
+      },
+      "action": "click",
+      "verify": {
+        "kind": "none"
+      },
+      "hints": [
+        "Near the bottom of the list — the last few entries are whole-document things.",
+        "Bottom of the Insert menu."
       ]
     }
   ]

@@ -152,7 +152,7 @@ const commands = {
     // Never emit from a trace that didn't reach the goal — it would teach the dead end.
     let trace;
     for (let attempt = 1; attempt <= 3; attempt++) {
-      const handle = await openAuthedSession();
+      const handle = flags.local ? await openLocalSession() : await openAuthedSession();
       try {
         console.log(`\n[author] exploration attempt ${attempt}/3 — ${handle.viewerUrl}`);
         trace = await explore(handle, spec);
