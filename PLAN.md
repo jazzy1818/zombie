@@ -1,5 +1,12 @@
 # Browser Teacher
 
+> **Current-checkout notice:** this file preserves the original design, frozen
+> schemas and historical status snapshots. The real resolver, panel, paint and
+> teaching composition are now integrated. See [§19](#19-current-integration-and-testing)
+> and [the testing workflow](docs/testing-workflow.md) before following old setup
+> or stub instructions. The user-driven runtime supersedes every `el.click()`
+> demo example below: users activate each website control themselves.
+
 **A teacher that lives in your browser.** It points at things and waits for *you* to click them.
 
 > Product tours (WalkMe, Pendo, Intercom) are hand-authored by humans — per app, per flow, forever.
@@ -1162,3 +1169,40 @@ __BT_DEV.off()
 Hints only fire from **step 3** of `styles-toc` onward: step 1 demonstrates and step 2 has no target,
 so neither waits on a click. And while the stub answers after 1.5s, no hint can ever reach 8s without
 `__BT_DEV.hints()` — that stops being true the moment `teach.js` is real.
+
+## 19. Current integration and testing
+
+Sections 1–18 record the original plan and later historical notes. Their public
+interface shapes remain useful; their stub-status claims and automated demonstration
+examples are superseded by the implemented behavior below.
+
+- `content.js` loads `main.js`; the latter imports resolver → paint → teach → panel.
+  The extension runs in its isolated world on HTTP/HTTPS pages.
+- A's resolver is implemented. The teaching adapter composes it with D's renderer,
+  retains generic target handling, and owns cancellable visual/user-interaction work.
+- D accepts a live Element or a local viewport rectangle. It handles smooth scrolling,
+  ghost motion from the observed pointer, offscreen dimming, live geometry and cleanup.
+- B's runner starts click listening before visuals. `demo`, `guided` and `solo` all
+  require the user's activation when a step has a target. Modal/menu openers are
+  explicit earlier steps. **Show me where** provides visual help without real clicks.
+- Stop/Close, replacement lessons and navigation cancel pending work. Panel and paint
+  coordinate browser top-layer order, including usable controls inside native modals.
+- The current bundled Styles lesson has nine steps: Styles opener, a canvas instruction,
+  Heading 1, Heading 2, then solo Insert → Page elements → Table of contents. The
+  four-step version-history lesson reaches the naming control; its final click-only
+  check does not prove that the user entered and saved a version name.
+- The panel discovers published lessons from `extension/lessons/index.json`, validates
+  their JSON, and searches their prose locally. Typing a question does not invoke Steel
+  or an authoring model. Generated files in `pipeline/out/` are not yet published lessons.
+
+Use [docs/testing-workflow.md](docs/testing-workflow.md) for the current commands and
+rehearsal sequence. [docs/extension-integration.md](docs/extension-integration.md)
+describes runtime boundaries and the test suites. Test reports state their actual
+browser/surface scope; local fixtures and pipeline replay are not substitutes for
+a signed-in human rehearsal of the complete application outcome.
+
+C's latest [pipeline findings](pipeline/findings-c.md) report a measured Steel viewport
+of 1435×809 versus local 1440×900, dynamic dropdown readouts suitable for `dom` verifies,
+and stateful labels that must not become stable target names. The checked-in lessons
+already include the Page elements submenu and the revised version-history targets.
+Earlier unresolved checklists must be read alongside these later observations.

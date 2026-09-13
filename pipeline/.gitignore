@@ -8,3 +8,4 @@ profile.json
 # but they're big, machine-generated, and never reviewed.
 traces/
 out/
+reports/

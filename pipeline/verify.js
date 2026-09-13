@@ -105,7 +105,8 @@ export async function verifyLesson(lesson, opts = {}) {
   }
 
   return {
-    ok: !failedAt,
+    ok: !failedAt && !skipped,
+    incomplete: skipped,
     steps,
     ...(failedAt ? { failedAt } : {}),
     viewerUrl: handle.viewerUrl,
@@ -153,7 +154,8 @@ async function pollResolve(handle, target, timeoutMs) {
   do {
     const hit = await handle.probe('resolve', target);
     if (hit && !hit.disabled) return hit;
-    fallback ??= hit;
+    const visible = hit || await handle.probe('resolve', target, { actionable: false });
+    if (visible?.disabled) fallback = visible;
     await handle.page.waitForTimeout(100);
   } while (Date.now() - start < timeoutMs);
   return fallback;
@@ -196,6 +198,8 @@ export function printReport(lesson, report) {
   }
   console.log(report.ok
     ? `\n  PASS — replays clean at ${report.viewport} in ${report.local ? 'local Chrome' : 'a fresh cloud Chrome'}.\n`
-    : `\n  FAIL at ${report.failedAt}. Watch it: ${report.viewerUrl}\n`);
+    : report.incomplete && !report.failedAt
+      ? '\n  INCOMPLETE — instruct-only actions were skipped; this is not a complete verified lesson.\n'
+      : `\n  FAIL at ${report.failedAt}. Watch it: ${report.viewerUrl}\n`);
   return report.ok;
 }

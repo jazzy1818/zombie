@@ -13,6 +13,7 @@ import { prune, printPrune } from './prune.js';
 import { emit, skeleton } from './emit.js';
 import { verifyLesson, printReport } from './verify.js';
 import { fallbackDemo, SHALLOW_GOAL } from './fallback-demo.js';
+import { assertLessonId, validatePublishable, runRecordedVerification, publishLesson } from './publish.js';
 
 const TRACES = new URL('./traces/', import.meta.url);
 const OUT = new URL('./out/', import.meta.url);
@@ -90,8 +91,12 @@ const commands = {
         console.log(`  vers.hist  ${!menu.found ? 'not in the DOM' : menu.disabled ? 'DISABLED — this doc will not work for version-history' : 'enabled'}`);
       }
 
-      const url = handle.session.debugUrl ?? handle.viewerUrl;
-      console.log(`\n  Watch / drive it here:\n\n    ${url}${url.includes('?') ? '&' : '?'}interactive=true\n`);
+      if (handle.local) {
+        console.log('\n  Continue in the connected local Chrome window.\n');
+      } else {
+        const url = handle.session.debugUrl ?? handle.viewerUrl;
+        console.log(`\n  Watch / drive it here:\n\n    ${url}${url.includes('?') ? '&' : '?'}interactive=true\n`);
+      }
 
       const rl = createInterface({ input: process.stdin, output: process.stdout });
       await rl.question('  Press ENTER to close the session... ');
@@ -130,16 +135,21 @@ const commands = {
     let allOk = true;
     for (const p of paths) {
       const lesson = JSON.parse(await readFile(p, 'utf8'));
-      const report = await verifyLesson(lesson, { docUrl: str(flags.doc), local: !!flags.local });
+      validatePublishable(lesson);
+      const { report, recorded } = await runRecordedVerification(lesson,
+        () => verifyLesson(lesson, { docUrl: str(flags.doc), local: !!flags.local }));
       allOk = printReport(lesson, report) && allOk;
+      await finishVerification(lesson, recorded, !!flags.publish);
     }
     if (!allOk) process.exitCode = 1;
   },
 
   async run({ flags }) {
     const id = str(flags.id) ?? 'scratch';
+    assertLessonId(id);
     const goal = str(flags.goal);
     if (!goal) throw new Error('--goal is required');
+    if (flags.publish && flags['no-verify']) throw new Error('--publish requires verification; remove --no-verify.');
 
     const spec = {
       goal,
@@ -152,6 +162,7 @@ const commands = {
           ? { kind: 'dom', selector: `[aria-label="${flags['check-aria']}"]` }
           : str(flags.check) ? JSON.parse(flags.check) : { kind: 'none' },
     };
+    if (!spec.docUrl) throw new Error('A prepared document URL is required; pass --doc or set DEMO_DOC_URL.');
     if (spec.goalCheck.kind === 'none') {
       console.warn('[author] no --check given: "done" will be taken on the model\'s word.');
     }
@@ -184,8 +195,10 @@ const commands = {
     if (flags.cache) console.log(`  wrote ${await saveCache(id, { trace, lesson })}`);
 
     if (flags['no-verify']) return;
-    const report = await verifyLesson(lesson, { docUrl: spec.docUrl, local: !!flags.local });
+    const { report, recorded } = await runRecordedVerification(lesson,
+      () => verifyLesson(lesson, { docUrl: spec.docUrl, local: !!flags.local }));
     if (!printReport(lesson, report)) process.exitCode = 1;
+    await finishVerification(lesson, recorded, !!flags.publish);
   },
 
   async prune({ positional, flags }) {
@@ -206,16 +219,35 @@ const commands = {
     }
 
     const id = str(flags.id) ?? 'scratch';
+    assertLessonId(id);
     const lesson = await emit(pruned, { id, goal: trace.goal });
     console.log(`  wrote ${await saveLesson(id, lesson)}`);
   },
 
   async demo({ flags }) {
-    await fallbackDemo({ live: !!flags.live, docUrl: str(flags.doc), spec: SHALLOW_GOAL });
+    await fallbackDemo({ live: !!flags.live, local: !!flags.local, docUrl: str(flags.doc), spec: SHALLOW_GOAL });
+  },
+
+  async publish({ positional, flags }) {
+    if (!positional[0] || !str(flags.report)) throw new Error('usage: node author.js publish <lesson.json> --report <lesson.verify.json>');
+    const lesson = JSON.parse(await readFile(fromCwd(positional[0]), 'utf8'));
+    const evidence = JSON.parse(await readFile(fromCwd(flags.report), 'utf8'));
+    const result = await publishLesson(lesson, evidence);
+    console.log(`  published ${result.lesson}\n  updated ${result.index}\n  Reload the extension and refresh the website to discover the lesson.`);
   },
 };
 
+async function finishVerification(lesson, recorded, publish) {
+  console.log(`  replay report: ${recorded.reportFile}`);
+  if (recorded.evidenceFile) console.log(`  publication evidence: ${recorded.evidenceFile}`);
+  if (!publish) return;
+  if (!recorded.evidence) throw new Error('Not published: every step must pass without skips.');
+  const result = await publishLesson(lesson, recorded.evidence);
+  console.log(`  published ${result.lesson}\n  updated ${result.index}`);
+}
+
 async function saveTrace(id, trace) {
+  assertLessonId(id);
   await mkdir(TRACES, { recursive: true });
   const name = `${id}-${new Date().toISOString().replace(/[:.]/g, '-')}.json`;
   await writeFile(new URL(name, TRACES), JSON.stringify(trace, null, 2));
@@ -223,6 +255,7 @@ async function saveTrace(id, trace) {
 }
 
 async function saveCache(id, payload) {
+  assertLessonId(id);
   await mkdir(CACHE, { recursive: true });
   await writeFile(new URL(`${id}.json`, CACHE), JSON.stringify(payload, null, 2));
   return `pipeline/cache/${id}.json`;
@@ -230,6 +263,7 @@ async function saveCache(id, payload) {
 
 // out/, never extension/lessons/ — the pipeline must not overwrite the hand-written ones.
 async function saveLesson(id, lesson) {
+  assertLessonId(id);
   await mkdir(OUT, { recursive: true });
   const url = new URL(`${id}.json`, OUT);
   await writeFile(url, JSON.stringify(lesson, null, 2));

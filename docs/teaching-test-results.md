@@ -1,12 +1,12 @@
 # Teaching adapter checks
 
-Run: 2026-09-12T23:57:58.409Z
+Run: 2026-09-13T03:17:14.204Z
 
 Browser: 151.0.7922.34
 
-Result: **27/27 checks passed**.
+Result: **34/34 checks passed**.
 
-These checks import the actual semantic adapter in a real browser and use ordinary DOM controls. Explicitly named A handoff checks inject small findSync doubles to validate Element precedence and disabled-element rejection; they do not claim to test A’s unfinished resolver. The separate loaded-extension suite tests the real manifest, content script, panel and teaching interaction.
+These checks import the actual semantic adapter and completed A resolver in a real browser. Explicitly named handoff-double checks isolate Element precedence and rejection; checks labelled "real A" use A’s production resolver. The loaded-extension suites separately test the manifest, panel and teaching interaction.
 
 - PASS: A menu container cannot impersonate its only named child
 - PASS: A shortcut suffix is allowed without confusing Export with Export as
@@ -22,6 +22,13 @@ These checks import the actual semantic adapter in a real browser and use ordina
 - PASS: A direct disabled Element is not an actionable target
 - PASS: An explicit nth counts eligible controls after both disabled variants are removed
 - PASS: Two eligible controls remain ambiguous even when disabled duplicates exist
+- PASS: Real A applies nth after disabled filtering before the adapter accepts its Element
+- PASS: Real A and fallback collapse nested same-name controls before nth
+- PASS: Unlabelled listboxes cannot impersonate either a sole option or aggregated options
+- PASS: Real A and fallback accept C option-role descriptors in menu scope
+- PASS: Known promo badges match authored menu names in both resolvers
+- PASS: Stateful selected readouts are not action targets in real A or fallback
+- PASS: Stateful readouts remain available for visible outcome verification
 - PASS: Teacher UI cannot resolve as the website target
 - PASS: Ambiguous visible matches require explicit disambiguation
 - PASS: An explicit nth chooses the requested visible match

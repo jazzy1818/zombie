@@ -5,16 +5,20 @@
 Product tours (WalkMe, Pendo, Intercom) are hand-authored by humans — per app, per flow, forever.
 We generate them automatically from a natural-language question, using a cloud browser agent.
 
-**Read [PLAN.md](PLAN.md) before writing a line of code.** It is the spec, the schedule and the
-contracts. This file is just how to get moving.
+**Start here: [test the current workflow](docs/testing-workflow.md).** The merged extension
+connects A's resolver, B's panel and D's paint through the real teaching adapter. Google Docs
+is the demo application; the rendering layer also works with ordinary DOM controls on other sites.
+The guide covers Windows setup, the local extension fixture, normal question-based lesson launch,
+and the separate authoring-to-publication handoff.
 
-**[A] and [D]: read [CHECKPOINT-1.md](CHECKPOINT-1.md) before H3:30.** B's layer is built; that file
-is what it needs from yours, plus one structural change to where the frozen import order lives.
+[PLAN.md](PLAN.md) retains the original contracts, schedule and historical handoffs.
+[CHECKPOINT-1.md](CHECKPOINT-1.md) is the earlier integration checklist, with a current-state
+notice. Their old stub and automatic-click examples do not describe today's runtime. Current
+composition and boundaries are in [extension integration](docs/extension-integration.md).
 
-**[C]: read [PLAN.md §17](PLAN.md#17-addendum--overnight-batch-generation--open-items-for-c).** §10
-describes generating one lesson; §17 is what's missing to run a batch of questions overnight and
-wake up to a library. The one that blocks everything: the emitter must write `lessons/index.json`,
-because a Chrome extension can't list a directory and won't otherwise see a single generated lesson.
+A generated lesson becomes searchable only after it is published into `extension/lessons/`
+and listed in `lessons/index.json`. See the publication instructions in the testing guide;
+the extension does not generate lessons when a user types into its chat bar.
 
 ---
 
@@ -62,16 +66,15 @@ directory, you've broken rule 1 — revert, don't resolve.
 git checkout -b <your-branch>
 ```
 
-Everything is scaffolded with your interface already defined and `TODO [X]` where the body goes.
-The three contracts (`window.__RESOLVE`, `window.__PAINT`, `window.__TEACH`) are frozen at hour 1 —
-which is what means **no two people ever have to read each other's code.**
+The runtime contracts (`window.__RESOLVE`, `window.__PAINT`, `window.__TEACH`) are implemented.
+Preserve their public shapes and cancellation behavior when changing the shared composition.
 
 **Load the extension:** `chrome://extensions` → Developer mode → Load unpacked → pick `extension/`.
 Refresh an HTTP/HTTPS website tab after loading or reloading the extension. The
 real teach bridge connects the panel to D's paint layer. The bundled lessons are
 Google Docs examples; other websites need matching lesson descriptors. See
 [extension integration and testing](docs/extension-integration.md) for the local
-extension fixture, cancellation behavior and the temporary adapter for A's stubs.
+extension fixture, cancellation behavior and the compatibility adapter around A's resolver.
 
 **Development contracts** (select the Browser Teacher console context):
 

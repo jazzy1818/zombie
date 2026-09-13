@@ -113,8 +113,28 @@
       <div class="result"><strong>Last real click</strong><span id="resolver-click-state" aria-live="polite">none</span></div>
     </section>
 
+    <section class="results" aria-label="Additional resolver controls">
+      <div role="toolbar" aria-label="Eligibility toolbar">
+        <button id="pool-disabled" aria-label="Eligible action" disabled>Native disabled</button>
+        <button id="pool-aria-disabled" aria-label="Eligible action" aria-disabled="true">ARIA disabled</button>
+        <button id="pool-first" aria-label="Eligible action">First eligible</button>
+        <button id="pool-second" aria-label="Eligible action">Second eligible</button>
+        <div id="pool-zoom" role="combobox" aria-label="Zoom"><input aria-label="Zoom" value="100%" readonly></div>
+      </div>
+      <div>
+        <div id="scale-options" role="listbox" aria-label="Scale choices">
+          <button id="scale-100" role="option" aria-label="100%">100%</button>
+          <button id="scale-150" role="option" aria-label="150%">150%</button>
+        </div>
+        <div id="scale-readout" role="listbox" aria-label="Zoom list. 100% selected.">▾</div>
+        <div role="listbox"><button id="solo-option" role="option">Solo option</button></div>
+        <div role="listbox"><button id="first-option" role="option">First option</button><button role="option">Second option</button></div>
+        <div id="page-elements" role="menuitem" tabindex="0">Page elementsUpdated►</div>
+      </div>
+    </section>
+
     <p class="controls">
-      <label><input id="resolver-closure" type="checkbox"> <b>Google Docs behaviour:</b> menu rows activate on <code>mouseup</code> and hide before <code>click</code> fires (Closure menus). Off by default so the practice lesson completes through the bridge; tick it (or add <code>?activate=mouseup</code>) to reproduce the bridge gap that <code>docs/resolver-tests.cjs</code> reports.</label>
+      <label><input id="resolver-closure" type="checkbox"> <b>Google Docs behaviour:</b> menu rows activate on <code>mouseup</code> and hide before <code>click</code> fires (Closure menus). Tick it (or add <code>?activate=mouseup</code>) to practice this input order through the real extension.</label>
     </p>
 
     <details open>
@@ -230,6 +250,7 @@ __RESOLVE.verify({ kind: 'dom', selector: '#resolver-toc-block' })   // → true
     });
     fontSize.addEventListener('click', () => { fontSizeState.textContent = 'Font size selected'; });
     $('#resolver-reset').addEventListener('click', reset);
+    $('#scale-150').addEventListener('click', () => $('#scale-readout').setAttribute('aria-label', 'Zoom list. 150% selected.'));
 
     function reset() {
       fontSizeState.textContent = 'Not selected';

@@ -2,6 +2,7 @@
 import { RESOLVE_TIMEOUT_MS } from '../constants.js';
 import { isVisible } from './visible.js';
 import { toolbarMatch, menuMatch } from './match.js';
+import { isEnabled, isStateReadout, isTeacherUI, roleOf, collapseNested } from './eligibility.js';
 
 // Ladder (every tier filters through isVisible() FIRST):
 //   1  #docs-toolbar-wrapper [aria-label]   → toolbarMatch
@@ -10,17 +11,19 @@ import { toolbarMatch, menuMatch } from './match.js';
 //   4  apply target.nth to what's left      (nth counts VISIBLE matches)
 //   5  fail → null; panel falls back to a text-only hint
 // target.scope skips to the relevant tier. NEVER tier on CSS class names.
-const TOOLBAR_TIER = ['#docs-toolbar-wrapper [aria-label]', toolbarMatch];
+const TOOLBAR_TIER = ['#docs-toolbar-wrapper [aria-label], [role="toolbar"] [aria-label]', toolbarMatch];
 const MENU_TIER = [
-  '[role="menuitem"], [role="menuitemcheckbox"], [role="menuitemradio"]',
+  '[role="menuitem"], [role="menuitemcheckbox"], [role="menuitemradio"], [role="option"], [role="listbox"]',
   menuMatch,
 ];
 const GENERIC_TIER = ['[aria-label]', toolbarMatch];
+const DIALOG_TIER = ['dialog [aria-label], [role="dialog"] [aria-label], [role="alertdialog"] [aria-label]', toolbarMatch];
 
 const TIERS_BY_SCOPE = {
   toolbar: [TOOLBAR_TIER],
   menu: [MENU_TIER],
   any: [TOOLBAR_TIER, MENU_TIER, GENERIC_TIER],
+  dialog: [DIALOG_TIER],
 };
 
 function normalizeTarget(target) {
@@ -33,26 +36,28 @@ function normalizeTarget(target) {
   const scope = target.scope === undefined ? 'any' : target.scope;
   if (typeof scope !== 'string' || !Object.hasOwn(TIERS_BY_SCOPE, scope)) return null;
 
-  return { name: target.name.trim(), scope, nth: target.nth };
+  if (target.role !== undefined && (typeof target.role !== 'string' || !target.role.trim())) return null;
+  return { name: target.name.trim(), scope, nth: target.nth, role: target.role?.trim() };
 }
 
 function pick(matches, nth) {
   // Docs sometimes gives a combobox and its nested input the same aria-label.
   // Treat that nested pair as one control, preferring the outer hit target.
-  const controls = matches.filter(candidate =>
-    !matches.some(other => other !== candidate && other.contains(candidate))
-  );
+  const controls = collapseNested(matches);
 
   if (nth !== undefined) return controls[nth] ?? null;
   return controls.length === 1 ? controls[0] : null;
 }
 
-function resolveOnce(target) {
+function resolveOnce(target, { requireEnabled = true, allowReadouts = false } = {}) {
   if (typeof document === 'undefined') return null;
 
   for (const [selector, matchesName] of TIERS_BY_SCOPE[target.scope]) {
     const matches = [...document.querySelectorAll(selector)]
       .filter(isVisible)
+      .filter(el => !isTeacherUI(el) && (!requireEnabled || isEnabled(el))
+        && (allowReadouts || !isStateReadout(el))
+        && (!target.role || roleOf(el) === target.role))
       .filter(el => matchesName(el, target.name));
 
     // A tier with matches owns the result. If it is ambiguous or nth is out
@@ -63,13 +68,13 @@ function resolveOnce(target) {
   return null;
 }
 
-export function tryResolve(target) {
+export function tryResolve(target, options) {
   const normalized = normalizeTarget(target);
-  return normalized ? resolveOnce(normalized) : null;
+  return normalized ? resolveOnce(normalized, options) : null;
 }
 
-export function findSync(target) {
-  return tryResolve(target);
+export function findSync(target, options) {
+  return tryResolve(target, options);
 }
 
 export async function find(target, timeout = RESOLVE_TIMEOUT_MS) {

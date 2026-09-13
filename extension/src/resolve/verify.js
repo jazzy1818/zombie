@@ -5,8 +5,10 @@
 //   { kind: 'none' }                      advance on click alone
 import { VERIFY_TIMEOUT_MS } from '../constants.js';
 import { findSync } from './resolver.js';
+import { isVisible } from './visible.js';
+import { isTeacherUI } from './eligibility.js';
 
-const TARGET_SCOPES = new Set(['toolbar', 'menu', 'any']);
+const TARGET_SCOPES = new Set(['toolbar', 'menu', 'dialog', 'any']);
 
 function hasText(value) {
   return typeof value === 'string' && value.trim().length > 0;
@@ -32,22 +34,23 @@ function isValidRule(v) {
 
 function query(selector) {
   try {
-    return document.querySelector(selector);
+    return [...document.querySelectorAll(selector)].filter(el => isVisible(el) && !isTeacherUI(el));
   } catch {
-    return null;
+    return [];
   }
 }
 
 function checkOnce(v) {
   switch (v.kind) {
     case 'dom':
-      return query(v.selector) !== null;
+      return query(v.selector).length > 0;
     case 'label': {
-      const el = query(v.selector);
-      return Boolean(el?.textContent?.includes(v.match));
+      const expected = v.match.replace(/\s+/g, ' ').trim();
+      return query(v.selector).some(el => [el.textContent, el.getAttribute('aria-label')]
+        .some(value => value?.replace(/\s+/g, ' ').trim().includes(expected)));
     }
     case 'visible':
-      return findSync({ name: v.name, scope: v.scope }) !== null;
+      return findSync({ name: v.name, scope: v.scope, role: v.role }, { requireEnabled: false, allowReadouts: true }) !== null;
     default:
       return false;
   }

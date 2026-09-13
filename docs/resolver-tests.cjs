@@ -184,8 +184,11 @@ async function phaseDirect(base) {
       assert.equal(await ev(`__RESOLVE.verify({ kind: 'label', selector: '#docs-toolbar-wrapper [aria-label="Styles"]', match: 'Heading 1' })`), true);
     });
 
-    const richLabel = await ev(`__RESOLVE.verify({ kind: 'label', selector: '#resolver-styles-readout', match: 'Heading 1' })`);
-    note(`A's label verify reads textContent only: against the richer readout aria-label "Styles list. Heading 1 selected." it returns ${richLabel}. The teaching adapter also accepts aria-label (C's request); A's verify.js does not yet.`);
+    await test(P, 'richer aria-label outcomes verify while stateful readouts remain invalid action targets', async () => {
+      assert.equal(await ev(`__RESOLVE.verify({ kind: 'label', selector: '#resolver-styles-readout', match: 'Heading 1' })`), true);
+      assert.equal(await ev(`__RESOLVE.findSync({ name: 'Styles list. Heading 1 selected.', scope: 'toolbar' })`), null);
+      assert.equal(await ev(`__RESOLVE.verify({ kind: 'visible', name: 'Styles list. Heading 1 selected.', scope: 'toolbar' })`), true);
+    });
 
     await test(P, 'Insert menu: the opener click is reported as wrong, then Table of contents counts although it hid on mouseup', async () => {
       let wait = ev(`__RESOLVE.waitForClick({ scope: 'menu', name: 'Table of contents' })`);
@@ -205,13 +208,53 @@ async function phaseDirect(base) {
       assert.equal(await ev(`__RESOLVE.verify({ kind: 'dom', selector: '#resolver-toc-block' })`), true);
     });
 
-    await test(P, 'a disabled menubar item still resolves (visibility only); the adapter filters disabled on top', async () => {
+    await test(P, 'disabled File remains visible as an outcome but action resolution waits until enabled', async () => {
       await page.reload();
       await page.addScriptTag({ type: 'module', content: "import '/extension/src/resolve/index.js';" });
       await page.waitForFunction(() => Boolean(window.__RESOLVE));
-      const early = await ev(`(() => { const el = __RESOLVE.findSync({ scope: 'menu', name: 'File' }); return [el?.id, el?.getAttribute('aria-disabled')]; })()`);
-      assert.deepEqual(early, ['resolver-file', 'true']);
-      note("A's findSync returns aria-disabled controls (File during load). teaching/resolution.js drops them before highlighting, so this only matters if A's resolver is ever used without the adapter.");
+      assert.equal(await ev(`__RESOLVE.findSync({ scope: 'menu', name: 'File' })`), null);
+      assert.equal(await ev(`__RESOLVE.verify({ kind: 'visible', scope: 'menu', name: 'File' })`), true);
+      assert.deepEqual(await ev(`__RESOLVE.find({ scope: 'menu', name: 'File' }).then(el => [el?.id, el?.getAttribute('aria-disabled')])`), ['resolver-file', 'false']);
+    });
+
+    await test(P, 'eligible and nested candidate pools apply nth after filtering and collapsing', async () => {
+      assert.deepEqual(await ev(`[0, 1, 2].map(nth => __RESOLVE.findSync({ scope: 'toolbar', name: 'Eligible action', nth })?.id || null)`), ['pool-first', 'pool-second', null]);
+      assert.deepEqual(await ev(`[0, 1].map(nth => __RESOLVE.findSync({ scope: 'toolbar', name: 'Zoom', nth })?.id || null)`), ['pool-zoom', null]);
+    });
+
+    await test(P, 'C option/listbox roles and Updated badges resolve without matching container text', async () => {
+      assert.deepEqual(await ev(`[
+        __RESOLVE.findSync({ scope: 'menu', role: 'option', name: '150%' })?.id,
+        __RESOLVE.findSync({ scope: 'menu', role: 'listbox', name: 'Scale choices' })?.id,
+        __RESOLVE.findSync({ scope: 'menu', name: 'Solo option' })?.id,
+        __RESOLVE.findSync({ scope: 'menu', name: 'First option' })?.id,
+        __RESOLVE.findSync({ scope: 'menu', name: 'Page elements' })?.id,
+        __RESOLVE.findSync({ scope: 'menu', role: 'button', name: '150%' }),
+      ]`), ['scale-150', 'scale-options', 'solo-option', 'first-option', 'page-elements', null]);
+    });
+
+    await test(P, 'a real press alone does not finish a click wait and cancellation discards its gesture', async () => {
+      await page.evaluate(() => {
+        window.pressResult = null;
+        window.pressAbort = new AbortController();
+        __RESOLVE.waitForClick({ scope: 'toolbar', name: 'Bold' }, { signal: pressAbort.signal })
+          .then(result => { pressResult = result; }, error => { pressResult = error.name; });
+      });
+      const box = await page.locator('#resolver-bold').boundingBox();
+      await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2);
+      await page.mouse.down(); await pause(100);
+      assert.equal(await ev('pressResult'), null);
+      await ev('pressAbort.abort(); true'); await page.mouse.up();
+      assert.equal(await ev('pressResult'), 'AbortError');
+      const next = ev(`__RESOLVE.waitForClick({ scope: 'toolbar', name: 'Styles' })`);
+      await page.locator('#resolver-font').click();
+      assert.deepEqual(await next, { wrong: 'Font' });
+    });
+
+    await test(P, 'an ambiguous name cannot become correct through a broad event-path fallback', async () => {
+      const wait = ev(`__RESOLVE.waitForClick({ scope: 'toolbar', name: 'Eligible action' })`);
+      await page.locator('#pool-first').click();
+      assert.deepEqual(await wait, { wrong: 'Eligible action' });
     });
 
     await test(P, 'verify: none is true, malformed rules are false, nth:null is rejected', async () => {
@@ -223,7 +266,7 @@ async function phaseDirect(base) {
       ])`);
       assert.deepEqual(values, [true, false, false, false]);
       assert.equal(await ev(`__RESOLVE.findSync({ scope: 'toolbar', name: 'Styles', nth: null })`), null);
-      note('A target carrying nth: null (what a JSON emitter writes for "no nth") resolves to null. Decide with C whether emit.js must omit the key or resolver.js should treat null like undefined.');
+      note('Unused nth must be omitted by lesson authors; an explicit nth:null is rejected rather than silently selecting another control.');
     });
 
     assert.deepEqual(pageErrors, [], `phase 1 page errors: ${pageErrors.join('; ')}`);
@@ -240,7 +283,7 @@ async function phaseExtension(base) {
   let context;
   try {
     context = await chromium.launchPersistentContext(profile, {
-      headless: true, executablePath: chromePath,
+      headless: true, channel: 'chromium', executablePath: chromePath,
       args: [`--disable-extensions-except=${extensionPath}`, `--load-extension=${extensionPath}`],
       viewport: { width: 1440, height: 900 },
     });
@@ -320,8 +363,8 @@ async function phaseExtension(base) {
   try {
     await test(P, 'the extension resolves fixture targets through A (an alias only A understands)', async () => {
       await open();
+      await page.locator('#resolver-styles').click();
       const ids = await evaluate(`(() => {
-        document.querySelector('#resolver-styles').click();
         return [
           __RESOLVE.findSync({ scope: 'toolbar', name: 'Font size' })?.id,
           __RESOLVE.findSync({ scope: 'menu', name: "Apply 'Heading 1'" })?.id,
@@ -362,14 +405,21 @@ async function phaseExtension(base) {
       assert.equal(await page.evaluate(() => fixture.trusted.every(click => click.trusted)), true);
     });
 
-    await test(P, 'BRIDGE (teaching/controller.js): a Docs-style row that hides on mouseup still counts as the correct click', async () => {
+    await test(P, 'the bridge completes a hidden-on-mouseup row only after its real click, including explicit nth', async () => {
       await open('?activate=mouseup');
-      await begin({ ...practice, steps: practice.steps.slice(1, 3) });
+      const steps = practice.steps.slice(1, 3).map(step => ({ ...step, target: { ...step.target, nth: 0 } }));
+      await begin({ ...practice, steps });
       await aligned('#resolver-styles');
       await page.locator('#resolver-styles').click();
       await page.waitForFunction(() => document.querySelector('#browser-teacher-root').shadowRoot.querySelector('.bt-progress')?.textContent === '2 / 2');
       await aligned('#resolver-heading-one');
-      await page.locator('#resolver-heading-one').click();
+      const box = await page.locator('#resolver-heading-one').boundingBox();
+      await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2);
+      await page.mouse.down(); await pause(100);
+      assert.equal(await progress(), '2 / 2');
+      assert.equal(await page.locator('#resolver-styles-menu').isHidden(), false);
+      assert.equal(await page.locator('#resolver-styles').textContent(), 'Normal text');
+      await page.mouse.up();
       try {
         await completed();
       } catch (error) {
@@ -380,6 +430,46 @@ async function phaseExtension(base) {
         }));
         throw new Error(`lesson did not advance after a correct mouseup-activated click; fixture: ${JSON.stringify(state)}`);
       }
+    });
+
+    await test(P, 'hidden wrong rows preserve authored Apply-name corrections before the next real click', async () => {
+      await open('?activate=mouseup');
+      await begin({ ...practice, steps: practice.steps.slice(1, 3) });
+      await aligned('#resolver-styles'); await page.locator('#resolver-styles').click();
+      await aligned('#resolver-heading-one'); await page.locator('#resolver-title').click();
+      await wrongNote().waitFor();
+      assert.match(await wrongNote().textContent(), /Title is a different structural role/);
+      assert.equal(await page.locator('#resolver-styles-menu').isHidden(), true);
+      await page.locator('#resolver-styles').click();
+      await page.locator('#resolver-heading-one').click(); await completed();
+    });
+
+    await test(P, 'current bare-name lessons retain their Title correction on legacy radio menu rows', async () => {
+      await open('?activate=mouseup');
+      const steps = practice.steps.slice(1, 3).map(step => ({ ...step, target: { ...step.target } }));
+      steps[1].target = { scope: 'menu', name: 'Heading 1', role: 'menuitemradio' };
+      steps[1].wrongHints = { Title: 'Use a heading level, not the document title.' };
+      await begin({ ...practice, steps });
+      await aligned('#resolver-styles'); await page.locator('#resolver-styles').click();
+      await aligned('#resolver-heading-one'); await page.locator('#resolver-title').click();
+      await wrongNote().waitFor();
+      assert.match(await wrongNote().textContent(), /Use a heading level/);
+      await page.locator('#resolver-styles').click();
+      await page.locator('#resolver-heading-one').click(); await completed();
+    });
+
+    await test(P, 'C option-role lesson runs through A, the real bridge and an aria-label outcome', async () => {
+      await open();
+      await begin({ ...practice, steps: [{
+        id: 'choose-scale', mode: 'guided', intent: 'Choose 150%.', action: 'click',
+        target: { scope: 'menu', role: 'option', name: '150%' },
+        verify: { kind: 'label', selector: '#scale-readout', match: '150% selected.' },
+        hints: ['Choose the named scale.'],
+      }] });
+      await aligned('#scale-150');
+      assert.equal(await page.locator('#scale-readout').getAttribute('aria-label'), 'Zoom list. 100% selected.');
+      await page.locator('#scale-150').click(); await completed();
+      assert.equal(await page.locator('#scale-readout').getAttribute('aria-label'), 'Zoom list. 150% selected.');
     });
 
     assert.deepEqual(runtimeErrors, [], `phase 2 runtime errors: ${runtimeErrors.join('; ')}`);

@@ -1,13 +1,13 @@
-// Compatibility adapter while A's resolver is unfinished. A's synchronous
-// resolver gets first refusal. This fallback contains no site-specific selectors.
+// A owns scoped matching; this fallback adds native names and open-shadow DOM.
 import { RESOLVE_TIMEOUT_MS, VERIFY_TIMEOUT_MS } from '../constants.js';
 import { isVisible } from '../resolve/visible.js';
 import { checkAbort, delay } from './async.js';
+import { parentOf as parent, isEnabled, isStateReadout, roleOf, collapseNested } from '../resolve/eligibility.js';
+export { isEnabled, roleOf } from '../resolve/eligibility.js';
 
 const CONTROL = 'button, a[href], input:not([type="hidden"]), select, textarea, summary, [role], [aria-label], [aria-labelledby]';
 const ACTION_ROLES = new Set(['button', 'link', 'checkbox', 'radio', 'switch', 'tab', 'menuitem', 'menuitemcheckbox', 'menuitemradio', 'option', 'combobox', 'listbox', 'textbox', 'searchbox', 'slider', 'spinbutton', 'treeitem']);
 const normalize = value => String(value || '').replace(/\s+/g, ' ').trim();
-const parent = element => element.assignedSlot || element.parentElement || element.getRootNode()?.host || null;
 const uiHost = element => element.id === 'browser-teacher-root'
   || element.getAttribute('data-browser-teacher') === 'ui'
   || element.hasAttribute('data-browser-teacher-paint');
@@ -25,37 +25,6 @@ export function usable(element) {
     if (node.inert || node.getAttribute('aria-hidden') === 'true') return false;
   }
   return true;
-}
-
-// A visible control can still be disabled while an application loads. Native
-// :disabled includes fieldset/legend rules; ARIA also applies to descendants.
-// Keep this separate from visibility: disabled controls can report outcomes.
-export function isEnabled(element) {
-  if (element?.nodeType !== 1 || element.matches(':disabled')) return false;
-  for (let node = element; node; node = parent(node)) {
-    if (normalize(node.getAttribute('aria-disabled')).toLowerCase() === 'true') return false;
-  }
-  return true;
-}
-
-export function roleOf(element) {
-  const explicit = element.getAttribute('role')?.trim().split(/\s+/)[0];
-  if (explicit) return explicit;
-  const tag = element.localName;
-  if (tag === 'button' || tag === 'summary') return 'button';
-  if (tag === 'a' && element.hasAttribute('href')) return 'link';
-  if (tag === 'select') return element.multiple ? 'listbox' : 'combobox';
-  if (tag === 'textarea') return 'textbox';
-  if (tag === 'option') return 'option';
-  if (tag === 'dialog') return 'dialog';
-  if (tag !== 'input') return '';
-  const type = element.type;
-  if (['button', 'submit', 'reset', 'image'].includes(type)) return 'button';
-  if (['checkbox', 'radio'].includes(type)) return type;
-  if (type === 'range') return 'slider';
-  if (type === 'number') return 'spinbutton';
-  if (type === 'hidden') return '';
-  return type === 'search' ? 'searchbox' : 'textbox';
 }
 
 export function accessibleName(element) {
@@ -102,13 +71,14 @@ function withinScope(element, scope = 'any') {
   for (let node = element; node; node = parent(node)) {
     const role = roleOf(node);
     if (scope === 'toolbar' && role === 'toolbar') return true;
-    if (scope === 'menu' && (role === 'menu' || role === 'menubar' || role.startsWith('menuitem'))) return true;
+    if (scope === 'menu' && (role === 'menu' || role === 'menubar' || role === 'listbox' || role === 'option' || role.startsWith('menuitem'))) return true;
     if (scope === 'dialog' && (role === 'dialog' || role === 'alertdialog')) return true;
   }
   return false;
 }
 
 function matchesName(element, wanted) {
+  if (roleOf(element) === 'listbox' && !element.hasAttribute('aria-label') && !element.hasAttribute('aria-labelledby')) return false;
   const name = accessibleName(element);
   const expected = normalize(wanted);
   if (name === expected) return true;
@@ -116,24 +86,26 @@ function matchesName(element, wanted) {
   // use an unrestricted prefix ("Save" must not silently become "Save as").
   if (!name.startsWith(expected)) return false;
   const suffix = name.slice(expected.length).trim();
-  return /^(?:[►▸▶›»]|\(?\s*(?:Ctrl|Control|Alt|Option|Shift|Meta|Cmd|Command|⌘|⌥|⇧|F\d{1,2})(?:\b|[+⌘⌥⇧]).*\)?)$/i.test(suffix);
+  return /^(?:Updated|New)\s*[►▸▶›»]?$/i.test(suffix)
+    || /^(?:[►▸▶›»]|\(?\s*(?:Ctrl|Control|Alt|Option|Shift|Meta|Cmd|Command|⌘|⌥|⇧|F\d{1,2})(?:\b|[+⌘⌥⇧]).*\)?)$/i.test(suffix);
 }
 
-export function findTarget(target, resolver, { requireEnabled = true } = {}) {
-  const eligible = element => usable(element) && (!requireEnabled || isEnabled(element));
+export function findTarget(target, resolver, { requireEnabled = true, allowReadouts = false } = {}) {
+  const eligible = element => usable(element) && (!requireEnabled || isEnabled(element))
+    && (allowReadouts || !isStateReadout(element));
   if (target?.nodeType === 1) return eligible(target) ? target : null;
   if (!target || typeof target.name !== 'string' || !target.name.trim()) return null;
   if (target.nth !== undefined && (!Number.isInteger(target.nth) || target.nth < 0)) return null;
   // Read A live so a completed resolver can replace the stub without changing D.
-  const provided = resolver?.()?.findSync?.(target);
+  const provided = resolver?.()?.findSync?.(target, { requireEnabled, allowReadouts });
   if (eligible(provided)) return provided;
-  const matches = queryDeep(CONTROL).filter(element => eligible(element)
+  const matches = collapseNested(queryDeep(CONTROL).filter(element => eligible(element)
     && withinScope(element, target.scope)
     && (!target.role || roleOf(element) === target.role)
     // A menu/toolbar container's concatenated text is not its child's button
     // name. Grouping and static roles require an explicit role in the target.
     && (target.role || !roleOf(element) || ACTION_ROLES.has(roleOf(element)))
-    && matchesName(element, target.name));
+    && matchesName(element, target.name)));
   if (target.nth === undefined && matches.length !== 1) return null;
   return matches[target.nth ?? 0] || null;
 }
@@ -151,7 +123,7 @@ export async function resolveTarget(target, { signal, resolver, timeout = RESOLV
 
 export function actionFromPath(path) {
   return path.find(element => element?.nodeType === 1 && usable(element)
-    && isEnabled(element)
+    && isEnabled(element) && !isStateReadout(element)
     && (element.matches('button, a[href], input:not([type="hidden"]), select, textarea, summary') || ACTION_ROLES.has(roleOf(element)))) || null;
 }
 
@@ -165,7 +137,7 @@ export async function verifyOutcome(verification, { signal, resolver, timeout = 
   if (!verification || verification.kind === 'none') return true;
   const end = performance.now() + timeout;
   function matches() {
-    if (verification.kind === 'visible') return Boolean(findTarget(verification, resolver, { requireEnabled: false }));
+    if (verification.kind === 'visible') return Boolean(findTarget(verification, resolver, { requireEnabled: false, allowReadouts: true }));
     if (!['dom', 'label'].includes(verification.kind) || typeof verification.selector !== 'string') return false;
     let elements;
     try { elements = queryDeep(verification.selector); } catch { return false; }

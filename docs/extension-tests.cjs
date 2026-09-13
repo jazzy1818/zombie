@@ -1,13 +1,15 @@
 // Run with Playwright on NODE_PATH: node docs/extension-tests.cjs
 // CHROME_PATH must name Chromium/Chrome for Testing with unpacked-extension support.
 // The actual extension is loaded from its manifest in a separate persistent profile.
-// CDP is used only to enter its isolated JavaScript world and call the real dev
-// lesson hook. No resolver, teach, paint, page click or browser API is mocked.
+// CDP enters the isolated world for diagnostics and fixture lesson data. Library
+// discovery/search tests start through the actual chat bar and packaged index.
+// No resolver, teach, paint, page click or browser API is mocked.
 const { chromium } = require('playwright');
 const assert = require('node:assert/strict');
 const fs = require('node:fs/promises');
 const path = require('node:path');
 const http = require('node:http');
+const { pathToFileURL } = require('node:url');
 
 const root = path.resolve(__dirname, '..');
 const artifacts = path.join(__dirname, '.paint-artifacts');
@@ -40,7 +42,7 @@ async function report() {
     `Unpacked extension: ${extensionId || 'not detected'}`, '',
     `Result: **${passed}/${results.length} checks passed**.`, '',
     ...(testFilter ? [`Selected checks: \`${process.env.EXTENSION_TEST_FILTER}\`.`, ''] : []),
-    'The browser loaded the unchanged extension directory through the manifest content script, then its real module graph in the extension isolated world. Tests use the actual panel, teaching adapter, resolver/fallback and paint implementations. No lesson-success, click, resolver or browser API mocks are installed.', '',
+    'The browser loaded the extension directory through the manifest content script, then its real module graph in the extension isolated world. Tests use the actual panel, teaching adapter, resolver/fallback and paint implementations. The publication check additionally loads a temporary copy of the same production files with one locally replayed fixture lesson added by the real publisher. No lesson-success, click, resolver or browser API mocks are installed.', '',
     ...results.map(result => `- ${result.passed ? 'PASS' : 'FAIL'}: ${result.name}${result.error ? ` — ${result.error.replace(/\n/g, ' ')}` : ''}`), '',
     `Uncaught page or extension console errors: ${runtimeErrors.length}.`,
     ...runtimeErrors.map(error => `- ${error.replace(/\n/g, ' ')}`), '',
@@ -240,6 +242,133 @@ async function report() {
     assert.deepEqual(await evaluate('Object.keys(__PAINT).sort()'), ['init', 'spotlight', 'clear', 'moveCursor', 'clickCursor', 'flashCorrect', 'flashWrong', 'setCursorVisible'].sort());
     assert.equal(await page.locator('[data-browser-teacher-paint]').count(), 1);
     assert.ok(extensionId);
+  });
+  await test('Packaged lesson index discovers and validates every published lesson', async () => {
+    const data = JSON.parse(await fs.readFile(path.join(extensionPath, 'lessons', 'index.json'), 'utf8'));
+    const entries = Array.isArray(data) ? data : data.lessons;
+    assert.ok(Array.isArray(entries) && entries.length, 'The shipped library needs a nonempty index');
+    const ids = entries.map(entry => typeof entry === 'string' ? entry : entry.id);
+    assert.equal(new Set(ids).size, ids.length, 'The published index must not contain duplicate ids');
+    assert.deepEqual(await evaluate('__BT_DEV.lessons()'), ids, 'Discovery must read the packaged index');
+    const loaded = await evaluate(`import(chrome.runtime.getURL('src/panel/lessons.js')).then(module => module.loadAll()).then(lessons => lessons.map(lesson => lesson.id))`);
+    assert.deepEqual(loaded, ids, 'Every indexed file must load and pass the real panel validator');
+    assert.ok(ids.includes('styles-toc') && ids.includes('version-history'));
+  });
+  await test('Typed question launches the packaged Styles lesson and waits for the real first click', async () => {
+    const shipped = JSON.parse(await fs.readFile(path.join(extensionPath, 'lessons', 'styles-toc.json'), 'utf8'));
+    await page.locator('#browser-teacher-root .bt-bar-input').fill('How do I add an automatic table of contents?');
+    await panelButton('Teach me').click();
+    await page.locator('#browser-teacher-root .bt-card-preamble').waitFor();
+    assert.equal(await page.locator('#browser-teacher-root .bt-card-title').textContent(), shipped.goal);
+    assert.equal(await page.locator('#browser-teacher-root .bt-card-body').textContent(), shipped.preamble);
+    await panelButton('Show me').click();
+    await cursorAligned('#styles-open');
+    assert.equal(await progress(), `1 / ${shipped.steps.length}`);
+    assert.equal(await count('styles-open'), 0);
+    await page.locator('#styles-open').click();
+    await panelButton('Got it').waitFor();
+    assert.equal(await progress(), `2 / ${shipped.steps.length}`);
+    assert.equal(await count('styles-open'), 1);
+    await panelButton('Stop').click();
+    await stopped();
+  });
+  await test('Typed version-history question selects the actual bundled preamble', async () => {
+    const shipped = JSON.parse(await fs.readFile(path.join(extensionPath, 'lessons', 'version-history.json'), 'utf8'));
+    await page.locator('#browser-teacher-root .bt-bar-input').fill('How can I find and name a version of my document?');
+    await panelButton('Teach me').click();
+    await page.locator('#browser-teacher-root .bt-card-preamble').waitFor();
+    assert.equal(await page.locator('#browser-teacher-root .bt-card-title').textContent(), shipped.goal);
+    assert.equal(await page.locator('#browser-teacher-root .bt-card-body').textContent(), shipped.preamble);
+    await panelButton('Not now').click();
+    await stopped();
+  });
+  await test('An unknown typed question offers published lesson choices and opens the chosen lesson', async () => {
+    const shipped = await evaluate(`import(chrome.runtime.getURL('src/panel/lessons.js')).then(module => module.loadAll()).then(lessons => lessons.map(({ id, goal, preamble }) => ({ id, goal, preamble })))`);
+    await page.locator('#browser-teacher-root .bt-bar-input').fill('zxqv nebular flibbertigibbet');
+    await panelButton('Teach me').click();
+    await page.locator('#browser-teacher-root .bt-card-picker').waitFor();
+    const choices = page.locator('#browser-teacher-root .bt-actions .bt-btn');
+    const labels = await choices.allTextContents();
+    assert.equal(labels.length, Math.min(4, shipped.length));
+    assert.ok(labels.every(label => shipped.some(lesson => lesson.goal === label)));
+    const selected = shipped.find(lesson => lesson.goal === labels[0]);
+    await choices.first().click();
+    await page.locator('#browser-teacher-root .bt-card-preamble').waitFor();
+    assert.equal(await page.locator('#browser-teacher-root .bt-card-body').textContent(), selected.preamble);
+    await panelButton('Not now').click();
+    await stopped();
+  });
+  await test('A measured fixture replay publishes into a copied extension and launches through its question box', async () => {
+    const candidate = {
+      id: 'published-paint-practice', app: 'universal', goal: 'Publish the sample article',
+      preamble: 'Practice publishing the sample article with the real website button.',
+      generalization: 'You activated the sample publishing control yourself.',
+      steps: [step('Publish', { target: target('Publish', 'toolbar') })],
+    };
+    // Collect success from a real trusted browser replay before creating proof.
+    // This validates the local publication protocol, not cloud exploration.
+    await evaluate(`(() => { window.__integrationRun = __BT_DEV.runLesson(${JSON.stringify(candidate)}); return true; })()`);
+    await panelButton('Show me').click();
+    await cursorAligned('#publish');
+    assert.equal(await count('publish'), 0);
+    await page.locator('#publish').click();
+    await completed();
+    assert.equal(await count('publish'), 1);
+    assert.equal(await page.evaluate(() => fixture.trusted.every(click => click.trusted)), true);
+    await panelButton('Done').click();
+    assert.equal((await evaluate('__integrationRun')).status, 'completed');
+
+    const { publishLesson, verificationEvidence } = await import(pathToFileURL(path.join(root, 'pipeline', 'publish.js')).href);
+    const evidence = verificationEvidence(candidate, { ok: true, local: true, steps: [{ id: candidate.steps[0].id, status: 'ok' }] });
+    const copiedExtension = await fs.mkdtemp(path.join(artifacts, 'published-extension-'));
+    await fs.cp(extensionPath, copiedExtension, { recursive: true });
+    const published = await publishLesson(candidate, evidence, { lessonsDir: path.join(copiedExtension, 'lessons') });
+    assert.ok(published.ids.includes(candidate.id));
+    const copiedProfile = await fs.mkdtemp(path.join(artifacts, 'published-profile-'));
+    const publishedContext = await chromium.launchPersistentContext(copiedProfile, {
+      headless: true, channel: 'chromium',
+      ...(process.env.CHROME_PATH ? { executablePath: process.env.CHROME_PATH } : {}),
+      args: [`--disable-extensions-except=${copiedExtension}`, `--load-extension=${copiedExtension}`],
+      viewport: { width: 1440, height: 900 },
+    });
+    const publishedPage = publishedContext.pages()[0] || await publishedContext.newPage();
+    publishedPage.setDefaultTimeout(12000);
+    publishedPage.on('pageerror', error => runtimeErrors.push(`Published fixture: ${error.message}`));
+    try {
+      const publishedCDP = await publishedContext.newCDPSession(publishedPage);
+      publishedCDP.on('Runtime.consoleAPICalled', event => {
+        if (event.type === 'error') runtimeErrors.push(`Published extension: ${event.args.map(arg => arg.value ?? arg.description ?? arg.type).join(' ')}`);
+      });
+      await publishedCDP.send('Runtime.enable');
+      await publishedPage.goto(url);
+      const panel = publishedPage.locator('#browser-teacher-root');
+      await panel.locator('.bt-bar-input').fill('How do I publish the sample article?');
+      await panel.getByRole('button', { name: 'Teach me', exact: true }).click();
+      await panel.locator('.bt-card-preamble').waitFor();
+      assert.equal(await panel.locator('.bt-card-title').textContent(), candidate.goal);
+      assert.equal(await panel.locator('.bt-card-body').textContent(), candidate.preamble);
+      await panel.getByRole('button', { name: 'Show me', exact: true }).click();
+      await publishedPage.waitForFunction(() => {
+        const cursor = document.querySelector('[data-browser-teacher-paint]')?.shadowRoot.querySelector('.cursor');
+        return cursor && !cursor.hidden;
+      });
+      assert.equal(await publishedPage.evaluate(() => fixture.clicks.publish || 0), 0);
+      await publishedPage.locator('#publish').click();
+      await panel.locator('.bt-card-generalization').waitFor();
+      assert.equal(await publishedPage.evaluate(() => fixture.clicks.publish), 1);
+      assert.equal(await publishedPage.evaluate(() => fixture.trusted.every(click => click.trusted)), true);
+      await publishedPage.waitForFunction(() => {
+        const paint = document.querySelector('[data-browser-teacher-paint]')?.shadowRoot;
+        return !paint || ['.spot', '.scrim', '.cursor', '.feedback', '.ripple'].every(selector => paint.querySelector(selector).hidden);
+      });
+      await panel.getByRole('button', { name: 'Done', exact: true }).click();
+      await panel.locator('.bt-window.is-open').waitFor({ state: 'hidden' });
+    } catch (error) {
+      await publishedPage.screenshot({ path: path.join(artifacts, 'publication-failure.png') }).catch(() => {});
+      throw error;
+    } finally {
+      await publishedContext.close();
+    }
   });
   await test('Guided lesson waits for a real correct click and clears every effect', async () => {
     await begin([step('Publish', { target: target('Publish', 'toolbar') })]);

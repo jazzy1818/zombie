@@ -1,16 +1,21 @@
 # Loaded extension integration results
 
-Run: 2026-09-13T00:04:30.441Z
+Run: 2026-09-13T03:20:24.803Z
 
 Browser: 151.0.7922.34
 
 Unpacked extension: hncmnkedojgcjjcnfnepjoleekjeahjg
 
-Result: **32/32 checks passed**.
+Result: **37/37 checks passed**.
 
-The browser loaded the unchanged extension directory through the manifest content script, then its real module graph in the extension isolated world. Tests use the actual panel, teaching adapter, resolver/fallback and paint implementations. No lesson-success, click, resolver or browser API mocks are installed.
+The browser loaded the extension directory through the manifest content script, then its real module graph in the extension isolated world. Tests use the actual panel, teaching adapter, resolver/fallback and paint implementations. The publication check additionally loads a temporary copy of the same production files with one locally replayed fixture lesson added by the real publisher. No lesson-success, click, resolver or browser API mocks are installed.
 
 - PASS: Manifest bootstrap loads real contracts in the extension isolated world
+- PASS: Packaged lesson index discovers and validates every published lesson
+- PASS: Typed question launches the packaged Styles lesson and waits for the real first click
+- PASS: Typed version-history question selects the actual bundled preamble
+- PASS: An unknown typed question offers published lesson choices and opens the chosen lesson
+- PASS: A measured fixture replay publishes into a copied extension and launches through its question box
 - PASS: Guided lesson waits for a real correct click and clears every effect
 - PASS: Synthetic page clicks do not advance the lesson
 - PASS: A fast correct click during cursor animation is captured before the next step
@@ -50,5 +55,3 @@ Scope: ordinary DOM controls on a local HTTP fixture, including native modal dia
 Screenshots and the disposable browser profile are saved under ignored `docs/.paint-artifacts/`.
 
 Run with `node docs/extension-tests.cjs` after making Playwright available. Set `CHROME_PATH` to a Chromium or Chrome for Testing executable that supports unpacked extensions. Normal branded Chrome builds may ignore extension-loading flags.
-
-Validation note: An earlier full run passed 31/32 checks; the existing shadow-root native-modal cursor-alignment check timed out once. With its assertions unchanged, that check passed alone, with the preceding modal-Stop case, and in this final complete 32/32 run. The cause of the first failure was not established. Failure diagnostics now record target geometry, cursor visibility/transform, resolver output and pointer state to aid a future reproduction. All new disabled-control and richer-label regressions passed both full runs.

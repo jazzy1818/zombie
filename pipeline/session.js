@@ -35,22 +35,30 @@ export async function openSession(opts = {}) {
     blockAds: true,
   });
 
-  const browser = await chromium.connectOverCDP(
-    `${session.websocketUrl}&apiKey=${STEEL_API_KEY}`,
-  );
-  const context = browser.contexts()[0];
-  const page = context.pages()[0] ?? await context.newPage();
+  let browser;
+  try {
+    browser = await chromium.connectOverCDP(
+      `${session.websocketUrl}&apiKey=${STEEL_API_KEY}`,
+    );
+    const context = browser.contexts()[0];
+    const page = context.pages()[0] ?? await context.newPage();
 
-  if (injectProbe) await context.addInitScript(PROBE_SOURCE);
+    if (injectProbe) await context.addInitScript(PROBE_SOURCE);
 
-  const handle = {
-    steel, session, browser, context, page,
-    viewerUrl: session.sessionViewerUrl ?? session.debugUrl,
-    probe: (fn, ...args) => callProbe(page, fn, args),
-  };
+    const handle = {
+      steel, session, browser, context, page,
+      viewerUrl: session.sessionViewerUrl ?? session.debugUrl,
+      probe: (fn, ...args) => callProbe(page, fn, args),
+    };
 
-  await assertViewport(page);
-  return handle;
+    await assertViewport(page);
+    return handle;
+  } catch (error) {
+    // Initialization can fail before the caller receives a handle to release.
+    try { await browser?.close(); } catch { /* connection already closed */ }
+    try { await steel.sessions.release(session.id); } catch { /* release attempted */ }
+    throw error;
+  }
 }
 
 // Steel's `dimensions` sets the browser window; the page's layout width may not follow.
