@@ -22,12 +22,16 @@
 // a request open that long. The panel polls.
 import { createServer } from 'node:http';
 import { readFile, writeFile, mkdir, readdir } from 'node:fs/promises';
-import { fileURLToPath } from 'node:url';
+import { fileURLToPath, pathToFileURL } from 'node:url';
+import { resolve } from 'node:path';
 import { openAuthedSession, openLocalSession, closeSession } from './session.js';
 import { explore } from './explore.js';
 import { prune } from './prune.js';
 import { emit } from './emit.js';
 import { verifyLesson } from './verify.js';
+import { createJobViewer } from './session-viewer.js';
+import { createReplayService } from './session-replay.js';
+import { STEEL_API_KEY } from './config.js';
 
 const PORT = Number(process.env.BRIDGE_PORT ?? 7777);
 const LESSONS = new URL('../extension/lessons/', import.meta.url);
@@ -38,7 +42,11 @@ const INDEX = new URL('index.json', LESSONS);
 let running = false;
 
 const jobs = new Map();
-const JOB_TTL_MS = 30 * 60_000;
+const JOB_TTL_MS = 24 * 60 * 60_000;
+const replays = createReplayService({
+  apiKey: STEEL_API_KEY,
+  baseUrl: () => `http://127.0.0.1:${server.address()?.port ?? PORT}`,
+});
 
 /* ------------------------------------------------------------------ lessons */
 
@@ -97,6 +105,7 @@ async function saveLesson(lesson) {
 function newJob(goal) {
   const id = `j_${Math.random().toString(36).slice(2, 10)}`;
   const job = { id, goal, state: 'running', progress: [], startedAt: Date.now() };
+  createJobViewer(job);
   jobs.set(id, job);
 
   // Without this a long-lived bridge accumulates every lesson it ever made.
@@ -119,55 +128,66 @@ const note = (job, text) => {
  * replay doubles the wait for someone staring at a panel — and they are about
  * to walk the lesson themselves, which is a better test than any replay.
  */
-async function runJob(job, spec) {
+export async function runJob(job, spec, overrides = {}) {
   const { goal, docUrl, check, verify, local } = spec;
+  const services = { openAuthedSession, openLocalSession, closeSession, explore, prune, emit, verifyLesson, uniqueId, saveLesson, ...overrides };
+  const viewer = createJobViewer(job, { registerRecording: overrides.registerRecording ?? replays.register });
   let trace = null;
+  let browserNumber = 0;
 
-  for (let attempt = 1; attempt <= 2 && !trace; attempt++) {
-    const handle = local ? await openLocalSession() : await openAuthedSession();
-    job.viewerUrl = handle.viewerUrl;
-    try {
-      note(job, attempt === 1 ? 'Opening a cloud browser…' : `Retrying (attempt ${attempt})…`);
-      const result = await explore(handle, {
-        goal,
-        docUrl,
-        goalCheck: check ?? { kind: 'none' },
-        onStep(ev) {
-          if (ev.phase === 'opening') note(job, 'Loading the document…');
-          if (ev.phase === 'click') note(job, `Tried "${ev.name}" — ${ev.reasoning}`);
-          if (ev.phase === 'checking') note(job, 'Checking whether that worked…');
-          if (ev.phase === 'reached') note(job, 'Found a path that works.');
-          if (ev.phase === 'stuck') note(job, `Stuck: ${ev.reasoning}`);
-        },
-      });
-      if (result.ok) trace = result;
-      else note(job, `That attempt did not reach the goal (${result.reason}).`);
-    } finally {
-      await closeSession(handle);
+  try {
+    for (let attempt = 1; attempt <= 2 && !trace; attempt++) {
+      const onViewer = viewer.begin({ attempt: ++browserNumber, local: !!local });
+      note(job, attempt === 1 ? (local ? 'Opening a local browser…' : 'Opening a cloud browser…') : `Retrying (attempt ${attempt})…`);
+      let handle;
+      try {
+        handle = local ? await services.openLocalSession({ onViewer }) : await services.openAuthedSession({ onViewer });
+        const result = await services.explore(handle, {
+          goal,
+          docUrl,
+          goalCheck: check ?? { kind: 'none' },
+          onStep(ev) {
+            if (ev.phase === 'opening') note(job, 'Loading the document…');
+            if (ev.phase === 'click') note(job, `Tried "${ev.name}" — ${ev.reasoning}`);
+            if (ev.phase === 'checking') note(job, 'Checking whether that worked…');
+            if (ev.phase === 'reached') note(job, 'Found a path that works.');
+            if (ev.phase === 'stuck') note(job, `Stuck: ${ev.reasoning}`);
+          },
+        });
+        if (result.ok) trace = result;
+        else note(job, `That attempt did not reach the goal (${result.reason}).`);
+      } finally {
+        if (handle) await services.closeSession(handle);
+      }
     }
+
+    if (!trace) throw new Error(`I explored but couldn't find a reliable way to do "${goal}".`);
+
+    note(job, 'Removing the wrong turns…');
+    const pruned = services.prune(trace);
+
+    note(job, 'Writing the explanation…');
+    const id = spec.id ?? await services.uniqueId(goal);
+    const lesson = await services.emit(pruned, { id, goal });
+
+    if (verify) {
+      note(job, 'Replaying it in a fresh browser to be sure…');
+      const onViewer = viewer.begin({ attempt: ++browserNumber, phase: 'verifying', local: !!local });
+      const report = await services.verifyLesson(lesson, { docUrl, local: !!local, onViewer });
+      if (!report.ok) throw new Error('The lesson did not replay cleanly, so I threw it away.');
+    }
+
+    note(job, 'Saving it for next time…');
+    await services.saveLesson(lesson);
+
+    job.lesson = lesson;
+    job.state = 'done';
+    note(job, `Done — ${lesson.steps.length} steps.`);
+  } finally {
+    // No live link survives completion, errors, or an opener that failed before
+    // it could notify us. This does not stop or pause generation for the UI.
+    viewer.finish();
   }
-
-  if (!trace) throw new Error(`I explored but couldn't find a reliable way to do "${goal}".`);
-
-  note(job, 'Removing the wrong turns…');
-  const pruned = prune(trace);
-
-  note(job, 'Writing the explanation…');
-  const id = spec.id ?? await uniqueId(goal);
-  const lesson = await emit(pruned, { id, goal });
-
-  if (verify) {
-    note(job, 'Replaying it in a fresh browser to be sure…');
-    const report = await verifyLesson(lesson, { docUrl, local: !!local });
-    if (!report.ok) throw new Error('The lesson did not replay cleanly, so I threw it away.');
-  }
-
-  note(job, 'Saving it for next time…');
-  await saveLesson(lesson);
-
-  job.lesson = lesson;
-  job.state = 'done';
-  note(job, `Done — ${lesson.steps.length} steps.`);
 }
 
 /* ------------------------------------------------------------------- server */
@@ -206,6 +226,8 @@ const server = createServer(async (req, res) => {
 
   if (req.method === 'OPTIONS') { cors(res); res.writeHead(204); res.end(); return; }
 
+  if (await replays.handle(req, res, url)) return;
+
   if (url.pathname === '/health') {
     return send(res, 200, { ok: true, busy: running, docUrl: !!process.env.DEMO_DOC_URL });
   }
@@ -219,7 +241,7 @@ const server = createServer(async (req, res) => {
     if (!job) return send(res, 404, { error: 'no such job' });
     return send(res, 200, {
       id: job.id, state: job.state, progress: job.progress,
-      viewerUrl: job.viewerUrl, lesson: job.lesson, error: job.error,
+      viewer: job.viewer, viewerUrl: job.viewerUrl, recordings: job.recordings, lesson: job.lesson, error: job.error,
     });
   }
 
@@ -253,7 +275,7 @@ const server = createServer(async (req, res) => {
   send(res, 404, { error: 'not found' });
 });
 
-server.listen(PORT, '127.0.0.1', () => {
+if (process.argv[1] && import.meta.url === pathToFileURL(resolve(process.argv[1])).href) server.listen(PORT, '127.0.0.1', () => {
   console.log(`\n  Browser Teacher bridge on http://localhost:${PORT}`);
   console.log(`  Doc: ${process.env.DEMO_DOC_URL ?? 'DEMO_DOC_URL not set — the panel must send one'}`);
   console.log('\n  Leave this running. Ask the panel a question it has no lesson for.\n');

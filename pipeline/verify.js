@@ -4,10 +4,10 @@ import { openAuthedSession, openLocalSession, closeSession, whoami } from './ses
 import { RESOLVE_TIMEOUT_MS, VERIFY_TIMEOUT_MS } from './config.js';
 
 export async function verifyLesson(lesson, opts = {}) {
-  const { docUrl = process.env.DEMO_DOC_URL, keepOpen = false, local = false } = opts;
+  const { docUrl = process.env.DEMO_DOC_URL, keepOpen = false, local = false, onViewer } = opts;
   if (!docUrl) throw new Error('no doc URL — pass { docUrl } or set DEMO_DOC_URL');
 
-  const handle = local ? await openLocalSession() : await openAuthedSession();
+  const handle = local ? await openLocalSession({ onViewer }) : await openAuthedSession({ onViewer });
   const steps = [];
   let failedAt;
 
