@@ -96,7 +96,12 @@ async function saveLesson(lesson) {
 
 function newJob(goal) {
   const id = `j_${Math.random().toString(36).slice(2, 10)}`;
-  const job = { id, goal, state: 'running', progress: [], startedAt: Date.now() };
+  const job = {
+    id, goal, state: 'running', progress: [], startedAt: Date.now(),
+    abort: new AbortController(),
+    handle: null,        // the live Steel session, so cancel can release it now
+    polledAt: Date.now(),
+  };
   jobs.set(id, job);
 
   // Without this a long-lived bridge accumulates every lesson it ever made.
@@ -112,6 +117,38 @@ const note = (job, text) => {
 };
 
 /**
+ * Stop a job and release its cloud browser now.
+ *
+ * The signal stops the loop at its next safe point, but that can be a whole model call
+ * away — so the session is closed here too. That makes the in-flight Playwright call
+ * throw, which is the fastest way out of a wait nobody is watching any more.
+ */
+async function cancelJob(job, why) {
+  if (job.state !== 'running') return false;
+  job.state = 'cancelled';
+  job.error = why;
+  job.abort.abort();
+  note(job, why);
+  const handle = job.handle;
+  job.handle = null;
+  if (handle) await closeSession(handle).catch(() => {});
+  return true;
+}
+
+// A closed tab, a crashed browser, a shut laptop: none of them send anything. Without
+// this the session runs to its Steel timeout and blocks every later question.
+const ABANDONED_MS = 60_000;
+
+setInterval(() => {
+  for (const job of jobs.values()) {
+    if (job.state !== 'running') continue;
+    if (Date.now() - job.polledAt < ABANDONED_MS) continue;
+    cancelJob(job, 'Nobody was waiting for this any more, so I stopped it.')
+      .catch(err => console.error(`  [${job.id}] cleanup failed:`, err.message));
+  }
+}, 10_000).unref();
+
+/**
  * The whole pipeline, for one goal.
  *
  * Mirrors `author.js run`, with two differences that matter when a human is
@@ -124,13 +161,22 @@ async function runJob(job, spec) {
   let trace = null;
 
   for (let attempt = 1; attempt <= 2 && !trace; attempt++) {
+    if (job.abort.signal.aborted) throw new Error('cancelled');
     const handle = local ? await openLocalSession() : await openAuthedSession();
+    // Opening takes seconds, and a cancel arriving inside that window finds job.handle
+    // still null — so it has nothing to release. Re-check now that we hold one.
+    if (job.abort.signal.aborted) {
+      await closeSession(handle).catch(() => {});
+      throw new Error('cancelled');
+    }
+    job.handle = handle;
     job.viewerUrl = handle.viewerUrl;
     try {
       note(job, attempt === 1 ? 'Opening a cloud browser…' : `Retrying (attempt ${attempt})…`);
       const result = await explore(handle, {
         goal,
         docUrl,
+        signal: job.abort.signal,
         goalCheck: check ?? { kind: 'none' },
         onStep(ev) {
           if (ev.phase === 'opening') note(job, 'Loading the document…');
@@ -143,10 +189,12 @@ async function runJob(job, spec) {
       if (result.ok) trace = result;
       else note(job, `That attempt did not reach the goal (${result.reason}).`);
     } finally {
+      job.handle = null;
       await closeSession(handle);
     }
   }
 
+  if (job.abort.signal.aborted) throw new Error('cancelled');
   if (!trace) throw new Error(`I explored but couldn't find a reliable way to do "${goal}".`);
 
   note(job, 'Removing the wrong turns…');
@@ -215,8 +263,19 @@ const server = createServer(async (req, res) => {
   }
 
   if (url.pathname.startsWith('/jobs/')) {
-    const job = jobs.get(url.pathname.slice('/jobs/'.length));
+    const rest = url.pathname.slice('/jobs/'.length);
+    const cancelling = rest.endsWith('/cancel');
+    const job = jobs.get(cancelling ? rest.slice(0, -'/cancel'.length) : rest);
     if (!job) return send(res, 404, { error: 'no such job' });
+
+    // sendBeacon can only POST, and it is the only thing that survives a closing tab.
+    if (cancelling) {
+      const stopped = await cancelJob(job, 'Cancelled — the cloud browser has been released.');
+      return send(res, 200, { id: job.id, state: job.state, stopped });
+    }
+
+    // Polling is the liveness signal: it is what tells the reaper someone still cares.
+    job.polledAt = Date.now();
     return send(res, 200, {
       id: job.id, state: job.state, progress: job.progress,
       viewerUrl: job.viewerUrl, lesson: job.lesson, error: job.error,
@@ -242,11 +301,18 @@ const server = createServer(async (req, res) => {
 
     runJob(job, { goal, docUrl, id: body.id, check: body.check, verify: !!body.verify, local: !!body.local })
       .catch(err => {
+        // A cancelled job already has its state and its reason; the throw that got us
+        // out of the loop is the mechanism, not news.
+        if (job.state === 'cancelled') return;
         job.state = 'error';
         job.error = err.message;
         note(job, `Failed: ${err.message}`);
       })
-      .finally(() => { running = false; });
+      .finally(() => {
+        running = false;
+        if (job.handle) closeSession(job.handle).catch(() => {});
+        job.handle = null;
+      });
     return;
   }
 

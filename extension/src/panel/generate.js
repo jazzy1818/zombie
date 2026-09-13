@@ -43,7 +43,26 @@ const sleep = (ms, signal) => new Promise((resolve, reject) => {
  * a blank spinner reads as broken, and the same four minutes narrated reads as
  * the product working.
  */
-export async function generateLesson(goal, { signal, onProgress, docUrl } = {}) {
+/**
+ * Tell the bridge to stop and release the cloud browser.
+ *
+ * Aborting the fetch only stops us listening — the session keeps running, keeps billing,
+ * and holds the bridge's one-at-a-time lock, so the next question comes back 409. This is
+ * the only thing that actually stops it.
+ *
+ * sendBeacon first: it is the one request that survives the page going away, which is
+ * exactly when this matters most.
+ */
+export function cancelGeneration(jobId) {
+  if (!jobId) return;
+  const url = `${BRIDGE}/jobs/${jobId}/cancel`;
+  try {
+    if (navigator.sendBeacon?.(url, new Blob([], { type: 'text/plain' }))) return;
+  } catch { /* fall through to fetch */ }
+  fetch(url, { method: 'POST', keepalive: true }).catch(() => {});
+}
+
+export async function generateLesson(goal, { signal, onProgress, docUrl, onJob } = {}) {
   const res = await fetch(`${BRIDGE}/generate`, {
     method: 'POST',
     headers: { 'content-type': 'application/json' },
@@ -55,6 +74,10 @@ export async function generateLesson(goal, { signal, onProgress, docUrl } = {}) 
   if (!res.ok) throw new Error((await res.json().catch(() => ({})))?.error || `The bridge said ${res.status}.`);
 
   const { jobId } = await res.json();
+  onJob?.(jobId);
+  // Whatever ends this — cancel, navigation, an error — the bridge is told once.
+  signal?.addEventListener('abort', () => cancelGeneration(jobId), { once: true });
+
   const started = Date.now();
   let seen = 0;
 
@@ -74,6 +97,7 @@ export async function generateLesson(goal, { signal, onProgress, docUrl } = {}) 
     seen = job.progress.length;
 
     if (job.state === 'done') return job.lesson;
+    if (job.state === 'cancelled') throw new DOMException('Generation cancelled', 'AbortError');
     if (job.state === 'error') throw new Error(job.error || 'Generation failed.');
 
     if (Date.now() - started > MAX_WAIT_MS) {
