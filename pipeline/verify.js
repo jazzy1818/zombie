@@ -14,10 +14,12 @@ export async function verifyLesson(lesson, opts = {}) {
   console.log(`\n  ${lesson.id} — watch: ${handle.viewerUrl}`);
 
   let skipped = false;
+  let viewport = '?';
 
   try {
     await handle.page.goto(docUrl, { waitUntil: 'domcontentloaded' });
     await handle.page.waitForSelector('#docs-toolbar-wrapper', { timeout: 30_000 });
+    viewport = await handle.page.evaluate(() => `${innerWidth}x${innerHeight}`);
     await handle.page.waitForTimeout(1500);   // Docs wires its menus after the toolbar paints
 
     const account = await whoami(handle.page);
@@ -107,6 +109,8 @@ export async function verifyLesson(lesson, opts = {}) {
     steps,
     ...(failedAt ? { failedAt } : {}),
     viewerUrl: handle.viewerUrl,
+    viewport,
+    local,
   };
 }
 
@@ -191,7 +195,7 @@ export function printReport(lesson, report) {
     }
   }
   console.log(report.ok
-    ? `\n  PASS — replays clean in a fresh 1440×900 cloud Chrome.\n`
+    ? `\n  PASS — replays clean at ${report.viewport} in ${report.local ? 'local Chrome' : 'a fresh cloud Chrome'}.\n`
     : `\n  FAIL at ${report.failedAt}. Watch it: ${report.viewerUrl}\n`);
   return report.ok;
 }
