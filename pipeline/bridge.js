@@ -29,7 +29,7 @@ import { createServer } from 'node:http';
 import { readFile, writeFile, mkdir, readdir } from 'node:fs/promises';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { resolve } from 'node:path';
-import { openExploreSession, closeSession, tryLoadProfile } from './session.js';
+import { openAuthedSession, openLocalSession, closeSession } from './session.js';
 import { explore } from './explore.js';
 import { prune } from './prune.js';
 import { emit } from './emit.js';
@@ -37,7 +37,6 @@ import { verifyLesson } from './verify.js';
 import { createJobViewer } from './session-viewer.js';
 import { createReplayService } from './session-replay.js';
 import { STEEL_API_KEY } from './config.js';
-import { appFor, choosePage } from './apps.js';
 
 const PORT = Number(process.env.BRIDGE_PORT ?? 7777);
 const LESSONS = new URL('../extension/lessons/', import.meta.url);
@@ -182,7 +181,7 @@ setInterval(() => {
  */
 export async function runJob(job, spec, overrides = {}) {
   const { goal, docUrl, check, verify, local } = spec;
-  const services = { openExploreSession, closeSession, explore, prune, emit, verifyLesson, uniqueId, saveLesson, ...overrides };
+  const services = { openAuthedSession, openLocalSession, closeSession, explore, prune, emit, verifyLesson, uniqueId, saveLesson, ...overrides };
   const viewer = createJobViewer(job, { registerRecording: overrides.registerRecording ?? replays.register });
   job.abort ??= new AbortController();
   const signal = job.abort.signal;
@@ -205,10 +204,6 @@ export async function runJob(job, spec, overrides = {}) {
     };
   }
 
-  // Explore the app the panel was open on, preserving its auth policy through
-  // retries and the optional fresh verification session.
-  const app = appFor(docUrl);
-  job.app = app.id;
   let trace = null;
   let browserNumber = 0;
 
@@ -217,34 +212,27 @@ export async function runJob(job, spec, overrides = {}) {
       checkCancelled();
       const onViewer = beginViewer({ attempt: ++browserNumber, local: !!local });
       note(job, attempt === 1
-        ? `Opening a ${local ? 'local' : 'cloud'} browser on ${app.label}…`
+        ? `Opening a ${local ? 'local' : 'cloud'} browser…`
         : `Retrying (attempt ${attempt})…`);
       let handle;
       try {
-        // Public pages can use an anonymous browser when no saved profile is
-        // available. The observer travels through every auth/local path.
-        handle = await services.openExploreSession({ app, local: !!local, auth: spec.auth ?? 'auto', onViewer });
+        handle = local
+          ? await services.openLocalSession({ onViewer })
+          : await services.openAuthedSession({ onViewer });
         job.handle = handle;
         checkCancelled(); // cancellation may have arrived while opening
-        job.anonymous = !!handle.anonymous;
-        if (handle.anonymous) note(job, `Browsing ${app.label} signed out.`);
-        if (attempt === 1 && spec.pageUrl && spec.pageUrl !== docUrl) {
-          note(job, 'Using the prepared document rather than yours — the cloud browser signs in as a different account.');
-        }
         const result = await services.explore(handle, {
           goal,
           docUrl,
-          app,
           signal,
           goalCheck: check ?? { kind: 'none' },
           onStep(ev) {
             if (signal.aborted) return;
-            if (ev.phase === 'opening') note(job, `Loading ${ev.docUrl ?? app.label}…`);
+            if (ev.phase === 'opening') note(job, 'Loading the document…');
             if (ev.phase === 'click') note(job, `Tried "${ev.name}" — ${ev.reasoning}`);
             if (ev.phase === 'checking') note(job, 'Checking whether that worked…');
             if (ev.phase === 'reached') note(job, 'Found a path that works.');
             if (ev.phase === 'stuck') note(job, `Stuck: ${ev.reasoning}`);
-            if (ev.phase === 'login-wall') note(job, `That page wants a sign-in: ${ev.reason}.`);
           },
         });
         checkCancelled();
@@ -265,14 +253,14 @@ export async function runJob(job, spec, overrides = {}) {
     note(job, 'Writing the explanation…');
     const id = spec.id ?? await services.uniqueId(goal);
     checkCancelled();
-    const lesson = await services.emit(pruned, { id, goal, app });
+    const lesson = await services.emit(pruned, { id, goal });
     checkCancelled();
 
     if (verify) {
       note(job, 'Replaying it in a fresh browser to be sure…');
       const onViewer = beginViewer({ attempt: ++browserNumber, phase: 'verifying', local: !!local });
       const report = await services.verifyLesson(lesson, {
-        docUrl, local: !!local, auth: spec.auth ?? 'auto', app, onViewer, signal,
+        docUrl, local: !!local, onViewer, signal,
         // Verification owns a fresh session. Make it reachable by cancellation
         // as soon as it opens and share release with its own finally block.
         onHandle: handle => { job.handle = handle; },
@@ -347,10 +335,6 @@ const server = createServer(async (req, res) => {
       busy: running,
       docUrl: !!process.env.DEMO_DOC_URL,
       // The panel sends its own page URL; this is only the fallback.
-      fallbackApp: process.env.DEMO_DOC_URL ? appFor(process.env.DEMO_DOC_URL).id : null,
-      // Whether a signed-in browser is available. Public pages work without
-      // one; anything behind a login does not.
-      profile: Boolean(await tryLoadProfile()),
     });
   }
 
@@ -387,9 +371,8 @@ const server = createServer(async (req, res) => {
     const goal = typeof body.goal === 'string' && body.goal.trim();
     if (!goal) return send(res, 400, { error: 'goal is required' });
 
-    const docUrl = choosePage(body.docUrl);
-    if (!docUrl) return send(res, 400, { error: 'no page URL sent and DEMO_DOC_URL is not set' });
-    if (!/^https?:\/\//i.test(docUrl)) return send(res, 400, { error: 'page URL must be http(s)' });
+    const docUrl = body.docUrl ?? process.env.DEMO_DOC_URL;
+    if (!docUrl) return send(res, 400, { error: 'no docUrl and DEMO_DOC_URL is not set' });
 
     // A second session would fight the first over the same document.
     if (running) return send(res, 409, { error: 'already generating a lesson — try again in a minute' });
@@ -399,11 +382,8 @@ const server = createServer(async (req, res) => {
     send(res, 202, { jobId: job.id });
 
     runJob(job, {
-      goal, docUrl, pageUrl: body.docUrl, id: body.id, check: body.check,
+      goal, docUrl, id: body.id, check: body.check,
       verify: !!body.verify, local: !!body.local,
-      // 'none' forces a signed-out browser — the honest way to check that a
-      // lesson is reachable by a logged-out visitor.
-      auth: body.auth === 'none' || body.auth === 'required' ? body.auth : 'auto',
     })
       .catch(err => {
         // A cancelled job already has its state and its reason; the throw that got us

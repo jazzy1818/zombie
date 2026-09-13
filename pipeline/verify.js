@@ -1,23 +1,20 @@
 // [C] Stage 5 — replay a lesson in a fresh session using only its emitted descriptors.
 // Completes → ship. Fails → descriptors too fragile, re-run.
-import { openExploreSession, closeSession, whoami } from './session.js';
+import { openAuthedSession, openLocalSession, closeSession, whoami } from './session.js';
 import { RESOLVE_TIMEOUT_MS, VERIFY_TIMEOUT_MS } from './config.js';
-import { appById, appFor, waitForApp } from './apps.js';
 
 export async function verifyLesson(lesson, opts = {}, overrides = {}) {
-  const { docUrl = process.env.DEMO_DOC_URL, keepOpen = false, local = false, auth = 'auto', onViewer, signal, onHandle } = opts;
+  const { docUrl = process.env.DEMO_DOC_URL, keepOpen = false, local = false, onViewer, signal, onHandle } = opts;
   // Service overrides keep lifecycle tests offline; normal callers use the
-  // same session/app functions as authoring.
-  const services = { openExploreSession, closeSession, whoami, waitForApp, ...overrides };
+  // same session functions as authoring.
+  const services = { openAuthedSession, openLocalSession, closeSession, whoami, ...overrides };
   const checkCancelled = () => signal?.throwIfAborted();
   checkCancelled();
-  if (!docUrl) throw new Error('no page URL — pass { docUrl } or set DEMO_DOC_URL');
+  if (!docUrl) throw new Error('no doc URL — pass { docUrl } or set DEMO_DOC_URL');
 
-  // Replay in the same app the lesson was authored for. The lesson's own `app`
-  // wins over the URL: a lesson replayed against the wrong app should fail
-  // loudly on its first descriptor, not quietly against a mismatched probe.
-  const app = opts.app ?? appById(lesson.app) ?? appFor(docUrl);
-  const handle = await services.openExploreSession({ app, local, auth, onViewer });
+  const handle = local
+    ? await services.openLocalSession({ onViewer })
+    : await services.openAuthedSession({ onViewer });
   let releasePromise;
   const release = () => releasePromise ??= Promise.resolve().then(() => (opts.releaseHandle ?? services.closeSession)(handle));
   const onAbort = () => { release().catch(() => {}); };
@@ -35,15 +32,15 @@ export async function verifyLesson(lesson, opts = {}, overrides = {}) {
     checkCancelled(); // an opener may finish after cancellation
     await handle.page.goto(docUrl, { waitUntil: 'domcontentloaded' });
     checkCancelled();
-    await services.waitForApp(handle, app);
+    await handle.page.waitForSelector('#docs-toolbar-wrapper', { timeout: 30_000 });
     viewport = await handle.page.evaluate(() => `${innerWidth}x${innerHeight}`);
-    await handle.page.waitForTimeout(1500);   // apps wire their menus after first paint
+    await handle.page.waitForTimeout(1500);   // Docs wires its menus after the toolbar paints
 
     checkCancelled();
     const account = await services.whoami(handle.page);
     console.log(account
       ? `  signed in as ${account}`
-      : `  no signed-in account detected — anything in ${app.label} that needs one will be disabled`);
+      : '  NOT SIGNED IN — Drive-level menu items will be disabled and steps that need them will fail');
 
     for (const step of lesson.steps) {
       checkCancelled();
@@ -167,7 +164,7 @@ async function roleCensus(handle) {
 async function dumpScope(handle, scope) {
   try {
     const obs = await handle.probe('observe');
-    const pool = scope && obs[scope] ? obs[scope] : [...obs.toolbar, ...obs.menu, ...obs.dialog, ...(obs.any ?? [])];
+    const pool = scope && obs[scope] ? obs[scope] : [...obs.toolbar, ...obs.menu, ...obs.dialog];
     return pool.map(c => c.raw + (c.disabled ? '   [disabled]' : ''));
   } catch {
     return [];

@@ -4,9 +4,8 @@ import { createInterface } from 'node:readline/promises';
 import { Steel } from 'steel-sdk';
 import { chromium } from 'playwright-core';
 import { VIEWPORT, STEEL_API_KEY, PROFILE_PATH } from './config.js';
-import { probeSource } from './dom-probe.js';
+import { PROBE_SOURCE } from './dom-probe.js';
 import { createSessionViewer } from './session-viewer.js';
-import { appFor } from './apps.js';
 
 const DEFAULT_TIMEOUT_MS = 300_000;   // Steel bills per session-minute
 const CAPTURE_TIMEOUT_MS = 900_000;   // a human is typing a password in this one
@@ -26,10 +25,6 @@ export async function openSession(opts = {}) {
     timeout = DEFAULT_TIMEOUT_MS,
     injectProbe = true,
     onViewer,
-    // Which app this session is for. The probe's scope selectors are baked
-    // into its source at injection time, so this has to be known before the
-    // first page load — not worked out once we get there.
-    app = appFor('https://docs.google.com/'),
   } = opts;
 
   const viewer = createSessionViewer(onViewer);
@@ -60,17 +55,16 @@ export async function openSession(opts = {}) {
     const context = browser.contexts()[0];
     const page = context.pages()[0] ?? await context.newPage();
 
-    const source = probeSource(app.selectors);
-    if (injectProbe) await context.addInitScript(source);
+    if (injectProbe) await context.addInitScript(PROBE_SOURCE);
 
     const handle = {
-      steel, session, browser, context, page, app,
+      steel, session, browser, context, page,
       viewer,
       viewerUrl: viewer.state.url,
-      probe: (fn, ...args) => callProbe(page, fn, args, source),
+      probe: (fn, ...args) => callProbe(page, fn, args),
     };
 
-    await assertViewport(page, app);
+    await assertViewport(page);
     return handle;
   } catch (error) {
     // Initialization can fail before the caller receives a handle to release.
@@ -82,24 +76,20 @@ export async function openSession(opts = {}) {
 }
 
 // Steel's `dimensions` sets the browser window; the page's layout width may not follow.
-// Every responsive app has a width below which it hides controls behind an overflow
-// menu, and a descriptor authored on the wrong side of that is wrong for the learner.
-// The threshold is the app's, not the web's: 1400 for Docs (PLAN.md §3), less for
-// apps that degrade more gracefully.
-async function assertViewport(page, app) {
-  const floor = app?.minWidth ?? 1400;
+// Below 1400 the Docs toolbar collapses into More and authored descriptors go stale.
+async function assertViewport(page) {
   const [w, h] = await page.evaluate(() => [window.innerWidth, window.innerHeight]);
-  if (w >= floor) return;
+  if (w >= 1400) return;
 
   const cdp = await page.context().newCDPSession(page);
   await cdp.send('Emulation.setDeviceMetricsOverride', {
     width: VIEWPORT.width, height: VIEWPORT.height, deviceScaleFactor: 1, mobile: false,
   });
   const [w2] = await page.evaluate(() => [window.innerWidth]);
-  if (w2 < floor) {
+  if (w2 < 1400) {
     throw new Error(
-      `viewport is ${w2}×${h}, needs ≥${floor} wide for ${app?.label ?? 'this app'}. Its chrome ` +
-      `will be collapsed into an overflow menu and every authored descriptor will be wrong.`,
+      `viewport is ${w2}×${h}, needs ≥1400 wide (PLAN.md §3). The Docs toolbar will be ` +
+      `collapsed into More and every authored descriptor will be wrong.`,
     );
   }
   console.warn(`[session] window was ${w}px; forced ${w2}px via Emulation override`);
@@ -117,32 +107,21 @@ export async function whoami(page) {
 }
 
 // Covers addInitScript not firing on the CDP default context.
-async function ensureProbe(page, source) {
+async function ensureProbe(page) {
   const ok = await page.evaluate(() => typeof window.__PROBE === 'object');
-  if (!ok) await page.evaluate(source);
+  if (!ok) await page.evaluate(PROBE_SOURCE);
 }
 
-async function callProbe(page, fn, args, source) {
-  await ensureProbe(page, source);
+async function callProbe(page, fn, args) {
+  await ensureProbe(page);
   return page.evaluate(
     ([f, a]) => window.__PROBE[f](...a),
     [fn, args],
   );
 }
 
-/**
- * Log the cloud browser into an app, once, and keep the session.
- *
- * One profile holds every cookie the browser collects, so signing into Google
- * and GitHub in the same capture leaves one profile that can explore both.
- * Nothing here is Google-specific any more except the warning, which still
- * applies: use a throwaway account, because cloud browsers trip Google's
- * "this browser may not be secure" check.
- *
- * @param {object} [opts]
- * @param {string[]} [opts.sites]  what to tell the operator to sign into
- */
-export async function openCaptureSession({ sites = [] } = {}) {
+// Use a throwaway Google account — cloud browsers trip "this browser may not be secure".
+export async function openCaptureSession() {
   const handle = await openSession({
     persistProfile: true,
     timeout: CAPTURE_TIMEOUT_MS,
@@ -150,14 +129,11 @@ export async function openCaptureSession({ sites = [] } = {}) {
   });
 
   const interactive = `${handle.session.debugUrl}${handle.session.debugUrl.includes('?') ? '&' : '?'}interactive=true`;
-  const what = sites.length ? sites.join(', ') : 'every app you want to generate lessons for';
-  console.log(`\n  Open this and sign into ${what}:\n`);
+  console.log('\n  Open this, log into Google, then open any Doc:\n');
   console.log(`    ${interactive}\n`);
-  console.log('  One profile holds them all — sign into as many as you like in this one window.');
-  console.log('  Use throwaway accounts: cloud browsers trip Google\'s "browser may not be secure" check.\n');
 
   const rl = createInterface({ input: process.stdin, output: process.stdout });
-  await rl.question('  Press ENTER once you are signed in... ');
+  await rl.question('  Press ENTER once you are logged in and looking at a Doc... ');
   rl.close();
   return handle;
 }
@@ -272,64 +248,9 @@ export async function loadProfile(path = PROFILE_PATH) {
   }
 }
 
-/** The saved profile, or null. For callers that can work without one. */
-export async function tryLoadProfile(path = PROFILE_PATH) {
-  try {
-    return JSON.parse(await readFile(path, 'utf8'));
-  } catch {
-    return null;
-  }
-}
-
 export async function openAuthedSession(opts = {}) {
   const { profileId, sessionContext } = await loadProfile();
   return openSession({ ...opts, profileId, sessionContext });
-}
-
-/**
- * A cloud browser signed into nothing.
- *
- * A public page needs no account, and requiring one anyway was a real barrier:
- * a public GitHub repo is readable by anybody, and refusing to explore it until
- * someone had hand-captured a Google login made no sense. Most of the web is
- * readable like this.
- */
-export function openAnonSession(opts = {}) {
-  return openSession(opts);
-}
-
-/**
- * Open whatever session this exploration can actually get.
- *
- * @param {object} opts
- * @param {object} [opts.app]      app profile, for the probe's selectors
- * @param {boolean} [opts.local]   drive the local Chrome over CDP instead
- * @param {'auto'|'none'|'required'} [opts.auth]
- *   - `auto` (default): use the saved profile if there is one, otherwise go
- *     anonymous and say so. Public pages then work out of the box.
- *   - `none`: ignore any saved profile. Useful for checking that a lesson is
- *     genuinely reachable by a logged-out visitor.
- *   - `required`: fail loudly rather than silently exploring a logged-out view
- *     of an app whose interesting parts need an account.
- */
-export async function openExploreSession({ app, local = false, auth = 'auto', ...rest } = {}) {
-  if (local) return openLocalSession({ ...rest, app });
-  if (auth === 'required') return openAuthedSession({ ...rest, app });
-  if (auth === 'none') return markAnonymous(await openAnonSession({ ...rest, app }));
-
-  const profile = await tryLoadProfile();
-  if (profile?.profileId || profile?.sessionContext) {
-    return openSession({ ...rest, app, profileId: profile.profileId, sessionContext: profile.sessionContext });
-  }
-  console.warn('[session] no saved profile — exploring signed out. '
-    + 'Public pages are fine; anything behind a login will not be reachable. '
-    + 'Run `node author.js capture-profile` if you need one.');
-  return markAnonymous(await openAnonSession({ ...rest, app }));
-}
-
-function markAnonymous(handle) {
-  handle.anonymous = true;
-  return handle;
 }
 
 // Drive a local Chrome started with --remote-debugging-port. Same probe, same verify
@@ -340,7 +261,6 @@ export async function openLocalSession(opts = {}) {
     cdpUrl = 'http://localhost:9222',
     injectProbe = true,
     onViewer,
-    app = appFor('https://docs.google.com/'),
   } = opts;
   const viewer = createSessionViewer(onViewer);
   viewer.unavailable();
@@ -358,18 +278,17 @@ export async function openLocalSession(opts = {}) {
 
   const context = browser.contexts()[0];
   const page = context.pages()[0] ?? await context.newPage();
-  const source = probeSource(app.selectors);
-  if (injectProbe) await context.addInitScript(source);
+  if (injectProbe) await context.addInitScript(PROBE_SOURCE);
 
   const handle = {
-    steel: null, session: null, browser, context, page, app,
+    steel: null, session: null, browser, context, page,
     local: true,
     viewer,
     viewerUrl: '(local Chrome)',
-    probe: (fn, ...args) => callProbe(page, fn, args, source),
+    probe: (fn, ...args) => callProbe(page, fn, args),
   };
 
-  await assertViewport(page, app);
+  await assertViewport(page);
   return handle;
 }
 

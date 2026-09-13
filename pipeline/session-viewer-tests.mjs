@@ -132,7 +132,8 @@ function jobFixture({ results = [{ ok: true }], openError, exploreError, verifyE
     };
   }
   const services = {
-    openExploreSession: open,
+    openAuthedSession: open,
+    openLocalSession: open,
     closeSession,
     explore: async (_handle, options) => {
       inputs.explore.push(options);
@@ -391,9 +392,10 @@ for (const phase of ['opening', 'navigation', 'resolve', 'check']) {
       keepOpen: true, // cancellation must still release even with this CLI option
       onHandle: value => { owned.push(value); },
     }, {
-      openExploreSession: async () => { if (phase === 'opening') await gate.wait(); return handle; },
+      openAuthedSession: async () => { if (phase === 'opening') await gate.wait(); return handle; },
+      openLocalSession: async () => { if (phase === 'opening') await gate.wait(); return handle; },
       closeSession: async () => { releases++; },
-      waitForApp: async () => {}, whoami: async () => null,
+      whoami: async () => null,
     }), { name: 'AbortError' });
     await gate.entered;
     abort.abort();

@@ -3,8 +3,7 @@
 // Lesson JSON is READ-ONLY input. The schema is frozen (PLAN.md §5) and
 // extension/lessons/ belongs to C — if a lesson looks wrong, message them.
 
-import { buildIndex, search, isConfident, relevant } from './search.js';
-import { lessonRunsHere, siteKey } from '../sites.js';
+import { buildIndex, search, isConfident } from './search.js';
 
 /**
  * Which lessons exist.
@@ -153,33 +152,11 @@ export async function loadAll() {
   return results.filter(Boolean);
 }
 
-/**
- * The lessons that could actually run on the page we're on.
- *
- * Everything downstream — the index, the picker, the "I don't know that one"
- * copy — works off this rather than off loadAll(). A Google Docs lesson on
- * GitHub isn't a weak match to be ranked low, it's a lesson whose every step
- * points at a control that does not exist, and ranking can't tell the
- * difference because the prose still says "click Insert".
- */
-export async function loadHere(site = siteKey()) {
-  return (await loadAll()).filter(lesson => lessonRunsHere(lesson, site));
-}
-
 let index = null;
-let indexedSite = null;
 
-/**
- * Built once per site from the lesson prose. Cheap — a few hundred tokens per
- * lesson. Keyed on the site because a single-page app can carry us from one
- * host to another without ever reloading the extension.
- */
+/** Built once from the lesson prose. Cheap — a few hundred tokens per lesson. */
 async function getIndex() {
-  const site = siteKey();
-  if (!index || indexedSite !== site) {
-    index = buildIndex(await loadHere(site), EXTRA_TERMS);
-    indexedSite = site;
-  }
+  if (!index) index = buildIndex(await loadAll(), EXTRA_TERMS);
   return index;
 }
 
@@ -191,19 +168,12 @@ async function getIndex() {
  * user just waited three minutes for it, and asking a near-identical question
  * a minute later should hit the index rather than build it a second time.
  */
-export function addLesson(lesson, site = siteKey()) {
+export function addLesson(lesson) {
   validateLesson(lesson);
-  // The emitter stamps `app` from the page it explored, so this is a safety
-  // net for a lesson that arrived without one. Without it such a lesson is
-  // filtered out of the very library it was just built for, and the user, who
-  // waited three minutes, is told we don't know how to do what we just learned.
-  const claimsApp = lesson.app !== undefined || lesson.sites !== undefined || lesson.site !== undefined;
-  if (!claimsApp && site) lesson.sites = [site];
   cache.set(lesson.id, lesson);
   const known = listLessons();
   idsPromise = known.then(ids => (ids.includes(lesson.id) ? ids : [...ids, lesson.id]));
   index = null;   // rebuilt on the next search, with this lesson in it
-  indexedSite = null;
   return lesson;
 }
 
@@ -213,16 +183,10 @@ export async function scoreLessons(question) {
 }
 
 /**
- * Score a question against the library.
+ * Pick a lesson for a question.
  *
- * `matches` is the part of the ranking the question actually earned — often
- * empty, and that emptiness is the answer: we don't teach this yet, so the
- * panel should say so rather than pad the screen with the whole library.
- * `ranked` is still the full scoring, for the dev console.
- *
- * `confident` says the top match is a strong one. The panel still asks — it
- * never launches a lesson the user didn't choose — but it words the question
- * differently when it has a real answer to offer.
+ * `confident` false -> the panel shows the lessons and lets the user choose,
+ * rather than confidently teaching the wrong thing on stage.
  *
  * Async because matching reads the lessons themselves. They're cached after the
  * first call, so this is a map lookup from then on.
@@ -231,13 +195,9 @@ export async function matchLesson(question) {
   const ranked = await scoreLessons(question);
   const best = ranked[0];
   return {
-    // No id rather than a Docs id: on a site we have no lessons for, the
-    // ranking is empty and inventing a default here would hand the picker a
-    // lesson the user never matched and the page can't run.
-    id: best?.id ?? null,
+    id: best?.id ?? FALLBACK_IDS[0],
     score: best?.score ?? 0,
     confident: isConfident(ranked),
-    matches: relevant(ranked),
     ranked,
   };
 }

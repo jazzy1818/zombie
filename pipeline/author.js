@@ -5,8 +5,8 @@ import { createInterface } from 'node:readline/promises';
 import { resolve as resolvePath } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import {
-  openCaptureSession, saveProfile, closeSession,
-  listProfiles, adoptProfile, openExploreSession, whoami,
+  openAuthedSession, openCaptureSession, saveProfile, closeSession,
+  listProfiles, adoptProfile, openLocalSession, whoami,
 } from './session.js';
 import { explore } from './explore.js';
 import { prune, printPrune } from './prune.js';
@@ -14,7 +14,6 @@ import { emit, skeleton } from './emit.js';
 import { verifyLesson, printReport } from './verify.js';
 import { fallbackDemo, SHALLOW_GOAL } from './fallback-demo.js';
 import { assertLessonId, validatePublishable, runRecordedVerification, publishLesson } from './publish.js';
-import { appFor, appById, listApps, waitForApp } from './apps.js';
 
 const TRACES = new URL('./traces/', import.meta.url);
 const OUT = new URL('./out/', import.meta.url);
@@ -38,18 +37,12 @@ function parseArgs(argv) {
 // A valueless flag parses as `true`, which would beat the process.env fallback.
 const str = v => (typeof v === 'string' && v.length ? v : undefined);
 
-// --anon ignores any saved profile; --auth demands one rather than quietly
-// exploring a logged-out view. Neither is needed for a public page.
-const authMode = flags => (flags.anon ? 'none' : flags.auth ? 'required' : 'auto');
-
 const fromCwd = p => resolvePath(process.cwd(), p);
 const fromHere = p => fileURLToPath(new URL(p, import.meta.url));
 
 const commands = {
-  // node author.js capture-profile --sites "Google, GitHub"
-  async 'capture-profile'({ flags }) {
-    const sites = str(flags.sites)?.split(',').map(s => s.trim()).filter(Boolean) ?? [];
-    const handle = await openCaptureSession({ sites });
+  async 'capture-profile'() {
+    const handle = await openCaptureSession();
     await saveProfile(handle);
     console.log('\n  Done. explore/verify will use this automatically.\n');
   },
@@ -58,13 +51,12 @@ const commands = {
   // explore and verify actually run in.
   async open({ flags }) {
     const docUrl = str(flags.doc) ?? process.env.DEMO_DOC_URL;
-    const app = appFor(docUrl ?? '');
-    const handle = await openExploreSession({ app, local: !!flags.local, auth: authMode(flags) });
+    const handle = flags.local ? await openLocalSession() : await openAuthedSession();
 
     try {
       if (docUrl) {
         await handle.page.goto(docUrl, { waitUntil: 'domcontentloaded' });
-        await waitForApp(handle, app);
+        await handle.page.waitForSelector('#docs-toolbar-wrapper', { timeout: 30_000 });
         await handle.page.waitForTimeout(1500);
       } else {
         console.warn('\n  no DEMO_DOC_URL — opening a blank browser');
@@ -74,18 +66,11 @@ const commands = {
       console.log(`\n  viewport   ${w}x${h}   ${w >= 1400 ? 'ok' : 'TOO NARROW — toolbar will be collapsed into More'}`);
 
       if (docUrl) {
-        console.log(`  app        ${app.label}${app.generic ? '  (no registered profile — using generic selectors)' : ''}`);
-        console.log(`  identity   ${handle.local ? 'local Chrome' : handle.anonymous ? 'signed out (no saved profile)' : 'saved profile'}`);
         const obs = await handle.probe('observe');
-        console.log(`  probe      ${obs.toolbar.length} toolbar, ${obs.menu.length} menu, ${obs.dialog.length} dialog, ${obs.any?.length ?? 0} page`);
-        if (!obs.toolbar.length && !obs.menu.length && !obs.any?.length) {
-          console.log('  WARNING    nothing nameable on this page — a canvas app or an iframe cannot be taught');
-        }
+        console.log(`  probe      ${obs.toolbar.length} toolbar, ${obs.menu.length} menu, ${obs.dialog.length} dialog visible`);
 
-        if (app.id === 'google-docs') {
-          const file = obs.menu.find(c => c.name === 'File');
-          console.log(`  menubar    ${file ? `"File" found via ${file.source}` : '"File" NOT FOUND — version-history s1 will not resolve'}`);
-        }
+        const file = obs.menu.find(c => c.name === 'File');
+        console.log(`  menubar    ${file ? `"File" found via ${file.source}` : '"File" NOT FOUND — version-history s1 will not resolve'}`);
 
         // Near-equal counts mean the visibility filter is broken.
         const total = await handle.page.evaluate(
@@ -94,10 +79,10 @@ const commands = {
         console.log(`  filter     ${obs.menu.length} visible of ${total} in the DOM`);
 
         const who = await whoami(handle.page);
-        console.log(`  account    ${who ?? `not detected — anything in ${app.label} that needs a login will be disabled`}`);
+        console.log(`  account    ${who ?? 'NOT SIGNED IN — Drive-level menu items will be disabled'}`);
       }
 
-      if (docUrl && app.id === 'google-docs') {
+      if (docUrl) {
         const menu = await handle.page.evaluate(() => {
           const el = [...document.querySelectorAll('[role="menuitem"]')]
             .find(e => e.textContent.trim().startsWith('Version history'));
@@ -152,7 +137,7 @@ const commands = {
       const lesson = JSON.parse(await readFile(p, 'utf8'));
       validatePublishable(lesson);
       const { report, recorded } = await runRecordedVerification(lesson,
-        () => verifyLesson(lesson, { docUrl: str(flags.doc), local: !!flags.local, auth: authMode(flags) }));
+        () => verifyLesson(lesson, { docUrl: str(flags.doc), local: !!flags.local }));
       allOk = printReport(lesson, report) && allOk;
       await finishVerification(lesson, recorded, !!flags.publish);
     }
@@ -177,21 +162,18 @@ const commands = {
           ? { kind: 'dom', selector: `[aria-label="${flags['check-aria']}"]` }
           : str(flags.check) ? JSON.parse(flags.check) : { kind: 'none' },
     };
-    if (!spec.docUrl) throw new Error('A page URL is required; pass --doc or set DEMO_DOC_URL. Any teachable web app works, not just Docs.');
+    if (!spec.docUrl) throw new Error('A prepared document URL is required; pass --doc or set DEMO_DOC_URL.');
     if (spec.goalCheck.kind === 'none') {
       console.warn('[author] no --check given: "done" will be taken on the model\'s word.');
     }
 
     // Never emit from a trace that didn't reach the goal — it would teach the dead end.
-    const app = appFor(spec.docUrl);
-    console.log(`\n[author] ${app.label}${app.generic ? ' (generic profile)' : ''} — ${spec.docUrl}`);
-
     let trace;
     for (let attempt = 1; attempt <= 3; attempt++) {
-      const handle = await openExploreSession({ app, local: !!flags.local, auth: authMode(flags) });
+      const handle = flags.local ? await openLocalSession() : await openAuthedSession();
       try {
         console.log(`\n[author] exploration attempt ${attempt}/3 — ${handle.viewerUrl}`);
-        trace = await explore(handle, { ...spec, app });
+        trace = await explore(handle, spec);
       } finally {
         await closeSession(handle);
       }
@@ -205,7 +187,7 @@ const commands = {
     const pruned = prune(trace);
     printPrune(trace, pruned);
 
-    const lesson = await emit(pruned, { id, goal, app });
+    const lesson = await emit(pruned, { id, goal });
     const path = await saveLesson(id, lesson);
     console.log(`  wrote ${path}`);
 
@@ -214,7 +196,7 @@ const commands = {
 
     if (flags['no-verify']) return;
     const { report, recorded } = await runRecordedVerification(lesson,
-      () => verifyLesson(lesson, { docUrl: spec.docUrl, local: !!flags.local, auth: authMode(flags) }));
+      () => verifyLesson(lesson, { docUrl: spec.docUrl, local: !!flags.local }));
     if (!printReport(lesson, report)) process.exitCode = 1;
     await finishVerification(lesson, recorded, !!flags.publish);
   },
@@ -226,13 +208,9 @@ const commands = {
     const pruned = prune(trace);
     printPrune(trace, pruned);
 
-    // Same app resolution emit() uses, so the preview shows the verify
-    // selectors that would actually ship rather than a different set.
-    const app = appById(trace.app) ?? appFor(pruned.url ?? '');
-
     // The mechanical half costs nothing — no browser, no model. Iterate here.
     if (flags['skeleton-only'] || flags['no-narrate']) {
-      for (const s of skeleton(pruned.kept, app)) {
+      for (const s of skeleton(pruned.kept)) {
         console.log(`  ${s.id.padEnd(3)} ${s.mode.padEnd(7)}${JSON.stringify(s.target).padEnd(46)}${JSON.stringify(s.verify)}`);
         console.log(`        why: ${s._trace.reasoning}`);
         console.log(`        saw: ${s._trace.observed}`);
@@ -242,20 +220,12 @@ const commands = {
 
     const id = str(flags.id) ?? 'scratch';
     assertLessonId(id);
-    const lesson = await emit(pruned, { id, goal: trace.goal, app });
+    const lesson = await emit(pruned, { id, goal: trace.goal });
     console.log(`  wrote ${await saveLesson(id, lesson)}`);
   },
 
   async demo({ flags }) {
     await fallbackDemo({ live: !!flags.live, local: !!flags.local, docUrl: str(flags.doc), spec: SHALLOW_GOAL });
-  },
-
-  // Which apps have a tuned profile. Everything else still works — it just
-  // gets generic selectors and no app-specific briefing for the explorer.
-  apps() {
-    console.log('');
-    for (const a of listApps()) console.log(`  ${a.id.padEnd(14)} ${a.hosts.join(', ')}`);
-    console.log('\n  Any other host works too, with generic selectors and its hostname as the app id.\n');
   },
 
   async publish({ positional, flags }) {

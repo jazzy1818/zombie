@@ -127,21 +127,10 @@ export function mountBar(root, { onPrompt, onListenStart }) {
      * vanishing — but the input is disabled so it can't be focused mid-step,
      * and a stray Option can't restart anything.
      */
-    /**
-     * @param {boolean} v
-     * @param {string} [reason]  why it's locked, shown in place of the prompt.
-     *                           A bar that just stops accepting input reads as
-     *                           broken; one that says why reads as deliberate.
-     */
-    setEnabled(v, reason = '') {
+    setEnabled(v) {
       enabled = v;
       input.disabled = !v;
       bar.classList.toggle('is-locked', !v);
-      // A bar locked mid-lesson should fade into the background; one locked
-      // because the page can't be taught is carrying the only explanation
-      // left on screen once the notice is closed, so keep it readable.
-      bar.classList.toggle('is-explained', !v && Boolean(reason));
-      input.placeholder = v || !reason ? 'Ask how to do something…' : reason;
       if (!v) stopListening();
     },
     focus() { if (enabled) input.focus(); },
