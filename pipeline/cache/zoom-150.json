@@ -376,7 +376,7 @@
             }
           ],
           "dialog": [],
-          "ts": 1789264329221
+          "ts": 1789264617552
         },
         "post": {
           "url": "https://docs.google.com/document/d/1FAarvqMcAY8f_c-XZ_Qie3Tw3QXTkz3mWgYLYhwUPxA/edit?tab=t.0#heading=h.9u3adgt3vq8f",
@@ -794,7 +794,7 @@
             }
           ],
           "dialog": [],
-          "ts": 1789264332476
+          "ts": 1789264622844
         },
         "delta": {
           "appeared": [
@@ -859,10 +859,10 @@
           "changed": []
         },
         "action": {
-          "reasoning": "The toolbar Zoom dropdown is the standard way to set zoom; open it to reveal 150%.",
+          "reasoning": "The toolbar Zoom dropdown lists zoom percentages including 150%.",
           "kind": "click",
           "id": 10,
-          "expectation": "the zoom dropdown opens listing percentage options including 150%"
+          "expectation": "the zoom dropdown opens showing percentage options"
         },
         "target": {
           "id": 10,
@@ -1290,7 +1290,7 @@
             }
           ],
           "dialog": [],
-          "ts": 1789264332476
+          "ts": 1789264622844
         },
         "post": {
           "url": "https://docs.google.com/document/d/1FAarvqMcAY8f_c-XZ_Qie3Tw3QXTkz3mWgYLYhwUPxA/edit?tab=t.0#heading=h.9u3adgt3vq8f",
@@ -1659,7 +1659,7 @@
             }
           ],
           "dialog": [],
-          "ts": 1789264335358
+          "ts": 1789264626224
         },
         "delta": {
           "appeared": [
@@ -1767,12 +1767,12 @@
     "id": "zoom-150",
     "app": "google-docs",
     "goal": "Set the page zoom to 150%",
-    "preamble": "Zoom feels like it should change the document, but it changes nothing about it. The page is still the same size, the text still prints the same, and anyone else opening this file sees whatever they had set. Zoom is a property of your eyes and your screen, not of the page — which is why it lives in the toolbar with the view controls rather than anywhere near formatting.",
-    "generalization": "Font size changes the document; zoom changes the window you're looking at it through. Whenever a control makes things bigger, it's worth asking which of those two it's doing — one travels with the file to everyone who opens it, the other stays with you and is forgotten the moment you close the tab.",
+    "preamble": "Zoom feels like it should change the document, but it doesn't touch a single thing in it. The page is still the same width, the text is still the same size, and anyone else opening this file sees it exactly as before. You're adjusting the distance between your eyes and the page — a setting about your view, not about the document. That's why it lives in the toolbar next to the other view controls rather than anywhere near the font size.",
+    "generalization": "Zoom is a property of your window, not of your document. The same distinction runs through most apps: some controls change the thing, and some change how you're looking at the thing. When a change doesn't survive being sent to someone else, it was a view setting all along — which is also why zooming in to read fine print never risks breaking anyone else's copy.",
     "steps": [
       {
         "id": "s1",
-        "intent": "This box shows the current magnification of the page — it almost certainly reads 100% right now. It's a dropdown, and opening it gives you the set of magnifications Docs offers, rather than making you type one.",
+        "intent": "The Zoom control shows the current magnification and opens the list of preset levels. It reports where you're standing relative to the page — and clicking it is how you move.",
         "mode": "demo",
         "target": {
           "scope": "toolbar",
@@ -1786,18 +1786,17 @@
           "scope": "menu"
         },
         "hints": [
-          "You're not changing the text, you're changing how close you are to it. Look for the control that's already reporting a percentage.",
-          "In the toolbar, just right of the print and spelling icons, showing '100%'."
+          "You want to change how close you are to the page, not how big the text is. That control sits with the view tools, not the text tools.",
+          "Toolbar, on the left — the box showing a percentage, just after the print and spelling icons."
         ],
         "wrongHints": {
-          "Font size": "That makes the letters themselves bigger — bigger on screen, bigger on paper, bigger for everyone who opens the file. Zoom leaves the document untouched and only moves you closer to it.",
-          "Styles": "Styles describe what a line of text is — a heading, a title, body text. Nothing about the document's meaning is changing here, only your view of it.",
-          "Print": "Reasonable, since print has its own scaling — but that scaling applies to paper. You want the page bigger on screen, which is a separate setting."
+          "Font size": "Understandable — bigger numbers there do make text look larger. But that rewrites the document for everyone who opens it. Zoom only changes what you see.",
+          "Print": "Print preview does show the page scaled to fit, but that's a side effect of a different job. Zoom is the control that exists purely to set your magnification."
         }
       },
       {
         "id": "s2",
-        "intent": "Pick 150%. You're telling Docs to draw the page half again as large as life. The list is a set of fixed steps rather than a slider, because these are the magnifications that keep text crisp.",
+        "intent": "Pick 150%. You're telling Docs to draw the page half again as large on your screen — the document's actual measurements stay exactly as they were.",
         "mode": "guided",
         "target": {
           "scope": "menu",
@@ -1809,13 +1808,12 @@
           "selector": "[aria-label=\"Zoom list. 150% selected.\"]"
         },
         "hints": [
-          "Half again as big as the 100% you started at — find that value in the list of percentages.",
-          "In the open dropdown, two below 100%, between 125% and 200%."
+          "You want to be closer than normal, but not dramatically so — one step past 125%.",
+          "In the list that just opened, below 100% and 125%."
         ],
         "wrongHints": {
-          "Fit": "Fit sizes the page to whatever your window happens to be, so the number changes every time you resize. You want a fixed 150%, not a moving target.",
-          "200%": "That's double, not half again. The difference matters if you're matching a specific magnification rather than just making things larger.",
-          "100%": "That's the size you're already at — the page drawn at its true dimensions. 150% is the one that enlarges it."
+          "Fit": "Fit is a reasonable instinct — it sizes the page to your window. But it hands the decision to Docs and changes as you resize. 150% is a fixed amount you chose.",
+          "100%": "That's the setting you're leaving: the page shown at its true printed size."
         }
       }
     ]
