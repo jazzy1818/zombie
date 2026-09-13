@@ -84,7 +84,26 @@
     {
       "id": "s5",
       "mode": "guided",
-      "intent": "Same thing for a section heading — put your cursor on one of the section lines and make it Heading 2. Heading 2 nests underneath Heading 1, which is how the contents gets its indentation.",
+      "intent": "Now the same move for a section heading. Put your cursor on one of the section lines, then open the Styles box again — notice it goes back to saying 'Normal text', because that's what this line still is.",
+      "target": {
+        "scope": "toolbar",
+        "name": "Styles"
+      },
+      "action": "click",
+      "verify": {
+        "kind": "visible",
+        "name": "Heading 2",
+        "scope": "menu"
+      },
+      "hints": [
+        "Same box as before — it always describes the line your cursor is on.",
+        "Click a section line first, then the Styles box in the toolbar."
+      ]
+    },
+    {
+      "id": "s6",
+      "mode": "guided",
+      "intent": "Choose Heading 2. It sits underneath Heading 1 rather than beside it, and that nesting is exactly what gives the table of contents its indentation.",
       "target": {
         "scope": "menu",
         "name": "Heading 2"
@@ -96,12 +115,15 @@
         "match": "Heading 2"
       },
       "hints": [
-        "Open the Styles box again, one step down from Heading 1.",
+        "One step down from Heading 1 — a subsection, not a new top-level section.",
         "Directly below 'Heading 1' in the dropdown."
-      ]
+      ],
+      "wrongHints": {
+        "Heading 1": "That would make this a top-level section, level with the one you just set. Heading 2 is what makes it a subsection."
+      }
     },
     {
-      "id": "s6",
+      "id": "s7",
       "mode": "solo",
       "intent": "Your turn, no highlight this time. Your headings are set — now insert the table of contents itself. Have a look through the menus.",
       "target": {
