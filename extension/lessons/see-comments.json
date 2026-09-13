@@ -1,0 +1,71 @@
+{
+  "id": "see-comments",
+  "app": "google-docs",
+  "goal": "how to see comments",
+  "preamble": "Comments aren't in your document the way words are. They're a separate layer, pinned to bits of text, and Docs decides how much of that layer to draw on screen. So when you can't see comments, nothing is missing — the layer is just turned down. What you're about to change isn't the document at all; it's your view of it.",
+  "generalization": "Anything that changes what you can see without changing what's in the file lives under View. Rulers, outlines, comments — none of those are content, they're how the content is drawn for you. If a change would look different to your collaborator than to you, look in View first.",
+  "steps": [
+    {
+      "id": "s1",
+      "intent": "Comments belong to the document no matter what you do here — the only question is whether they're drawn on your screen. That kind of question, what's shown rather than what exists, has its own menu.",
+      "mode": "demo",
+      "target": {
+        "scope": "menu",
+        "name": "View"
+      },
+      "action": "click",
+      "verify": {
+        "kind": "visible",
+        "name": "Comments(D)",
+        "scope": "menu"
+      },
+      "hints": [
+        "You're not adding anything or editing anything. You're changing what gets displayed to you and only you.",
+        "The menu bar at the top, third from the left, between Edit and Insert."
+      ],
+      "wrongHints": {
+        "Insert": "Insert is how you make a new comment. Reasonable guess — but the comments already exist; you want to look at them, not create one.",
+        "Edit": "Edit changes the document's contents. Whether comments are visible on your screen doesn't change the document for anyone else."
+      }
+    },
+    {
+      "id": "s2",
+      "intent": "Docs doesn't offer a single on/off switch for comments — it offers degrees of visibility, so it gathers them into their own group. Open that group.",
+      "mode": "guided",
+      "target": {
+        "scope": "menu",
+        "name": "Comments(D)"
+      },
+      "action": "click",
+      "verify": {
+        "kind": "visible",
+        "name": "Show all comments",
+        "scope": "menu"
+      },
+      "hints": [
+        "There's more than one way to show a comment, so the options are nested rather than sitting loose in the menu.",
+        "In the View menu that just opened, with a small arrow on the right meaning a submenu follows."
+      ],
+      "wrongHints": {
+        "Mode": "Mode decides whether you're editing, suggesting or viewing. It affects what you can do to the document, not what you can see alongside it."
+      }
+    },
+    {
+      "id": "s3",
+      "intent": "Your turn. Of the options here, one turns the layer fully up: every comment on the page, open and readable, rather than tucked away. Pick that one.",
+      "mode": "solo",
+      "target": {
+        "scope": "menu",
+        "name": "Show all comments"
+      },
+      "action": "click",
+      "verify": {
+        "kind": "none"
+      },
+      "hints": [
+        "Two of these make comments smaller or take them away. You want the opposite direction.",
+        "The option in this submenu that promises all of them, not some of them."
+      ]
+    }
+  ]
+}

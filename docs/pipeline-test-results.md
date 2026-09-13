@@ -1,8 +1,8 @@
 # Offline pipeline handoff checks
 
-Run: 2026-09-13T04:01:57.006Z
+Run: 2026-09-13T06:00:05.679Z
 
-Browser: 153.0.8010.37
+Browser: 151.0.7922.34
 
 Result: **12/12 checks passed**.
 

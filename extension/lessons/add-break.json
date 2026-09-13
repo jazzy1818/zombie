@@ -1,0 +1,76 @@
+{
+  "id": "add-break",
+  "app": "google-docs",
+  "goal": "how to add break",
+  "preamble": "The obvious way to start a new page is to hold Enter until the cursor falls onto one. It works for about a minute — until you add a sentence higher up and everything slides out of place. A break isn't whitespace. It's an invisible instruction sitting in the text that says \"stop this page here\", and it keeps saying it no matter what you type above it. That's what you're inserting.",
+  "generalization": "Blank lines are a guess about where the page ends; a break is a statement. Any time you find yourself pressing a key repeatedly to push content into position, there's usually a control that declares the position instead — and declared layout survives editing, while pushed layout doesn't.",
+  "steps": [
+    {
+      "id": "s1",
+      "intent": "A break is a thing that doesn't exist in your document yet, and you want it to exist. It isn't a change to text you've already written, so the formatting menus have nothing to do with it. Insert is the menu for putting new objects into the page — images, tables, footnotes, and the invisible ones too.",
+      "mode": "demo",
+      "target": {
+        "scope": "menu",
+        "name": "Insert"
+      },
+      "action": "click",
+      "verify": {
+        "kind": "visible",
+        "name": "Break",
+        "scope": "menu"
+      },
+      "hints": [
+        "Nothing on the page is being restyled. Something new is going in. Which menu is about adding?",
+        "The menu bar along the top — Insert sits between View and Format."
+      ],
+      "wrongHints": {
+        "Format": "A fair guess, because a break changes how the document lays out. But Format works on text that's already there — its font, spacing, alignment. A break is a new element you're placing, not a property of existing text.",
+        "View": "View changes how you see the document on screen without altering it. A break is an actual change to the document, so it belongs with the things you add."
+      }
+    },
+    {
+      "id": "s2",
+      "intent": "Docs doesn't put the breaks straight on this menu, because there's more than one kind and they do meaningfully different things. Opening the Break group is how you get to choose which kind of stopping point you mean.",
+      "mode": "guided",
+      "target": {
+        "scope": "menu",
+        "name": "Break"
+      },
+      "action": "click",
+      "verify": {
+        "kind": "visible",
+        "name": "Page break",
+        "scope": "menu"
+      },
+      "hints": [
+        "The item you want names the whole family, not a specific one — and it has a small arrow showing more sits beneath it.",
+        "In the Insert menu, below the items for images and tables, grouped with the other page-structure entries."
+      ],
+      "wrongHints": {
+        "Horizontal line": "It looks like a divider, and it does divide — but visually, on the same page. It draws a line you can see. A break draws nothing and moves content instead."
+      }
+    },
+    {
+      "id": "s3",
+      "intent": "Four options, and they differ in how much they separate. You want the plainest one: push everything after this point onto a fresh page, and change nothing else about how the document is formatted. Pick the one whose name says exactly that and nothing more.",
+      "mode": "solo",
+      "target": {
+        "scope": "menu",
+        "name": "Page break"
+      },
+      "action": "click",
+      "verify": {
+        "kind": "none"
+      },
+      "hints": [
+        "Three of these do extra work — starting a new formatting region, or moving to the next column. You want the one that only moves the page along.",
+        "The first entry in the submenu that just opened to the right."
+      ],
+      "wrongHints": {
+        "Section break (next page)": "On screen the result looks identical — new page, cursor at the top. But it also starts a new section, which can carry its own margins, headers and page numbering. That's power you don't need here, and it will surprise you later when a header stops matching.",
+        "Section break (continuous)": "This one doesn't start a new page at all. It splits the document into two formatting regions on the same page — useful for changing column layout mid-page, not for getting to a new sheet.",
+        "Column break": "That moves text to the top of the next column, which only means anything in a multi-column layout. In a normal single-column document it has nowhere to send your text."
+      }
+    }
+  ]
+}

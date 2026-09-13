@@ -1,0 +1,79 @@
+{
+  "id": "allign-right",
+  "app": "google-docs",
+  "goal": "how to allign right",
+  "preamble": "Alignment feels like something you do to words, so the instinct is to select the text first. But Docs doesn't align words — it aligns paragraphs. A paragraph has one alignment for the whole of it, which means putting your cursor anywhere inside it is enough. Once you see alignment as a property of the paragraph rather than of the letters, the place to look for it stops being a mystery: it's under the menu that describes how text is arranged.",
+  "generalization": "Alignment lives on the paragraph, not on the selection. That's why a cursor sitting anywhere in the line was enough, and why you never needed to highlight anything. Everything in Format > Align & indent works the same way — indents, spacing, justification — they all describe the block your cursor is in. Once that clicks, you stop dragging over text before you format it.",
+  "steps": [
+    {
+      "id": "s1",
+      "intent": "The toolbar has alignment buttons, but they're a shortcut for something that lives in a menu — and the menu tells you more about what alignment actually is. Format is where Docs keeps every decision about how text is arranged on the page, as opposed to what the text says. Alignment is exactly that kind of decision.",
+      "mode": "demo",
+      "target": {
+        "scope": "menu",
+        "name": "Format"
+      },
+      "action": "click",
+      "verify": {
+        "kind": "visible",
+        "name": "Align & indent",
+        "scope": "menu"
+      },
+      "hints": [
+        "You're not adding anything or changing the words — you're changing how existing text sits on the page. One menu is entirely about that.",
+        "The menu bar at the top, between Insert and Tools."
+      ],
+      "wrongHints": {
+        "Insert": "Insert is for putting new things into the document — images, tables, page breaks. The paragraph already exists; you're only changing how it's arranged.",
+        "Edit": "Edit deals with the content itself: undo, cut, paste, find and replace. Arrangement of text on the page is Format's job.",
+        "View": "View changes how you see the document on screen without changing the document. Alignment is a real change that stays in the file."
+      }
+    },
+    {
+      "id": "s2",
+      "intent": "Notice that Docs files alignment together with indentation rather than with bold and italic. That grouping is the lesson: both alignment and indentation are about where a paragraph's edges sit, so they belong to the paragraph as a whole. Open this submenu to see the full set.",
+      "mode": "guided",
+      "target": {
+        "scope": "menu",
+        "name": "Align & indent"
+      },
+      "action": "click",
+      "verify": {
+        "kind": "visible",
+        "name": "Right",
+        "scope": "menu"
+      },
+      "hints": [
+        "Look for the item that pairs alignment with the other thing that moves a paragraph's edges around.",
+        "Upper half of the Format menu, below Paragraph styles — it has an arrow, meaning more options sit underneath."
+      ],
+      "wrongHints": {
+        "Text": "Text holds bold, italic, size, colour — things that apply to individual characters you've selected. Alignment applies to a whole paragraph, so it's kept separate.",
+        "Paragraph styles": "Right instinct, since this is about paragraphs. But styles are about what a paragraph *is* — heading, normal text. Alignment is about where it sits.",
+        "Line & paragraph spacing": "That's the vertical version of the same idea — the gaps above, below and between lines. You want the horizontal one."
+      }
+    },
+    {
+      "id": "s3",
+      "intent": "Your turn, with no highlight. The submenu shows you the four ways a paragraph can meet its margins. Pick the one that pins the text to the right edge and lets the left edge fall where it may.",
+      "mode": "solo",
+      "target": {
+        "scope": "menu",
+        "name": "Right"
+      },
+      "action": "click",
+      "verify": {
+        "kind": "none"
+      },
+      "hints": [
+        "Three of these options do something to both edges or to the left one. Only one anchors the text to the margin you care about.",
+        "Third in the list of alignment options, after Left and Center."
+      ],
+      "wrongHints": {
+        "Justified": "Justified does reach the right margin, but it stretches the spacing so both edges line up. You asked for the text to sit against the right edge, not to be pulled taut across the page.",
+        "Increase indent": "Indenting pushes the left edge inward, which can look similar on a short line. But the text is still anchored to the left — add a longer sentence and it grows rightward from the indent.",
+        "Center": "Centering balances the paragraph between both margins. Right alignment gives up on the left edge entirely and holds the right one fixed."
+      }
+    }
+  ]
+}

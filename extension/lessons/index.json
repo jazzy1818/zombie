@@ -1,8 +1,21 @@
 [
+  "add-break",
+  "add-citations",
+  "add-date",
+  "add-emoji",
   "add-image",
+  "allign-right",
   "change-page-zoom-200",
+  "find-notification-settings",
+  "see-comments",
+  "see-word-count",
+  "set-header-margin",
+  "set-up-bullet-points",
   "styles-toc",
+  "translate",
+  "use-meeting-notes",
   "version-history",
   "wanna-change-color-of-current",
-  "wanna-increase-font-size"
+  "wanna-increase-font-size",
+  "where-is-accesibility"
 ]

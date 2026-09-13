@@ -9,6 +9,7 @@
 // library and never start one.
 
 const BRIDGE = 'http://localhost:7777';
+export const bridgeOrigin = new URL(BRIDGE).origin;
 
 // Generation takes 1-4 minutes. Polling beats holding a request open for that
 // long — a request that dies at a proxy timeout loses a lesson we already paid
@@ -28,11 +29,16 @@ export async function bridgeAvailable({ timeoutMs = 1500 } = {}) {
 }
 
 const sleep = (ms, signal) => new Promise((resolve, reject) => {
-  const t = setTimeout(resolve, ms);
-  signal?.addEventListener('abort', () => {
+  const abort = () => {
     clearTimeout(t);
     reject(new DOMException('Generation cancelled', 'AbortError'));
-  }, { once: true });
+  };
+  const t = setTimeout(() => {
+    signal?.removeEventListener('abort', abort);
+    resolve();
+  }, ms);
+  if (signal?.aborted) abort();
+  else signal?.addEventListener('abort', abort, { once: true });
 });
 
 /**
@@ -43,7 +49,9 @@ const sleep = (ms, signal) => new Promise((resolve, reject) => {
  * a blank spinner reads as broken, and the same four minutes narrated reads as
  * the product working.
  */
-export async function generateLesson(goal, { signal, onProgress, docUrl } = {}) {
+// onJob runs for every poll, even when the textual progress hasn't changed.
+// Session allocation/release and retries can happen between progress entries.
+export async function generateLesson(goal, { signal, onProgress, onJob, docUrl } = {}) {
   const res = await fetch(`${BRIDGE}/generate`, {
     method: 'POST',
     headers: { 'content-type': 'application/json' },
@@ -61,23 +69,32 @@ export async function generateLesson(goal, { signal, onProgress, docUrl } = {}) 
   for (;;) {
     await sleep(POLL_MS, signal);
     if (signal?.aborted) throw new DOMException('Generation cancelled', 'AbortError');
+    if (Date.now() - started > MAX_WAIT_MS) {
+      throw new Error('Generation is taking longer than expected — check the bridge terminal.');
+    }
 
     let job;
     try {
-      job = await (await fetch(`${BRIDGE}/jobs/${jobId}`, { signal })).json();
+      const pollSignal = AbortSignal.any([
+        ...(signal ? [signal] : []), AbortSignal.timeout(15_000),
+      ]);
+      const response = await fetch(`${BRIDGE}/jobs/${jobId}`, { signal: pollSignal });
+      if (!response.ok) throw new Error(`The bridge said ${response.status}.`);
+      job = await response.json();
+      if (!Array.isArray(job.progress)) throw new Error('Invalid job response.');
     } catch (err) {
-      if (err?.name === 'AbortError') throw err;
+      if (signal?.aborted) throw new DOMException('Generation cancelled', 'AbortError');
+      onJob?.({ state: 'running', viewer: { status: 'unavailable', url: null, reason: 'disconnected' } });
       continue;   // a dropped poll is not a dead job
     }
 
+    if (signal?.aborted) throw new DOMException('Generation cancelled', 'AbortError');
+    onJob?.(job);
     for (const p of job.progress.slice(seen)) onProgress?.(p.text, job);
     seen = job.progress.length;
 
     if (job.state === 'done') return job.lesson;
     if (job.state === 'error') throw new Error(job.error || 'Generation failed.');
 
-    if (Date.now() - started > MAX_WAIT_MS) {
-      throw new Error('Generation is taking longer than expected — check the bridge terminal.');
-    }
   }
 }

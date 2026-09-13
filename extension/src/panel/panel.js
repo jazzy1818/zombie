@@ -16,6 +16,7 @@ import { mountBar } from './launcher.js';
 import { makeFloating } from './floating.js';
 import { loadLesson, loadAll, matchLesson, listLessons, validateLesson, addLesson } from './lessons.js';
 import { generateLesson, bridgeAvailable } from './generate.js';
+import { createCloudViewer } from './cloud-viewer.js';
 import { runLesson, ACTION } from './machine.js';
 import { createSpeech } from './speech.js';
 import { installDev } from './dev.js';
@@ -141,15 +142,16 @@ export async function mountPanel() {
   });
 
   const speech = createSpeech();
-  const ui = createUI(els, raise, speech);
+  const viewer = createCloudViewer(root, raise);
+  const ui = createUI(els, raise, speech, viewer);
   let currentRun = null;
-  const cancel = () => {
+  const cancel = ({ replacing = false, forgetRecordings = false } = {}) => {
     const previous = currentRun;
     currentRun = null;
     previous?.controller.abort();
     previous?.stopNavigation();
     window.__TEACH?.clear();
-    ui.reset();
+    ui.reset({ restoreFocus: !replacing, forgetRecordings });
   };
   ui.onCancel = cancel;
 
@@ -188,11 +190,11 @@ export async function mountPanel() {
    * where someone can read it, not silently in the console behind the page.
    */
   async function session(work) {
-    cancel();
+    cancel({ replacing: true, forgetRecordings: true });
     const controller = new AbortController();
     const run = { controller, stopNavigation: () => {} };
     currentRun = run;
-    run.stopNavigation = watchNavigation(cancel);
+    run.stopNavigation = watchNavigation(() => cancel({ forgetRecordings: true }));
     const active = () => currentRun === run && !controller.signal.aborted;
     const options = { signal: controller.signal, isCurrent: () => currentRun === run };
     let stopWaiting;
@@ -255,6 +257,7 @@ export async function mountPanel() {
       const lesson = await generateLesson(question, {
         signal: options.signal,
         onProgress: text => { if (active()) ui.generatingNote(text); },
+        onJob: job => { if (active()) viewer.update(job); },
       });
       if (!active()) return;
       // Findable by search from here on, so asking again doesn't rebuild it.
@@ -308,13 +311,13 @@ function noFocusSteal(el) {
  * Everything machine.js is allowed to do to the UI. Passing this in rather than
  * importing the panel keeps the runner DOM-free and the imports acyclic.
  */
-function createUI(els, raise, speech) {
+function createUI(els, raise, speech, viewer) {
   let resolveAction = null;
   let bar = null;
   let spoken = '';   // what's currently on screen, for the toggle-on case
 
-  const fire = value => {
-    if (value === ACTION.QUIT) { ui.onCancel(); return; }
+  const fire = (value, { forgetRecordings = false } = {}) => {
+    if (value === ACTION.QUIT) { ui.onCancel({ forgetRecordings }); return; }
     const r = resolveAction;
     resolveAction = null;
     r?.(value);
@@ -339,7 +342,7 @@ function createUI(els, raise, speech) {
     els.win.classList.toggle('is-open', open);
   }
 
-  function renderActions(actions = []) {
+  function renderActions(actions = [], { restoreFocus = true } = {}) {
     els.actions.replaceChildren();
     for (const a of actions) {
       const b = document.createElement('button');
@@ -347,9 +350,10 @@ function createUI(els, raise, speech) {
       b.className = a.subtle ? 'bt-btn bt-btn-subtle' : 'bt-btn';
       b.textContent = a.label;
       noFocusSteal(b);
-      b.addEventListener('click', () => fire(a.value));
+      b.addEventListener('click', () => fire(a.value, a));
       els.actions.appendChild(b);
     }
+    if (restoreFocus) viewer.restoreFocus();
   }
 
   function renderCard({ kind, mode, title, body }) {
@@ -395,7 +399,8 @@ function createUI(els, raise, speech) {
     /** Re-read what's on screen — used when the toggle is switched on mid-lesson. */
     sayCurrent() { speech.say(spoken); },
 
-    reset() {
+    reset({ restoreFocus = true, forgetRecordings = false } = {}) {
+      viewer.reset({ forgetRecordings });
       const pending = resolveAction;
       resolveAction = null;
       pending?.(ACTION.QUIT);
@@ -406,6 +411,7 @@ function createUI(els, raise, speech) {
       els.body.replaceChildren();
       els.actions.replaceChildren();
       bar?.setEnabled(true);
+      if (restoreFocus) viewer.restoreFocus();
       window.__TEACH?.clear();
     },
 
@@ -445,7 +451,6 @@ function createUI(els, raise, speech) {
         b.addEventListener('click', () => onGenerate());
         els.actions.appendChild(b);
       }
-
       for (const id of order) {
         const b = document.createElement('button');
         b.type = 'button';
@@ -455,6 +460,7 @@ function createUI(els, raise, speech) {
         b.addEventListener('click', () => ui.onPickLesson(id));
         els.actions.appendChild(b);
       }
+      viewer.restoreFocus();
     },
 
     /**
@@ -472,11 +478,14 @@ function createUI(els, raise, speech) {
         title: 'Working it out',
         body: `I don't have a lesson for "${question}", so I'm opening a cloud browser and finding out. This takes a minute or two.`,
       });
-      renderActions([{ label: 'Stop', value: ACTION.QUIT, subtle: true }]);
+      viewer.begin(els.body);
+      renderActions([{ label: 'Stop', value: ACTION.QUIT, subtle: true, forgetRecordings: true }]);
     },
 
     /** One line of the agent's trail. Deliberately not spoken — it would never stop talking. */
     generatingNote(text) {
+      // The opening status already has its own clickable, persistent row.
+      if (/^Opening a cloud browser[.…]*$/i.test(text.trim())) return;
       let trail = els.body.querySelector('.bt-trail');
       if (!trail) {
         trail = document.createElement('ol');
@@ -492,6 +501,7 @@ function createUI(els, raise, speech) {
     },
 
     lessonStarted() {
+      viewer.lessonStarted();
       raise();          // stay above D's scrim
       bar?.setEnabled(false);
       setOpen(true);
@@ -502,16 +512,24 @@ function createUI(els, raise, speech) {
       bar?.setEnabled(false);
       setOpen(true);
       renderCard({ kind: 'loading', title: 'Browser Teacher', body: 'Preparing your lesson…' });
-      renderActions([{ label: 'Stop', value: ACTION.QUIT, subtle: true }]);
+      // A replacement run transfers focus to its actual first card, rather
+      // than a temporary Stop button that will immediately be removed.
+      renderActions([{ label: 'Stop', value: ACTION.QUIT, subtle: true, forgetRecordings: true }], { restoreFocus: false });
     },
 
     lessonEnded() { ui.reset(); },
 
     /** A card that waits for one of its own buttons. */
-    card({ kind, title, body, actions }, options) {
+    async card({ kind, title, body, actions }, options) {
       renderCard({ kind, title, body });
       renderActions(actions);
-      return waitAction(options);
+      const action = await waitAction(options);
+      // Done ends this task, including its optional cloud recording history.
+      // Minimizing keeps history available until the task is done or stopped.
+      if (kind === 'generalization' && action === ACTION.CONTINUE && !options?.signal?.aborted) {
+        viewer.reset({ forgetRecordings: true });
+      }
+      return action;
     },
 
     step(step, index, total) {
@@ -520,7 +538,7 @@ function createUI(els, raise, speech) {
       renderCard({ kind: 'step', mode: step.mode, title: modeLabel(step.mode), body: step.intent });
       renderActions([
         { label: 'Show me where', value: ACTION.DEMO_REST, subtle: true },
-        { label: 'Stop', value: ACTION.QUIT, subtle: true },
+        { label: 'Stop', value: ACTION.QUIT, subtle: true, forgetRecordings: true },
       ]);
     },
 
@@ -537,6 +555,7 @@ function createUI(els, raise, speech) {
 
     /** Something threw. Show it rather than dying quietly behind the page. */
     fail(err) {
+      viewer.lessonStarted();
       raise();
       setOpen(true);
       els.progress.hidden = true;

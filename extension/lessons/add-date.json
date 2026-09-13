@@ -1,0 +1,93 @@
+{
+  "id": "add-date",
+  "app": "google-docs",
+  "goal": "how to add a date",
+  "preamble": "You could type \"15 Sep\" with the keyboard and be done in three seconds. What you're about to make instead is a date chip — a small object that Docs understands as a date rather than as five characters that happen to look like one. It can be reformatted later, it reads correctly to anyone who opens the doc, and it hooks into the calendar. The task isn't typing a date; it's inserting one.",
+  "generalization": "Typed text is characters; a chip is a thing. Docs keeps a whole family of them — people, files, dates, events — and they all live in the same place for the same reason: each one is a piece of real data wearing a text disguise. Whenever you're about to type something that has a meaning beyond its letters, check whether Docs has a chip for it first.",
+  "steps": [
+    {
+      "id": "s1",
+      "intent": "Nothing in the document changes here — you're putting something new into it that wasn't there before. In Docs, everything that gets added rather than restyled lives under one menu.",
+      "mode": "demo",
+      "target": {
+        "scope": "menu",
+        "name": "Insert"
+      },
+      "action": "click",
+      "verify": {
+        "kind": "visible",
+        "name": "Smart chips(Z)",
+        "scope": "menu"
+      },
+      "hints": [
+        "You aren't formatting existing text, you're adding a new object. Which menu is that always about?",
+        "The menu bar at the top, between View and Format."
+      ],
+      "wrongHints": {
+        "Format": "Format changes text that already exists — bold, spacing, alignment. There's no date on the page yet to format.",
+        "Tools": "Tools holds things that act on the document — word count, spelling, voice typing. Adding content to the page isn't one of them."
+      }
+    },
+    {
+      "id": "s2",
+      "intent": "The Insert menu is mostly big, obvious things: images, tables, charts. A date is small and inline — it sits in a sentence. Docs groups all of those small inline objects that carry real data under one name.",
+      "mode": "guided",
+      "target": {
+        "scope": "menu",
+        "name": "Smart chips(Z)"
+      },
+      "action": "click",
+      "verify": {
+        "kind": "visible",
+        "name": "Date",
+        "scope": "menu"
+      },
+      "hints": [
+        "You want something that sits inside a line of text and means something, not a block that takes up the page. Docs calls that family by a single name.",
+        "Upper part of the Insert menu, with a submarrow on the right — the entry with the keyboard letter next to it."
+      ],
+      "wrongHints": {
+        "Building blocks": "A reasonable guess, since meeting notes blocks do contain dates. But those insert a whole prewritten layout. You want one date, on its own."
+      }
+    },
+    {
+      "id": "s3",
+      "intent": "The submenu is a list of the kinds of real-world things Docs can hold inside a line: people, files, events, dates. Pick the one that's a day on a calendar with nothing attached to it.",
+      "mode": "guided",
+      "target": {
+        "scope": "menu",
+        "name": "Date"
+      },
+      "action": "click",
+      "verify": {
+        "kind": "visible",
+        "name": "15 Sep",
+        "scope": "dialog"
+      },
+      "hints": [
+        "Several of these involve time. You want the plain one — the day itself, not something scheduled on it.",
+        "In the small submenu that opened to the right, below the people and file entries."
+      ],
+      "wrongHints": {
+        "People": "That chip points at a person and their contact details. Close cousin, wrong data."
+      }
+    },
+    {
+      "id": "s4",
+      "intent": "Your turn, no highlight. A picker opened because Docs now needs to know which date you mean — until you tell it, the chip has no value. Pick the 15th of September from the calendar to finish the insertion.",
+      "mode": "solo",
+      "target": {
+        "scope": "any",
+        "name": "15 Sep"
+      },
+      "action": "click",
+      "verify": {
+        "kind": "none"
+      },
+      "hints": [
+        "The chip is waiting on a value. Everything you need is in the grid in front of you — you're answering a question, not opening another menu.",
+        "In the calendar grid, find September and click the day numbered 15."
+      ]
+    }
+  ]
+}

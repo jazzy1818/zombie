@@ -1,0 +1,96 @@
+{
+  "id": "add-emoji",
+  "app": "google-docs",
+  "goal": "how to add emoji",
+  "preamble": "An emoji looks like a tiny picture, so it feels like something you'd paste in. It isn't. To Docs an emoji is a character — the same kind of thing as a letter or an accented vowel, just one that happens to be in colour. Knowing that tells you where to look for it, and it explains why it will behave like text once it's there.",
+  "generalization": "Emoji live with the symbols, not with the images, because Docs files things by what they are rather than what they look like. That's why the one you inserted sits on the line like a letter: it grows with the font size, moves when you type before it, and travels with the text when you copy it. When you can't find a control, ask what category the thing really belongs to — the menu was built around that answer.",
+  "steps": [
+    {
+      "id": "s1",
+      "intent": "Nothing you want is in the document yet, so this isn't a formatting job — it's an addition. One menu exists for putting things into a document that weren't there before, and everything from images to page numbers to characters you can't type on your keyboard is behind it.",
+      "mode": "demo",
+      "target": {
+        "scope": "menu",
+        "name": "Insert"
+      },
+      "action": "click",
+      "verify": {
+        "kind": "visible",
+        "name": "Symbols",
+        "scope": "menu"
+      },
+      "hints": [
+        "You're not changing text that exists, you're adding something new. Which menu owns that?",
+        "The Insert menu, in the menu bar across the top."
+      ],
+      "wrongHints": {
+        "Format": "Format changes text that's already on the page — its size, spacing, alignment. There's nothing here yet to format.",
+        "Edit": "Edit is for operating on what you've already got: undo, cut, paste, find. Adding something brand new has its own menu."
+      }
+    },
+    {
+      "id": "s2",
+      "intent": "Scan this menu and you'll see it's sorted by what things are: pictures in one area, page furniture in another. An emoji is a character, and the group for characters your keyboard can't produce is the one to open.",
+      "mode": "guided",
+      "target": {
+        "scope": "menu",
+        "name": "Symbols"
+      },
+      "action": "click",
+      "verify": {
+        "kind": "visible",
+        "name": "Emoji(7)",
+        "scope": "menu"
+      },
+      "hints": [
+        "Ignore the entries that put a picture or an object on the page. You want the group for characters — the ones no key on your keyboard types.",
+        "'Symbols', with an arrow on the right meaning there's a submenu underneath."
+      ],
+      "wrongHints": {
+        "Image": "A reasonable guess, since emoji are little pictures. But an image is an object that sits on the page and has to be positioned; an emoji sits inside the line and behaves like a letter.",
+        "Drawing": "Drawing makes a new object you compose yourself. An emoji already exists as a character — you're picking one, not making one."
+      }
+    },
+    {
+      "id": "s3",
+      "intent": "This submenu holds the three kinds of thing you can't type directly: mathematical equations, obscure characters, and emoji. Emoji gets its own entry because you browse for them rather than search by name — so it opens a picker instead of a search box.",
+      "mode": "guided",
+      "target": {
+        "scope": "menu",
+        "name": "Emoji(7)"
+      },
+      "action": "click",
+      "verify": {
+        "kind": "visible",
+        "name": "😀",
+        "scope": "menu"
+      },
+      "hints": [
+        "Of the few options here, one is for the everyday coloured characters rather than the technical ones.",
+        "In the small menu that just opened to the right, the entry named for emoji."
+      ],
+      "wrongHints": {
+        "Special characters": "Close, and not wrong in spirit — emoji really are special characters. But that tool is built for hunting down accents, arrows and dingbats by name or by drawing them. The emoji entry gives you a browsable picker instead.",
+        "Equation": "That opens a maths editor, for building formulas out of operators and fractions. Different kind of character entirely."
+      }
+    },
+    {
+      "id": "s4",
+      "intent": "The picker is open, sorted into the usual categories. Pick the smiling face — and once it lands, look at where it sits: on the line, in the text, with the cursor after it, exactly as if you'd typed a letter.",
+      "mode": "solo",
+      "target": {
+        "scope": "menu",
+        "name": "😀",
+        "nth": 0
+      },
+      "action": "click",
+      "verify": {
+        "kind": "none"
+      },
+      "hints": [
+        "You're choosing a character now, not navigating. Find the plain grinning face among the faces.",
+        "The smileys category, near the start of the grid."
+      ]
+    }
+  ]
+}

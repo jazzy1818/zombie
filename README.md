@@ -16,13 +16,22 @@ and the separate authoring-to-publication handoff.
 notice. Their old stub and automatic-click examples do not describe today's runtime. Current
 composition and boundaries are in [extension integration](docs/extension-integration.md).
 
-A generated lesson becomes searchable only after it is published into `extension/lessons/`
-and listed in `lessons/index.json`. See the publication instructions in the testing guide;
-the extension does not generate lessons when a user types into its chat bar.
+A generated lesson becomes searchable when it is saved into `extension/lessons/`
+and listed in `lessons/index.json`. With `npm run bridge` running in `pipeline/`,
+an unmatched question offers **Work it out for me**. During generation, click
+**Opening a cloud browser…** / **Watch cloud browser** to watch Steel in a floating
+window; **−** minimizes it while the AI continues. See the
+[generation and viewer test steps](docs/testing-workflow.md#5-watch-a-lesson-being-generated).
+
+When that session ends, **Watch recording** remains available on the page. Review
+the completed session with playback controls, or choose an earlier attempt from
+the viewer's Session selector. Playback retries automatically while the recording
+is being prepared. **Done**, **Stop**, starting another task, or navigation clears the
+recording button and history from the page.
 
 ---
 
-## Two halves that never talk at runtime
+## Authoring and teaching
 
 **Authoring** (cloud, ahead of time) — a Steel session explores Google Docs, makes mistakes, finds
 the path, prunes it, describes each step *semantically*, and replays to verify. Emits `lessons/*.json`.
@@ -30,7 +39,9 @@ the path, prunes it, describes each step *semantically*, and replays to verify. 
 **Teaching** (local, at use time) — a Chrome extension resolves those descriptors against the live
 DOM, spotlights the control, narrates *why*, and **waits for the user's click**.
 
-The handoff is a JSON file. Descriptors carry **no coordinates and no screenshots** — the cloud
+The handoff is lesson JSON. The optional local bridge lets the panel request
+authoring and receive that lesson at runtime; existing lessons work without it.
+Descriptors carry **no coordinates and no screenshots** — the cloud
 browser's window differs from the user's, so coordinates don't survive the trip.
 
 ---
