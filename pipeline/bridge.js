@@ -14,10 +14,6 @@
 // Start it with:  npm run bridge
 //
 //   POST /generate  { goal, id?, docUrl?, check?, verify? }  -> { jobId }
-//
-// docUrl is whatever page the panel is open on, so a question asked on GitHub
-// explores GitHub. DEMO_DOC_URL is only the fallback for a panel that didn't
-// send one.
 //   GET  /jobs/:id                                           -> job state
 //   POST /jobs/:id/cancel                                    -> cancel job
 //   GET  /lessons                                            -> saved lesson ids

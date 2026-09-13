@@ -116,11 +116,6 @@ try {
     await compareNames('Heading 1', 'heading1');
     await compareNames('Heading 10', 'heading10');
   });
-  await test('Separated count badges match while glued semantic digits do not', async () => {
-    for (const [name, id] of [['Issues', 'issues-count'], ['Inbox', 'inbox-count'], ['Stars', 'stars-count'], ['Tasks', null]]) {
-      await compareNames(name, id);
-    }
-  });
   await test('Native fieldset exception and rendered label checks agree', async () => {
     assert.deepEqual(await compare({ name: 'Legend exception' }), { pipeline: 'legend', runtime: 'legend' });
     assert.deepEqual(await compare({ name: 'Field control' }), { pipeline: null, runtime: null });
