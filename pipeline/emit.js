@@ -76,8 +76,14 @@ export function deriveVerify(step, nextStep) {
 
   const changed = step.delta.changed[0];
   if (changed) {
-    const selector = `#docs-toolbar-wrapper [aria-label="${changed.name}"]`;
-    return { kind: 'label', selector, match: changed.to };
+    // `label` reads textContent. A state readout holds its value in aria-label and its
+    // textContent is empty, so the only kind that can see it is `dom`.
+    if (changed.state) {
+      const selector = `[aria-label="${changed.to}"]`;
+      if (SAFE_SELECTOR.test(selector)) return { kind: 'dom', selector };
+    } else {
+      return { kind: 'label', selector: `#docs-toolbar-wrapper [aria-label="${changed.name}"]`, match: changed.to };
+    }
   }
 
   const dialog = step.delta.appeared.find(c => c.scope === 'dialog');

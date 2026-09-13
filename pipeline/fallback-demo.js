@@ -11,11 +11,13 @@ import { emit } from './emit.js';
 
 const CACHE_DIR = new URL('./cache/', import.meta.url);
 
+// Word count was the obvious shallow goal and it does not work: its dialog carries no
+// aria-label, no id and no roles on its children, so no Verify kind can see the end state.
 export const SHALLOW_GOAL = {
-  id: 'word-count',
-  goal: 'Show the word count for this document',
-  // 2 clicks, ~40s: Tools → Word count.
-  goalCheck: { kind: 'visible', name: 'Word count', scope: 'menu' },
+  id: 'zoom-150',
+  goal: 'Set the page zoom to 150%',
+  // 2 clicks, ~40s: Zoom → 150%. Docs writes the selection into the list's aria-label.
+  goalCheck: { kind: 'dom', selector: '[aria-label="Zoom list. 150% selected."]' },
 };
 
 export async function fallbackDemo(opts = {}) {

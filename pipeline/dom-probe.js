@@ -67,6 +67,9 @@ export function installProbe() {
       scope,
       source,
     };
+    // "Zoom list. 100% selected." — Docs writes the current value into these aria-labels.
+    // Great verify signal, fatal as a descriptor: the name changes when the value does.
+    if (/\b(?:list|menu)\.\s.+\sselected\.\s*$/.test(raw)) c.state = true;
     if (/[▶▸►‣]\s*$/.test(raw)) c.submenu = true;
     if (el.getAttribute('aria-disabled') === 'true') c.disabled = true;
     if (el.getAttribute('aria-checked') === 'true') c.checked = true;

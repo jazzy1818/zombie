@@ -16,6 +16,7 @@ import { fallbackDemo, SHALLOW_GOAL } from './fallback-demo.js';
 
 const TRACES = new URL('./traces/', import.meta.url);
 const OUT = new URL('./out/', import.meta.url);
+const CACHE = new URL('./cache/', import.meta.url);
 
 function parseArgs(argv) {
   const positional = [];
@@ -147,7 +148,9 @@ const commands = {
       // on its way to a native command.
       goalCheck: str(flags['check-visible'])
         ? { kind: 'visible', name: flags['check-visible'], scope: str(flags.scope) ?? 'menu' }
-        : str(flags.check) ? JSON.parse(flags.check) : { kind: 'none' },
+        : str(flags['check-aria'])
+          ? { kind: 'dom', selector: `[aria-label="${flags['check-aria']}"]` }
+          : str(flags.check) ? JSON.parse(flags.check) : { kind: 'none' },
     };
     if (spec.goalCheck.kind === 'none') {
       console.warn('[author] no --check given: "done" will be taken on the model\'s word.');
@@ -177,8 +180,11 @@ const commands = {
     const path = await saveLesson(id, lesson);
     console.log(`  wrote ${path}`);
 
+    // Seeds the stage demo. --live re-records it; this is the same payload for free.
+    if (flags.cache) console.log(`  wrote ${await saveCache(id, { trace, lesson })}`);
+
     if (flags['no-verify']) return;
-    const report = await verifyLesson(lesson, { docUrl: spec.docUrl });
+    const report = await verifyLesson(lesson, { docUrl: spec.docUrl, local: !!flags.local });
     if (!printReport(lesson, report)) process.exitCode = 1;
   },
 
@@ -214,6 +220,12 @@ async function saveTrace(id, trace) {
   const name = `${id}-${new Date().toISOString().replace(/[:.]/g, '-')}.json`;
   await writeFile(new URL(name, TRACES), JSON.stringify(trace, null, 2));
   return name;
+}
+
+async function saveCache(id, payload) {
+  await mkdir(CACHE, { recursive: true });
+  await writeFile(new URL(`${id}.json`, CACHE), JSON.stringify(payload, null, 2));
+  return `pipeline/cache/${id}.json`;
 }
 
 // out/, never extension/lessons/ — the pipeline must not overwrite the hand-written ones.
