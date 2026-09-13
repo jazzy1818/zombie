@@ -58,6 +58,14 @@ Before A replaces it, run the loaded-extension tests against the replacement and
 preserve trusted-event handling, exclusion of teacher UI clicks, abortable waits,
 hidden-target filtering, ambiguity handling, and real verification outcomes.
 
+The adapter now also filters native/ARIA-disabled action targets before applying
+`nth`, including Elements supplied by A. Existing retries wait for controls that
+enable during application loading. `visible`, `dom` and `label` verification can
+still inspect rendered disabled readouts. Label verification accepts either the
+matched element's textContent or its own aria-label, with no new JSON fields.
+See the [pipeline findings handoff](findings.md#pipeline-findings-applied-to-the-extension)
+for the observed dropdown labels and the remaining A/C authoring alignment work.
+
 ## Behavior to preserve
 
 1. Scroll smoothly to the resolved element, including a nested scroll container.
@@ -102,11 +110,13 @@ Reports: [standalone paint](paint-test-results.md) and
 [loaded extension](extension-test-results.md), plus
 [semantic adapter checks](teaching-test-results.md).
 
-Validated on September 12, 2026: **85/85 checks passed** (46 paint, 27 loaded
-extension, 12 semantic adapter), with zero reported browser/extension errors.
-The loaded-extension suite used Chromium 151.0.7922.34; the standalone paint
-suite used installed Chrome 153.0.8010.36. The modal screenshot was also inspected
-to verify that the target stays bright and the panel remains readable.
+The pipeline-findings follow-up passed **59/59 checks** (32 loaded extension,
+27 semantic adapter), with zero reported browser/extension errors in Chromium
+151.0.7922.34. The extension report records an earlier shadow-modal timeout
+that did not recur in focused checks or the final full run; its cause is not
+established. Paint source is unchanged from the separate passing 46-check run
+in Chrome 153.0.8010.36. The modal screenshot was also inspected to verify that
+the target stays bright and the panel remains readable.
 
 ## Limits
 

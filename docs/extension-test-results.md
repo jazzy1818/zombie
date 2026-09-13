@@ -1,12 +1,12 @@
 # Loaded extension integration results
 
-Run: 2026-09-12T23:23:38.024Z
+Run: 2026-09-13T00:04:30.441Z
 
 Browser: 151.0.7922.34
 
 Unpacked extension: hncmnkedojgcjjcnfnepjoleekjeahjg
 
-Result: **27/27 checks passed**.
+Result: **32/32 checks passed**.
 
 The browser loaded the unchanged extension directory through the manifest content script, then its real module graph in the extension isolated world. Tests use the actual panel, teaching adapter, resolver/fallback and paint implementations. No lesson-success, click, resolver or browser API mocks are installed.
 
@@ -30,6 +30,11 @@ The browser loaded the unchanged extension directory through the manifest conten
 - PASS: Restart cancels stale resolution without closing or replacing the new step
 - PASS: Hidden duplicates are excluded and open shadow-root controls resolve
 - PASS: Native button text and associated input labels resolve without aria-label
+- PASS: Disabled native and ARIA duplicates cannot shadow an enabled website action
+- PASS: Native disabled target waits for document readiness before highlighting or moving the ghost
+- PASS: ARIA-disabled target waits for document readiness before highlighting or moving the ghost
+- PASS: A replaced Styles button verifies the richer inner aria-label after the user selects a heading
+- PASS: Existing textContent label outcomes still verify after a real user action
 - PASS: Ambiguous targets do not silently select the first matching control
 - PASS: Explicit nth disambiguates visible matches
 - PASS: Same-document hash links can continue a chain
@@ -45,3 +50,5 @@ Scope: ordinary DOM controls on a local HTTP fixture, including native modal dia
 Screenshots and the disposable browser profile are saved under ignored `docs/.paint-artifacts/`.
 
 Run with `node docs/extension-tests.cjs` after making Playwright available. Set `CHROME_PATH` to a Chromium or Chrome for Testing executable that supports unpacked extensions. Normal branded Chrome builds may ignore extension-loading flags.
+
+Validation note: An earlier full run passed 31/32 checks; the existing shadow-root native-modal cursor-alignment check timed out once. With its assertions unchanged, that check passed alone, with the preceding modal-Stop case, and in this final complete 32/32 run. The cause of the first failure was not established. Failure diagnostics now record target geometry, cursor visibility/transform, resolver output and pointer state to aid a future reproduction. All new disabled-control and richer-label regressions passed both full runs.

@@ -52,6 +52,22 @@
     <a id="redirect" href="/docs/extension-fixture.html?destination=1" aria-label="Open next page">Open next page</a>
     <div id="same-page">Same-document anchor</div>
   </section>
+  <section role="toolbar" aria-label="Document loading toolbar">
+    <p>Controls become usable after the document finishes loading.</p>
+    <button id="load-native" aria-label="Load native document">Load native document</button>
+    <span id="native-ready-slot"></span>
+    <button id="load-aria" aria-label="Load ARIA document">Load ARIA document</button>
+    <span id="aria-ready-slot"></span>
+    <button disabled id="ready-duplicate-native" aria-label="Ready duplicate">Unavailable native</button>
+    <button aria-disabled="true" id="ready-duplicate-aria" aria-label="Ready duplicate">Unavailable ARIA</button>
+    <button id="ready-duplicate" aria-label="Ready duplicate">Ready duplicate</button>
+  </section>
+  <section id="style-toolbar" role="toolbar" aria-label="Formatting toolbar">
+    <div id="styles-slot"><button id="styles-open" aria-label="Styles">Styles</button></div>
+    <div id="styles-menu" role="menu" aria-label="Formatting styles" hidden>
+      <button id="heading-one" role="menuitem" aria-label="Apply Heading 1">Heading 1</button>
+    </div>
+  </section>
   <details>
     <summary>Manual practice with the loaded extension</summary>
     <p>Load the repository's <code>extension</code> directory as an unpacked extension. Open DevTools, select the <strong>Browser Teacher</strong> console context, then run this recipe:</p>
@@ -70,7 +86,7 @@
   <button id="modal-close" aria-label="Close website dialog">Close website dialog</button>
 </dialog>
 <script>
-  window.fixture = { clicks: {}, trusted: [], verifyDelay: 0 };
+  window.fixture = { clicks: {}, trusted: [], verifyDelay: 0, readyTimes: {} };
   document.addEventListener('click', event => {
     if (event.target.closest?.('#browser-teacher-root')) return;
     const button = event.composedPath().find(node => node instanceof Element && node.matches('button,a'));
@@ -88,6 +104,31 @@
     if (fixture.verifyDelay >= 0) setTimeout(() => { document.querySelector('#verify-state').textContent = 'Verified'; }, fixture.verifyDelay);
   });
   document.querySelector('#spa').addEventListener('click', () => { history.pushState({}, '', '/docs/extension-fixture-route'); });
+  for (const kind of ['native', 'aria']) {
+    document.querySelector(`#load-${kind}`).addEventListener('click', () => {
+      const control = document.createElement('button');
+      control.id = `${kind}-ready`;
+      control.setAttribute('aria-label', kind === 'native' ? 'Native document action' : 'ARIA document action');
+      control.textContent = 'Document action';
+      if (kind === 'native') control.disabled = true;
+      else control.setAttribute('aria-disabled', 'true');
+      document.querySelector(`#${kind}-ready-slot`).replaceChildren(control);
+      fixture.readyTimes[kind] = { created: performance.now(), enabled: null };
+      setTimeout(() => {
+        control.disabled = false;
+        control.setAttribute('aria-disabled', 'false');
+        fixture.readyTimes[kind].enabled = performance.now();
+      }, 900);
+    });
+  }
+  document.querySelector('#styles-open').addEventListener('click', () => {
+    document.querySelector('#styles-slot').innerHTML = '<div id="style-readout" role="listbox" aria-label="Styles list. Normal text selected."><span>◈</span></div>';
+    document.querySelector('#styles-menu').hidden = false;
+  });
+  document.querySelector('#heading-one').addEventListener('click', () => {
+    document.querySelector('#style-readout').setAttribute('aria-label', 'Styles list. Heading 1 selected.');
+    document.querySelector('#styles-menu').hidden = true;
+  });
   const shadow = document.querySelector('#shadow-host').attachShadow({ mode: 'open' });
   shadow.innerHTML = `
     <style>button{font:inherit;padding:10px;margin:6px}dialog{margin:0;position:fixed;top:150px;left:70px;width:600px;padding:25px}dialog::backdrop{background:#14233566}</style>

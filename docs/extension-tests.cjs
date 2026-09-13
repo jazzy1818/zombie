@@ -12,6 +12,7 @@ const http = require('node:http');
 const root = path.resolve(__dirname, '..');
 const artifacts = path.join(__dirname, '.paint-artifacts');
 const extensionPath = path.join(root, 'extension');
+const testFilter = process.env.EXTENSION_TEST_FILTER ? new RegExp(process.env.EXTENSION_TEST_FILTER) : null;
 const results = [];
 const runtimeErrors = [];
 let context;
@@ -38,6 +39,7 @@ async function report() {
     `Browser: ${browserVersion}`, '',
     `Unpacked extension: ${extensionId || 'not detected'}`, '',
     `Result: **${passed}/${results.length} checks passed**.`, '',
+    ...(testFilter ? [`Selected checks: \`${process.env.EXTENSION_TEST_FILTER}\`.`, ''] : []),
     'The browser loaded the unchanged extension directory through the manifest content script, then its real module graph in the extension isolated world. Tests use the actual panel, teaching adapter, resolver/fallback and paint implementations. No lesson-success, click, resolver or browser API mocks are installed.', '',
     ...results.map(result => `- ${result.passed ? 'PASS' : 'FAIL'}: ${result.name}${result.error ? ` — ${result.error.replace(/\n/g, ' ')}` : ''}`), '',
     `Uncaught page or extension console errors: ${runtimeErrors.length}.`,
@@ -105,6 +107,7 @@ async function report() {
     await page.locator('#browser-teacher-root .bt-bar').waitFor();
   }
   async function test(name, run) {
+    if (testFilter && !testFilter.test(name)) return;
     const previousErrors = runtimeErrors.length;
     try {
       await reset();
@@ -113,6 +116,41 @@ async function report() {
       results.push({ name, passed: true }); console.log(`PASS ${name}`);
     } catch (error) {
       results.push({ name, passed: false, error: error.message }); console.error(`FAIL ${name}: ${error.message}`);
+      const diagnostic = await page.evaluate(() => {
+        const root = document.querySelector('[data-browser-teacher-paint]')?.shadowRoot;
+        const shapes = {};
+        for (const name of ['spot', 'scrim', 'cursor']) {
+          const element = root?.querySelector(`.${name}`);
+          if (element) {
+            const style = getComputedStyle(element), rect = element.getBoundingClientRect();
+            shapes[name] = { hidden: element.hidden, display: style.display, visibility: style.visibility, transform: style.transform,
+              rect: { left: rect.left, top: rect.top, width: rect.width, height: rect.height } };
+          }
+        }
+        const targetRects = {};
+        for (const element of document.querySelector('#shadow-host')?.shadowRoot.querySelectorAll('button, dialog') || []) {
+          const rect = element.getBoundingClientRect();
+          targetRects[element.id] = { connected: element.isConnected, left: rect.left, top: rect.top, width: rect.width, height: rect.height,
+            display: getComputedStyle(element).display, visibility: getComputedStyle(element).visibility, disabled: element.matches(':disabled'), ariaDisabled: element.getAttribute('aria-disabled') };
+        }
+        return { url: location.href, now: performance.now(), scrollY, shapes, targetRects, clicks: window.fixture?.clicks,
+          panel: document.querySelector('#browser-teacher-root')?.shadowRoot.querySelector('.bt-body')?.textContent };
+      }).catch(() => null);
+      if (diagnostic && /Native modal inside/.test(name)) {
+        diagnostic.extension = await evaluate(`(async () => {
+          const resolution = await import(chrome.runtime.getURL('src/teaching/resolution.js'));
+          const geometry = await import(chrome.runtime.getURL('src/paint/geometry.js'));
+          const pointer = await import(chrome.runtime.getURL('src/paint/pointer.js'));
+          const element = resolution.findTarget({ name: 'Confirm shadow modal', scope: 'dialog' }, () => __RESOLVE);
+          const cursor = document.querySelector('[data-browser-teacher-paint]')?.shadowRoot.querySelector('.cursor');
+          const before = cursor && { hidden: cursor.hidden, transform: cursor.style.transform };
+          const result = { resolvedId: element?.id, rect: element && geometry.readRect(element), pointer: pointer.getPointerPosition(), before };
+          __TEACH.setCursorVisible(true);
+          result.afterVisible = cursor && { hidden: cursor.hidden, transform: cursor.style.transform };
+          return result;
+        })()`).catch(error => ({ error: error.message }));
+      }
+      await fs.writeFile(path.join(artifacts, `extension-failure-${results.length}.json`), JSON.stringify(diagnostic, null, 2));
       await page.screenshot({ path: path.join(artifacts, `extension-failure-${results.length}.png`) }).catch(() => {});
     }
   }
@@ -379,6 +417,63 @@ async function report() {
     await completed();
     assert.equal(await count('native-action'), 1);
     assert.equal(await page.locator('#name-input').evaluate(element => element === document.activeElement), true);
+  });
+  await test('Disabled native and ARIA duplicates cannot shadow an enabled website action', async () => {
+    await begin([step('Ready duplicate', { target: target('Ready duplicate', 'toolbar') })]);
+    await cursorAligned('#ready-duplicate');
+    await page.locator('#ready-duplicate').click(); await completed();
+    assert.equal(await count('ready-duplicate'), 1);
+    assert.equal(await count('ready-duplicate-native'), 0);
+    assert.equal(await count('ready-duplicate-aria'), 0);
+  });
+  for (const kind of ['native', 'aria']) {
+    await test(`${kind === 'native' ? 'Native disabled' : 'ARIA-disabled'} target waits for document readiness before highlighting or moving the ghost`, async () => {
+      const loader = kind === 'native' ? 'Load native document' : 'Load ARIA document';
+      const action = kind === 'native' ? 'Native document action' : 'ARIA document action';
+      await begin([step(loader), step(action, { target: target(action, 'toolbar') })]);
+      await cursorAligned(`#load-${kind}`); await sampleFrames();
+      await page.locator(`#load-${kind}`).click();
+      assert.equal(await page.locator(`#${kind}-ready`).isDisabled(), true);
+      await cleared(); await page.waitForTimeout(220); await cleared();
+      assert.equal(await page.evaluate(kind => fixture.readyTimes[kind].enabled, kind), null);
+      assert.equal(await count(`${kind}-ready`), 0);
+      await cursorAligned(`#${kind}-ready`);
+      const recorded = await samples();
+      const times = await page.evaluate(kind => fixture.readyTimes[kind], kind);
+      assert.ok(times.enabled > times.created + 800, 'The fixture must expose a genuinely disabled loading interval');
+      assert.ok(times.enabled < times.created + 2000, 'Readiness must happen within the existing resolver retry window');
+      assert.equal(recorded.some(sample => sample.visible && sample.time > times.created + 10 && sample.time < times.enabled), false, 'The ghost must remain hidden until the target is enabled');
+      assert.ok(recorded.some(sample => sample.visible && sample.time >= times.enabled), 'The real ghost must arrive after readiness');
+      await page.locator(`#${kind}-ready`).click(); await completed();
+      assert.equal(await count(`${kind}-ready`), 1);
+      assert.equal(await page.evaluate(() => fixture.trusted.every(click => click.trusted)), true);
+    });
+  }
+  await test('A replaced Styles button verifies the richer inner aria-label after the user selects a heading', async () => {
+    await begin([
+      step('Styles', { target: target('Styles', 'toolbar'), verify: { kind: 'visible', name: 'Apply Heading 1', scope: 'menu' } }),
+      step('Apply Heading 1', { target: target('Apply Heading 1', 'menu'), verify: { kind: 'label', selector: '#style-toolbar [aria-label^="Styles list."]', match: 'Heading 1' } }),
+    ]);
+    await cursorAligned('#styles-open');
+    assert.equal(await page.locator('#styles-menu').isVisible(), false);
+    await page.locator('#styles-open').click(); await cursorAligned('#heading-one');
+    assert.equal(await page.locator('#styles-open').count(), 0, 'Opening the menu must replace the original outer control');
+    assert.equal(await page.locator('#style-readout').getAttribute('aria-label'), 'Styles list. Normal text selected.');
+    assert.equal(await page.locator('#style-readout').textContent(), '◈', 'The outcome must not be available through textContent');
+    assert.equal(await count('heading-one'), 0);
+    await page.locator('#heading-one').click(); await completed();
+    assert.equal(await page.locator('#style-readout').getAttribute('aria-label'), 'Styles list. Heading 1 selected.');
+    assert.equal(await page.locator('#style-readout').textContent(), '◈');
+    assert.equal(await count('styles-open'), 1); assert.equal(await count('heading-one'), 1);
+  });
+  await test('Existing textContent label outcomes still verify after a real user action', async () => {
+    await begin([step('Start verification', { verify: { kind: 'label', selector: '#verify-state', match: 'Verified' } })]);
+    await cursorAligned('#verify');
+    assert.equal(await page.locator('#verify-state').textContent(), 'Idle');
+    assert.equal(await count('verify'), 0);
+    await page.locator('#verify').click(); await completed();
+    assert.equal(await page.locator('#verify-state').textContent(), 'Verified');
+    assert.equal(await page.locator('#verify-state').getAttribute('aria-label'), null);
   });
   await test('Ambiguous targets do not silently select the first matching control', async () => {
     await begin([step('Ambiguous action')]);

@@ -27,6 +27,17 @@ export function usable(element) {
   return true;
 }
 
+// A visible control can still be disabled while an application loads. Native
+// :disabled includes fieldset/legend rules; ARIA also applies to descendants.
+// Keep this separate from visibility: disabled controls can report outcomes.
+export function isEnabled(element) {
+  if (element?.nodeType !== 1 || element.matches(':disabled')) return false;
+  for (let node = element; node; node = parent(node)) {
+    if (normalize(node.getAttribute('aria-disabled')).toLowerCase() === 'true') return false;
+  }
+  return true;
+}
+
 export function roleOf(element) {
   const explicit = element.getAttribute('role')?.trim().split(/\s+/)[0];
   if (explicit) return explicit;
@@ -108,14 +119,15 @@ function matchesName(element, wanted) {
   return /^(?:[►▸▶›»]|\(?\s*(?:Ctrl|Control|Alt|Option|Shift|Meta|Cmd|Command|⌘|⌥|⇧|F\d{1,2})(?:\b|[+⌘⌥⇧]).*\)?)$/i.test(suffix);
 }
 
-export function findTarget(target, resolver) {
-  if (target?.nodeType === 1) return usable(target) ? target : null;
+export function findTarget(target, resolver, { requireEnabled = true } = {}) {
+  const eligible = element => usable(element) && (!requireEnabled || isEnabled(element));
+  if (target?.nodeType === 1) return eligible(target) ? target : null;
   if (!target || typeof target.name !== 'string' || !target.name.trim()) return null;
   if (target.nth !== undefined && (!Number.isInteger(target.nth) || target.nth < 0)) return null;
   // Read A live so a completed resolver can replace the stub without changing D.
   const provided = resolver?.()?.findSync?.(target);
-  if (usable(provided)) return provided;
-  const matches = queryDeep(CONTROL).filter(element => usable(element)
+  if (eligible(provided)) return provided;
+  const matches = queryDeep(CONTROL).filter(element => eligible(element)
     && withinScope(element, target.scope)
     && (!target.role || roleOf(element) === target.role)
     // A menu/toolbar container's concatenated text is not its child's button
@@ -139,12 +151,12 @@ export async function resolveTarget(target, { signal, resolver, timeout = RESOLV
 
 export function actionFromPath(path) {
   return path.find(element => element?.nodeType === 1 && usable(element)
-    && !element.matches(':disabled') && element.getAttribute('aria-disabled') !== 'true'
+    && isEnabled(element)
     && (element.matches('button, a[href], input:not([type="hidden"]), select, textarea, summary') || ACTION_ROLES.has(roleOf(element)))) || null;
 }
 
 export function pathActivates(path, element) {
-  if (!element || element.matches(':disabled') || element.getAttribute('aria-disabled') === 'true') return false;
+  if (!isEnabled(element)) return false;
   return path.includes(element) || path.some(node => node?.localName === 'label' && node.control === element);
 }
 
@@ -153,12 +165,17 @@ export async function verifyOutcome(verification, { signal, resolver, timeout = 
   if (!verification || verification.kind === 'none') return true;
   const end = performance.now() + timeout;
   function matches() {
-    if (verification.kind === 'visible') return Boolean(findTarget(verification, resolver));
+    if (verification.kind === 'visible') return Boolean(findTarget(verification, resolver, { requireEnabled: false }));
     if (!['dom', 'label'].includes(verification.kind) || typeof verification.selector !== 'string') return false;
     let elements;
     try { elements = queryDeep(verification.selector); } catch { return false; }
+    const expected = typeof verification.match === 'string' ? normalize(verification.match) : '';
     return elements.some(element => usable(element) && (verification.kind === 'dom'
-      || (typeof verification.match === 'string' && normalize(element.textContent).includes(normalize(verification.match)))));
+      // A dropdown can expose its selection only in its accessible label.
+      // Keep selector + match and existing text checks; do not guess another
+      // element when the authored selector no longer matches the live page.
+      || (expected && [element.textContent, element.getAttribute('aria-label')]
+        .some(value => normalize(value).includes(expected)))));
   }
   for (;;) {
     checkAbort(signal);
