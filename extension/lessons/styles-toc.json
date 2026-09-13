@@ -47,7 +47,7 @@
       "action": "click",
       "verify": {
         "kind": "visible",
-        "name": "Apply 'Heading 1'",
+        "name": "Heading 1",
         "scope": "menu"
       },
       "hints": [
@@ -65,7 +65,7 @@
       "intent": "Choose Heading 1. You're telling Docs 'this line is a top-level section'.",
       "target": {
         "scope": "menu",
-        "name": "Apply 'Heading 1'"
+        "name": "Heading 1"
       },
       "action": "click",
       "verify": {
@@ -78,7 +78,7 @@
         "Below 'Title' and 'Subtitle' in the list."
       ],
       "wrongHints": {
-        "Apply 'Title'": "Title works visually, but Docs treats it as the document name — it won't appear as a section in the contents."
+        "Title": "Title works visually, but Docs treats it as the document name — it won't appear as a section in the contents."
       }
     },
     {
@@ -87,7 +87,7 @@
       "intent": "Same thing for a section heading — put your cursor on one of the section lines and make it Heading 2. Heading 2 nests underneath Heading 1, which is how the contents gets its indentation.",
       "target": {
         "scope": "menu",
-        "name": "Apply 'Heading 2'"
+        "name": "Heading 2"
       },
       "action": "click",
       "verify": {
