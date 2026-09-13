@@ -94,7 +94,14 @@ export function installProbe() {
       ...collect('#docs-menubar [role="menuitem"]', 'menu', 'menubar-role', seen),
       ...collect('#docs-menubar [aria-label]', 'menu', 'menubar-aria', seen),
     ];
-    const menu = [...menubar, ...collect('[role="menuitem"]', 'menu', 'menuitem', seen)];
+    // Docs' toolbar dropdowns (Styles, Font, Zoom) are listboxes whose children are
+    // role=option, not menuitem. Both count as "menu" for a lesson descriptor.
+    const menu = [
+      ...menubar,
+      ...collect('[role="menuitem"]', 'menu', 'menuitem', seen),
+      ...collect('[role="option"], [role="menuitemradio"], [role="menuitemcheckbox"]',
+        'menu', 'option', seen),
+    ];
     const dialog = collect(
       '[role="dialog"] [aria-label], [role="dialog"] button', 'dialog', 'dialog', seen,
     );
@@ -108,11 +115,15 @@ export function installProbe() {
     const menuitem = { sel: '[role="menuitem"]', match: menuMatch };
     const menubarRole = { sel: '#docs-menubar [role="menuitem"]', match: menuMatch };
     const menubarAria = { sel: '#docs-menubar [aria-label]', match: toolbarMatch };
+    const option = {
+      sel: '[role="option"], [role="menuitemradio"], [role="menuitemcheckbox"]',
+      match: menuMatch,
+    };
     const any = { sel: '[aria-label]', match: toolbarMatch };
 
     if (scope === 'toolbar') return [toolbar];
-    if (scope === 'menu') return [menubarRole, menuitem, menubarAria];
-    return [toolbar, menuitem, menubarRole, any];
+    if (scope === 'menu') return [menubarRole, menuitem, option, menubarAria];
+    return [toolbar, menuitem, option, menubarRole, any];
   }
 
   /** → { id, count, tier } | null. `count` is visible matches; emit needs it for nth. */
