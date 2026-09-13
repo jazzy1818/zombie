@@ -143,7 +143,11 @@ const commands = {
     const spec = {
       goal,
       docUrl: str(flags.doc) ?? process.env.DEMO_DOC_URL,
-      goalCheck: str(flags.check) ? JSON.parse(flags.check) : { kind: 'none' },
+      // --check-visible avoids passing JSON through PowerShell, which mangles quotes
+      // on its way to a native command.
+      goalCheck: str(flags['check-visible'])
+        ? { kind: 'visible', name: flags['check-visible'], scope: str(flags.scope) ?? 'menu' }
+        : str(flags.check) ? JSON.parse(flags.check) : { kind: 'none' },
     };
     if (spec.goalCheck.kind === 'none') {
       console.warn('[author] no --check given: "done" will be taken on the model\'s word.');
