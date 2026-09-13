@@ -1,127 +1,229 @@
 # Browser Teacher
 
-**A teacher that lives in your browser.** It points at things and waits for *you* to click them.
+Browser Teacher is a Chrome extension that teaches web-app workflows inside the
+page where the work happens. Ask how to do something, choose a matching lesson,
+and the extension points to the next control. It explains why that control
+matters and waits for you to click it.
 
-Product tours (WalkMe, Pendo, Intercom) are hand-authored by humans — per app, per flow, forever.
-We generate them automatically from a natural-language question, using a cloud browser agent.
+That last part is deliberate: Browser Teacher does not complete the task for
+you. The learner makes every click, so the lesson feels closer to guided
+practice than a product tour.
 
-**Start here: [test the current workflow](docs/testing-workflow.md).** The merged extension
-connects A's resolver, B's panel and D's paint through the real teaching adapter. Google Docs
-is the demo application; the rendering layer also works with ordinary DOM controls on other sites.
-The guide covers Windows setup, the local extension fixture, normal question-based lesson launch,
-and the separate authoring-to-publication handoff.
+The repository contains two connected pieces:
 
-[PLAN.md](PLAN.md) retains the original contracts, schedule and historical handoffs.
-[CHECKPOINT-1.md](CHECKPOINT-1.md) is the earlier integration checklist, with a current-state
-notice. Their old stub and automatic-click examples do not describe today's runtime. Current
-composition and boundaries are in [extension integration](docs/extension-integration.md).
+- **Teaching extension:** searches saved lessons, resolves each semantic target
+  against the live page, highlights it, and checks the learner's action.
+- **Authoring pipeline:** explores a workflow in a local or Steel cloud browser,
+  removes wrong turns, writes a reusable lesson, and can replay it before
+  publication.
 
-A generated lesson becomes searchable when it is saved into `extension/lessons/`
-and listed in `lessons/index.json`. With `npm run bridge` running in `pipeline/`,
-an unmatched question offers **Work it out for me**. During generation, click
-**Opening a cloud browser…** / **Watch cloud browser** to watch Steel in a floating
-window; **−** minimizes it while the AI continues. See the
-[generation and viewer test steps](docs/testing-workflow.md#5-watch-a-lesson-being-generated).
+Saved lessons are plain JSON. They describe controls by meaning and context,
+not by screen coordinates, so the same lesson can survive ordinary differences
+between the authoring browser and the learner's window.
 
-When that session ends, **Watch recording** remains available on the page. Review
-the completed session with playback controls, or choose an earlier attempt from
-the viewer's Session selector. Playback retries automatically while the recording
-is being prepared. **Done**, **Stop**, starting another task, or navigation clears the
-recording button and history from the page.
+## Run the extension
 
----
+You do not need Node.js, an API key, or the authoring bridge to use the lessons
+already included in this repository.
 
-## Authoring and teaching
+1. Open `chrome://extensions` in Chrome.
+2. Turn on **Developer mode**.
+3. Click **Load unpacked** and select this repository's `extension` folder.
+4. Open or refresh an HTTP/HTTPS page. Google Docs is the best place to try the
+   bundled lessons.
+5. Use the Browser Teacher bar at the bottom of the page. Ask a question such
+   as **How do I change the font style?**, click **Teach me**, and choose the
+   lesson you want.
+6. Click **Show me** when you want visual guidance, then make the highlighted
+   click yourself.
 
-**Authoring** (cloud, ahead of time) — a Steel session explores Google Docs, makes mistakes, finds
-the path, prunes it, describes each step *semantically*, and replays to verify. Emits `lessons/*.json`.
+After changing extension code or adding a lesson, click **Reload** on
+`chrome://extensions` and refresh the page you are testing. Reloading the
+website alone does not reload the extension package.
 
-**Teaching** (local, at use time) — a Chrome extension resolves those descriptors against the live
-DOM, spotlights the control, narrates *why*, and **waits for the user's click**.
+### Run a local smoke test
 
-The handoff is lesson JSON. The optional local bridge lets the panel request
-authoring and receive that lesson at runtime; existing lessons work without it.
-Descriptors carry **no coordinates and no screenshots** — the cloud
-browser's window differs from the user's, so coordinates don't survive the trip.
-
----
-
-## Who owns what
-
-Ownership is at **directory** level. **Nobody edits another person's directory.** That is the entire
-merge-conflict strategy.
-
-| | Owns | Branch |
-|---|---|---|
-| **A** | `extension/src/resolve/` — DOM intelligence. Finds elements, judges outcomes. Draws nothing. | `resolve` |
-| **B** | `extension/src/panel/`, `manifest.json`, `content.js` — UI & orchestration | `panel` |
-| **C** | `pipeline/`, `extension/lessons/` — the Steel pipeline and the lessons it emits | `pipeline` |
-| **D** | `extension/src/paint/`, `docs/` — the visual layer. Draws. Knows nothing about Docs. | `paint` |
-
-Merge to `main` only at Checkpoint 1 and Checkpoint 2. If you hit a conflict outside your own
-directory, you've broken rule 1 — revert, don't resolve.
-
-### The three shared files
-
-- **`extension/src/constants.js`** — written hour 0, **never edited again**
-- **`extension/src/content.js`** — B's; import order frozen
-- **`extension/src/teach.js`** — the shared composition now connects the panel and paint.
-  Its cancellable adapter and the handoff to A are described in
-  [extension integration](docs/extension-integration.md); Contract 4 keeps its eight methods.
-
----
-
-## Start working
+The repository includes a small practice site that exercises the real resolver,
+teaching controller, and visual layer without touching a live application.
+From the repository root, run:
 
 ```bash
-git checkout -b <your-branch>
+python3 -m http.server 8765 --bind 127.0.0.1
 ```
 
-The runtime contracts (`window.__RESOLVE`, `window.__PAINT`, `window.__TEACH`) are implemented.
-Preserve their public shapes and cancellation behavior when changing the shared composition.
+On Windows, use `python` instead of `python3`. Keep the terminal open, then visit
+[the extension fixture](http://127.0.0.1:8765/docs/extension-fixture.html). Load
+Browser Teacher as described above and refresh the fixture.
 
-**Load the extension:** `chrome://extensions` → Developer mode → Load unpacked → pick `extension/`.
-Refresh an HTTP/HTTPS website tab after loading or reloading the extension. The
-real teach bridge connects the panel to D's paint layer. The bundled lessons are
-Google Docs examples; other websites need matching lesson descriptors. See
-[extension integration and testing](docs/extension-integration.md) for the local
-extension fixture, cancellation behavior and the compatibility adapter around A's resolver.
-
-**Development contracts** (select the Browser Teacher console context):
+In DevTools, switch the Console execution context from `top` to **Browser
+Teacher**, then run:
 
 ```js
-// B — the real __TEACH bridge composes resolution and paint
-// D — no stub needed, use raw rects
-__PAINT.spotlight({ top: 120, left: 300, width: 180, height: 32 });
-// A — no stub needed, log elements
-__RESOLVE.find({ scope: 'toolbar', name: 'Bold' }).then(console.log);
+__BT_DEV.off();
+fetch('/docs/extension-practice.json')
+  .then(response => response.json())
+  .then(lesson => __BT_DEV.runLesson(lesson));
 ```
 
-**Pipeline:**
+The practice lesson covers ordinary controls, scrolling, a menu, a modal, a
+wrong click, cancellation, and navigation. A fuller manual checklist is in
+[docs/testing-workflow.md](docs/testing-workflow.md).
+
+## Generate a new lesson
+
+Generation is optional. It is used when the saved library does not contain a
+good match for the learner's question.
+
+### Requirements
+
+- Node.js 24 or newer
+- A Steel API key
+- An Anthropic API key
+- A prepared page where the authoring browser is allowed to perform the task
+
+Install and configure the pipeline:
 
 ```bash
-cd pipeline && npm install
-export STEEL_API_KEY=... PROFILE_PATH=...
+cd pipeline
+npm ci
+cp .env.example .env
 ```
 
----
+On Windows PowerShell, replace the last command with:
 
-## The one number to write on the wall
+```powershell
+Copy-Item .env.example .env
+```
 
-## 1440×900
+Fill in `pipeline/.env`:
 
-Steel's viewport **and** the demo laptop's window. The Docs toolbar collapses controls into a `More`
-overflow button as width shrinks — a button present at 1440px is **absent from the DOM** at 1000px.
-If the two disagree, lessons reference elements that don't exist and it looks like a resolver bug.
+```dotenv
+STEEL_API_KEY=your_steel_key
+ANTHROPIC_API_KEY=your_anthropic_key
+PROFILE_PATH=./profile.json
+DEMO_DOC_URL=https://docs.google.com/document/d/your-test-document/edit
+```
 
-Set the demo laptop's window to match before rehearsal.
+Both `.env` and `profile.json` are ignored by Git. Keep API keys and saved
+browser sessions out of commits.
 
----
+Public pages can be explored anonymously. For a private Google Doc or another
+signed-in workflow, capture a reusable browser profile once:
 
-## Two things that will bite you
+```bash
+npm run capture-profile -- --sites "Google, GitHub"
+```
 
-- **~200 menu items are in the DOM at all times, most of them hidden.** Docs pre-renders every menu
-  on page load. The `isVisible()` filter is mandatory — it's the #1 resolver risk.
-- **The document body is canvas-rendered.** No DOM element exists for a paragraph, word, or cursor
-  position. Lessons live in the chrome — menus, toolbar, sidebars, dialogs — **never in the page.**
-  For steps that need the body, instruct and verify on a DOM side-effect.
+Complete the sign-in in the browser that opens. The resulting profile is used
+automatically by later exploration and verification runs.
+
+Start the local bridge and leave it running:
+
+```bash
+npm run bridge
+```
+
+The bridge listens on `http://localhost:7777`. It keeps API keys outside the
+extension and performs model and cloud-browser work on the extension's behalf.
+Refresh the target page after starting it. When a question has no confident
+saved match, the panel offers **Work it out for me**; when it has near matches,
+**None of these** starts the same generation path. A lesson normally takes a
+few minutes to explore and write, and the panel can show the live browser or a
+recording while it runs.
+
+When generation succeeds, the bridge writes the lesson to
+`extension/lessons/` and rebuilds `extension/lessons/index.json`. The current
+panel can teach the returned lesson immediately. Reload the unpacked extension
+and refresh the site before expecting a newly written lesson to be searchable
+in a later session.
+
+### Author from the command line
+
+The same pipeline can be run directly when you want an explicit goal and
+completion check:
+
+```bash
+npm run author -- --id change-page-zoom-150 --goal "Change page zoom to 150%" --doc "https://docs.google.com/document/d/your-test-document/edit" --check-aria "Zoom list. 150% selected." --publish
+```
+
+This explores the task, emits a lesson into `pipeline/out/`, replays it, and
+publishes it only when every required step passes. Omit `--publish` while
+iterating. Run `node author.js` from `pipeline/` to see the available pipeline
+commands.
+
+## How teaching works
+
+```text
+question
+  -> site-scoped lesson search
+  -> learner chooses a lesson
+  -> teaching controller resolves the next semantic target
+  -> paint layer spotlights the live control
+  -> learner clicks
+  -> click and outcome verification advance the lesson
+```
+
+If local search is uncertain and the bridge is available, the bridge can judge
+the best candidates before the panel shows them. A weak text match is not enough
+to silently start a lesson, and the learner can reject a suggestion before any
+steps run.
+
+During a lesson, the main runtime responsibilities stay separate:
+
+- `extension/src/panel/` owns questions, lesson choices, progress, and bridge
+  communication.
+- `extension/src/teaching/` coordinates each step and cancellation.
+- `extension/src/resolve/` finds visible controls, validates clicks, and checks
+  DOM outcomes.
+- `extension/src/paint/` owns spotlighting, guidance, scrolling, and feedback.
+- `extension/lessons/` contains published lesson JSON and its index.
+- `pipeline/` contains exploration, pruning, emission, replay, publication, and
+  the local bridge.
+
+The composition is documented in
+[docs/extension-integration.md](docs/extension-integration.md). The original
+design contracts and project checkpoints remain in [PLAN.md](PLAN.md) and
+[CHECKPOINT-1.md](CHECKPOINT-1.md) for development history.
+
+## Test the project
+
+The pipeline's local test suite does not call Steel or Anthropic:
+
+```bash
+cd pipeline
+npm test
+```
+
+The site registry and page-support checks can be run from the repository root:
+
+```bash
+node docs/sites-tests.mjs
+node docs/support-tests.mjs
+node docs/apps-tests.mjs
+```
+
+Resolver, teaching, paint, generation, and loaded-extension browser suites are
+also included. They need Playwright and a compatible Chromium executable; the
+exact commands and expected manual checks are kept in
+[docs/testing-workflow.md#6-run-the-automated-regression-suites](docs/testing-workflow.md#6-run-the-automated-regression-suites).
+
+## Current limitations
+
+- Google Docs renders document text on a canvas. Browser Teacher can resolve
+  toolbar controls, menus, dialogs, and sidebars, but it cannot target an
+  individual word or paragraph in the document body. Those moments have to be
+  taught as instructions and checked through a visible DOM side effect when one
+  exists.
+- Google Docs keeps many hidden menu items in the DOM. Resolution must filter
+  for visibility before matching a label.
+- Responsive layouts can move controls into overflow menus. Google Docs lessons
+  are authored around a `1440x900` viewport; a substantially narrower window
+  may expose a genuinely different workflow.
+- Generic sites work best when their controls have stable text, ARIA labels, or
+  standard roles. Canvas-only interfaces and deeply embedded cross-origin
+  frames cannot be taught reliably with the current resolver.
+
+Browser Teacher is a prototype, so a completed lesson is evidence that its
+steps ran, not a guarantee that every external application state changed as
+intended. For important workflows, keep an explicit final outcome check in the
+lesson and rehearse it on the target site before publishing.

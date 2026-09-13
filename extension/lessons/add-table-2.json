@@ -1,0 +1,53 @@
+{
+  "id": "add-table-2",
+  "app": "google-docs",
+  "goal": "how to add a table",
+  "preamble": "A table looks like formatting — rows, borders, alignment — so the instinct is to go looking under Format. But nothing on the page is a table yet. You're not changing how existing text is arranged; you're bringing a new object into the document, and its shape is decided the moment you create it. That distinction is what tells you which menu to open.",
+  "generalization": "Format changes what's already there. Insert brings in something that wasn't. Nearly everything in Docs sorts cleanly into one of those two questions, and asking it first will find you the right menu before you've read a single label — charts, images, footnotes, page breaks all live on the Insert side for the same reason a table does.",
+  "steps": [
+    {
+      "id": "s1",
+      "intent": "There is no table in your document to format, so formatting tools have nothing to work on. What you want is to add a new thing to the page — and one menu exists purely for adding things that aren't there yet.",
+      "mode": "demo",
+      "target": {
+        "scope": "menu",
+        "name": "Insert"
+      },
+      "action": "click",
+      "verify": {
+        "kind": "visible",
+        "name": "Table",
+        "scope": "menu"
+      },
+      "hints": [
+        "Ask yourself whether you're altering existing text or introducing something new. The answer picks the menu.",
+        "The Insert menu, in the menu bar along the top, between Format and View."
+      ],
+      "wrongHints": {
+        "Format": "A fair guess — tables are grids, and grids feel like layout. But Format acts on something that already exists. Once the table is on the page, Format will have plenty to say about it. Right now there's nothing to act on.",
+        "Edit": "Edit is about moving content around that's already in the document — cut, copy, paste, undo. Creating something from nothing belongs to Insert."
+      }
+    },
+    {
+      "id": "s2",
+      "intent": "Unlike an image or a page break, a table can't be dropped in as-is — Docs needs to know how many rows and columns before it can make one. That's why this entry opens further instead of acting immediately: choosing the size is part of creating it.",
+      "mode": "guided",
+      "target": {
+        "scope": "menu",
+        "name": "Table"
+      },
+      "action": "click",
+      "verify": {
+        "kind": "none"
+      },
+      "hints": [
+        "You're looking for the one item that can't finish its job with a single click, because it still needs a shape from you.",
+        "Partway down the Insert menu, in the group with Image and Drawing."
+      ],
+      "wrongHints": {
+        "Chart": "Charts do hold rows and columns of numbers, so the confusion is understandable — but a chart draws a picture of data. A table shows the data itself, laid out on the page.",
+        "Drawing": "You could draw boxes that look like a grid, and it would look right. It wouldn't behave like a table though — no tabbing between cells, no adding a row later. Shape and behaviour come together when you insert a real one."
+      }
+    }
+  ]
+}
