@@ -75,6 +75,24 @@ const commands = {
           () => document.querySelectorAll('[role="menuitem"]').length,
         );
         console.log(`  filter     ${obs.menu.length} visible of ${total} in the DOM`);
+
+        // Which account this browser is actually signed in as — the profile and your
+        // local browser can easily be different accounts.
+        const who = await handle.page.evaluate(() =>
+          [...document.querySelectorAll('[aria-label]')]
+            .map(e => e.getAttribute('aria-label'))
+            .filter(l => l && l.includes('@'))
+            .slice(0, 3));
+        console.log(`  account    ${who.length ? who.join(' | ') : 'no signed-in account found — the session may be anonymous'}`);
+      }
+
+      if (docUrl) {
+        const menu = await handle.page.evaluate(() => {
+          const el = [...document.querySelectorAll('[role="menuitem"]')]
+            .find(e => e.textContent.trim().startsWith('Version history'));
+          return el ? { found: true, disabled: el.getAttribute('aria-disabled') === 'true' } : { found: false };
+        });
+        console.log(`  vers.hist  ${!menu.found ? 'not in the DOM' : menu.disabled ? 'DISABLED — this doc will not work for version-history' : 'enabled'}`);
       }
 
       const url = handle.session.debugUrl ?? handle.viewerUrl;
