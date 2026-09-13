@@ -10,7 +10,7 @@ import {
 } from './session.js';
 import { explore } from './explore.js';
 import { prune, printPrune } from './prune.js';
-import { emit } from './emit.js';
+import { emit, skeleton } from './emit.js';
 import { verifyLesson, printReport } from './verify.js';
 import { fallbackDemo, SHALLOW_GOAL } from './fallback-demo.js';
 
@@ -189,7 +189,16 @@ const commands = {
     const pruned = prune(trace);
     printPrune(trace, pruned);
 
-    if (flags['skeleton-only']) return;
+    // The mechanical half costs nothing — no browser, no model. Iterate here.
+    if (flags['skeleton-only'] || flags['no-narrate']) {
+      for (const s of skeleton(pruned.kept)) {
+        console.log(`  ${s.id.padEnd(3)} ${s.mode.padEnd(7)}${JSON.stringify(s.target).padEnd(46)}${JSON.stringify(s.verify)}`);
+        console.log(`        why: ${s._trace.reasoning}`);
+        console.log(`        saw: ${s._trace.observed}`);
+      }
+      return;
+    }
+
     const id = str(flags.id) ?? 'scratch';
     const lesson = await emit(pruned, { id, goal: trace.goal });
     console.log(`  wrote ${await saveLesson(id, lesson)}`);
