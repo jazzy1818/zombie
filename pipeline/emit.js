@@ -14,11 +14,14 @@ function stripLadder(raw, scope) {
     return [t.replace(/\s*\([^)]*\)\s*$/, '').trim(), t];
   }
   const noArrow = t.replace(/[▶▸►‣]\s*$/, '').trim();
+  // "Page elementsUpdated" — Docs appends promo badges to menu labels.
+  const noBadge = noArrow.replace(/(?:Updated|New)$/, '').trim();
   return [
-    noArrow
+    noBadge
       .replace(/\s*\([A-Za-z0-9]{1,3}\)\s*$/, '')
       .replace(/(?:Ctrl|Alt|Shift|Cmd|⌘|⌥|⇧|⌃)[^\s]*$/, '')
       .trim(),
+    noBadge,
     noArrow.replace(/\s*\([A-Za-z0-9]{1,3}\)\s*$/, '').trim(),
     noArrow,
     t,
@@ -113,14 +116,18 @@ export function skeleton(kept) {
   }));
 }
 
+// Flat types only. Structured outputs rejects tuples and records — they emit JSON Schema
+// without a `type`. The lesson's [conceptual, spatial] pair and wrongHints map are
+// rebuilt in the merge below.
 const Narration = z.object({
   preamble: z.string(),
   generalization: z.string(),
   steps: z.array(z.object({
     id: z.string(),
     intent: z.string(),
-    hints: z.tuple([z.string(), z.string()]),
-    wrongHints: z.record(z.string(), z.string()).optional(),
+    hintConceptual: z.string(),
+    hintSpatial: z.string(),
+    wrongHints: z.array(z.object({ name: z.string(), message: z.string() })),
   })),
 });
 
@@ -195,7 +202,9 @@ export async function emit(pruned, meta) {
     ].map(c => c.name));
 
     const wrongHints = Object.fromEntries(
-      Object.entries(p.wrongHints ?? {}).filter(([name]) => visibleNames.has(name)),
+      (p.wrongHints ?? [])
+        .filter(w => visibleNames.has(w.name))
+        .map(w => [w.name, w.message]),
     );
 
     const step = {
@@ -205,7 +214,10 @@ export async function emit(pruned, meta) {
       target: s.target,
       action: 'click',
       verify: s.verify,
-      hints: p.hints ?? [`Look for ${s.target.name}.`, `It is in the ${s.target.scope}.`],
+      hints: [
+        p.hintConceptual ?? `Look for ${s.target.name}.`,
+        p.hintSpatial ?? `It is in the ${s.target.scope}.`,
+      ],
     };
     if (Object.keys(wrongHints).length) step.wrongHints = wrongHints;
     return step;
