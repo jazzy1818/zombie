@@ -14,10 +14,6 @@
 // Start it with:  npm run bridge
 //
 //   POST /generate  { goal, id?, docUrl?, check?, verify? }  -> { jobId }
-//
-// docUrl is whatever page the panel is open on, so a question asked on GitHub
-// explores GitHub. DEMO_DOC_URL is only the fallback for a panel that didn't
-// send one.
 //   GET  /jobs/:id                                           -> job state
 //   GET  /lessons                                            -> saved lesson ids
 //   GET  /health                                             -> { ok: true }
@@ -27,12 +23,11 @@
 import { createServer } from 'node:http';
 import { readFile, writeFile, mkdir, readdir } from 'node:fs/promises';
 import { fileURLToPath } from 'node:url';
-import { openExploreSession, closeSession, tryLoadProfile } from './session.js';
+import { openAuthedSession, openLocalSession, closeSession } from './session.js';
 import { explore } from './explore.js';
 import { prune } from './prune.js';
 import { emit } from './emit.js';
 import { verifyLesson } from './verify.js';
-import { appFor, choosePage } from './apps.js';
 
 const PORT = Number(process.env.BRIDGE_PORT ?? 7777);
 const LESSONS = new URL('../extension/lessons/', import.meta.url);
@@ -101,12 +96,7 @@ async function saveLesson(lesson) {
 
 function newJob(goal) {
   const id = `j_${Math.random().toString(36).slice(2, 10)}`;
-  const job = {
-    id, goal, state: 'running', progress: [], startedAt: Date.now(),
-    abort: new AbortController(),
-    handle: null,        // the live Steel session, so cancel can release it now
-    polledAt: Date.now(),
-  };
+  const job = { id, goal, state: 'running', progress: [], startedAt: Date.now() };
   jobs.set(id, job);
 
   // Without this a long-lived bridge accumulates every lesson it ever made.
@@ -122,38 +112,6 @@ const note = (job, text) => {
 };
 
 /**
- * Stop a job and release its cloud browser now.
- *
- * The signal stops the loop at its next safe point, but that can be a whole model call
- * away — so the session is closed here too. That makes the in-flight Playwright call
- * throw, which is the fastest way out of a wait nobody is watching any more.
- */
-async function cancelJob(job, why) {
-  if (job.state !== 'running') return false;
-  job.state = 'cancelled';
-  job.error = why;
-  job.abort.abort();
-  note(job, why);
-  const handle = job.handle;
-  job.handle = null;
-  if (handle) await closeSession(handle).catch(() => {});
-  return true;
-}
-
-// A closed tab, a crashed browser, a shut laptop: none of them send anything. Without
-// this the session runs to its Steel timeout and blocks every later question.
-const ABANDONED_MS = 60_000;
-
-setInterval(() => {
-  for (const job of jobs.values()) {
-    if (job.state !== 'running') continue;
-    if (Date.now() - job.polledAt < ABANDONED_MS) continue;
-    cancelJob(job, 'Nobody was waiting for this any more, so I stopped it.')
-      .catch(err => console.error(`  [${job.id}] cleanup failed:`, err.message));
-  }
-}, 10_000).unref();
-
-/**
  * The whole pipeline, for one goal.
  *
  * Mirrors `author.js run`, with two differences that matter when a human is
@@ -163,64 +121,32 @@ setInterval(() => {
  */
 async function runJob(job, spec) {
   const { goal, docUrl, check, verify, local } = spec;
-  // Explore whatever the panel was open on. A question asked on GitHub is a
-  // question about GitHub, and sending it to a Google Doc would produce a
-  // lesson for the wrong app that the panel would then refuse to offer.
-  const app = appFor(docUrl);
-  job.app = app.id;
   let trace = null;
 
   for (let attempt = 1; attempt <= 2 && !trace; attempt++) {
-    if (job.abort.signal.aborted) throw new Error('cancelled');
-    // 'auto': use a saved profile if there is one, otherwise browse signed out.
-    // A public page — a public repo, a docs site, a link-shared document —
-    // needs no account, and refusing to explore one until someone had captured
-    // a login was a barrier with nothing behind it.
-    const handle = await openExploreSession({ app, local: !!local, auth: spec.auth ?? 'auto' });
-    // Opening takes seconds, and a cancel arriving inside that window finds job.handle
-    // still null — so it has nothing to release. Re-check now that we hold one.
-    if (job.abort.signal.aborted) {
-      await closeSession(handle).catch(() => {});
-      throw new Error('cancelled');
-    }
-    job.handle = handle;
+    const handle = local ? await openLocalSession() : await openAuthedSession();
     job.viewerUrl = handle.viewerUrl;
-    job.anonymous = !!handle.anonymous;
     try {
-      note(job, attempt === 1
-        ? `Opening a cloud browser on ${app.label}${handle.anonymous ? ' (signed out)' : ''}…`
-        : `Retrying (attempt ${attempt})…`);
-      if (attempt === 1 && spec.pageUrl && spec.pageUrl !== docUrl) {
-        // Not the page you asked from. Say so, or a lesson authored against a
-        // different document looks like the agent wandered off.
-        note(job, 'Using the prepared document rather than yours — the cloud browser signs in as a different account.');
-      }
+      note(job, attempt === 1 ? 'Opening a cloud browser…' : `Retrying (attempt ${attempt})…`);
       const result = await explore(handle, {
         goal,
         docUrl,
-        app,
-        signal: job.abort.signal,
         goalCheck: check ?? { kind: 'none' },
         onStep(ev) {
-          // The URL matters here: the commonest confusion is the cloud browser
-          // opening a different page than the one you asked from.
-          if (ev.phase === 'opening') note(job, `Loading ${ev.docUrl ?? app.label}…`);
+          if (ev.phase === 'opening') note(job, 'Loading the document…');
           if (ev.phase === 'click') note(job, `Tried "${ev.name}" — ${ev.reasoning}`);
           if (ev.phase === 'checking') note(job, 'Checking whether that worked…');
           if (ev.phase === 'reached') note(job, 'Found a path that works.');
           if (ev.phase === 'stuck') note(job, `Stuck: ${ev.reasoning}`);
-          if (ev.phase === 'login-wall') note(job, `That page wants a sign-in: ${ev.reason}.`);
         },
       });
       if (result.ok) trace = result;
       else note(job, `That attempt did not reach the goal (${result.reason}).`);
     } finally {
-      job.handle = null;
       await closeSession(handle);
     }
   }
 
-  if (job.abort.signal.aborted) throw new Error('cancelled');
   if (!trace) throw new Error(`I explored but couldn't find a reliable way to do "${goal}".`);
 
   note(job, 'Removing the wrong turns…');
@@ -228,11 +154,11 @@ async function runJob(job, spec) {
 
   note(job, 'Writing the explanation…');
   const id = spec.id ?? await uniqueId(goal);
-  const lesson = await emit(pruned, { id, goal, app });
+  const lesson = await emit(pruned, { id, goal });
 
   if (verify) {
     note(job, 'Replaying it in a fresh browser to be sure…');
-    const report = await verifyLesson(lesson, { docUrl, local: !!local, app });
+    const report = await verifyLesson(lesson, { docUrl, local: !!local });
     if (!report.ok) throw new Error('The lesson did not replay cleanly, so I threw it away.');
   }
 
@@ -281,16 +207,7 @@ const server = createServer(async (req, res) => {
   if (req.method === 'OPTIONS') { cors(res); res.writeHead(204); res.end(); return; }
 
   if (url.pathname === '/health') {
-    return send(res, 200, {
-      ok: true,
-      busy: running,
-      docUrl: !!process.env.DEMO_DOC_URL,
-      // The panel sends its own page URL; this is only the fallback.
-      fallbackApp: process.env.DEMO_DOC_URL ? appFor(process.env.DEMO_DOC_URL).id : null,
-      // Whether a signed-in browser is available. Public pages work without
-      // one; anything behind a login does not.
-      profile: Boolean(await tryLoadProfile()),
-    });
+    return send(res, 200, { ok: true, busy: running, docUrl: !!process.env.DEMO_DOC_URL });
   }
 
   if (url.pathname === '/lessons') {
@@ -298,19 +215,8 @@ const server = createServer(async (req, res) => {
   }
 
   if (url.pathname.startsWith('/jobs/')) {
-    const rest = url.pathname.slice('/jobs/'.length);
-    const cancelling = rest.endsWith('/cancel');
-    const job = jobs.get(cancelling ? rest.slice(0, -'/cancel'.length) : rest);
+    const job = jobs.get(url.pathname.slice('/jobs/'.length));
     if (!job) return send(res, 404, { error: 'no such job' });
-
-    // sendBeacon can only POST, and it is the only thing that survives a closing tab.
-    if (cancelling) {
-      const stopped = await cancelJob(job, 'Cancelled — the cloud browser has been released.');
-      return send(res, 200, { id: job.id, state: job.state, stopped });
-    }
-
-    // Polling is the liveness signal: it is what tells the reaper someone still cares.
-    job.polledAt = Date.now();
     return send(res, 200, {
       id: job.id, state: job.state, progress: job.progress,
       viewerUrl: job.viewerUrl, lesson: job.lesson, error: job.error,
@@ -324,9 +230,8 @@ const server = createServer(async (req, res) => {
     const goal = typeof body.goal === 'string' && body.goal.trim();
     if (!goal) return send(res, 400, { error: 'goal is required' });
 
-    const docUrl = choosePage(body.docUrl);
-    if (!docUrl) return send(res, 400, { error: 'no page URL sent and DEMO_DOC_URL is not set' });
-    if (!/^https?:\/\//i.test(docUrl)) return send(res, 400, { error: 'page URL must be http(s)' });
+    const docUrl = body.docUrl ?? process.env.DEMO_DOC_URL;
+    if (!docUrl) return send(res, 400, { error: 'no docUrl and DEMO_DOC_URL is not set' });
 
     // A second session would fight the first over the same document.
     if (running) return send(res, 409, { error: 'already generating a lesson — try again in a minute' });
@@ -335,26 +240,13 @@ const server = createServer(async (req, res) => {
     running = true;
     send(res, 202, { jobId: job.id });
 
-    runJob(job, {
-      goal, docUrl, pageUrl: body.docUrl, id: body.id, check: body.check,
-      verify: !!body.verify, local: !!body.local,
-      // 'none' forces a signed-out browser — the honest way to check that a
-      // lesson is reachable by a logged-out visitor.
-      auth: body.auth === 'none' || body.auth === 'required' ? body.auth : 'auto',
-    })
+    runJob(job, { goal, docUrl, id: body.id, check: body.check, verify: !!body.verify, local: !!body.local })
       .catch(err => {
-        // A cancelled job already has its state and its reason; the throw that got us
-        // out of the loop is the mechanism, not news.
-        if (job.state === 'cancelled') return;
         job.state = 'error';
         job.error = err.message;
         note(job, `Failed: ${err.message}`);
       })
-      .finally(() => {
-        running = false;
-        if (job.handle) closeSession(job.handle).catch(() => {});
-        job.handle = null;
-      });
+      .finally(() => { running = false; });
     return;
   }
 
@@ -363,7 +255,6 @@ const server = createServer(async (req, res) => {
 
 server.listen(PORT, '127.0.0.1', () => {
   console.log(`\n  Browser Teacher bridge on http://localhost:${PORT}`);
-  console.log(`  Fallback page: ${process.env.DEMO_DOC_URL ?? 'DEMO_DOC_URL not set — the panel must send its own'}`);
-  console.log('\n  Leave this running. Ask the panel a question it has no lesson for,');
-  console.log('  on any teachable site — it explores whatever page you asked from.\n');
+  console.log(`  Doc: ${process.env.DEMO_DOC_URL ?? 'DEMO_DOC_URL not set — the panel must send one'}`);
+  console.log('\n  Leave this running. Ask the panel a question it has no lesson for.\n');
 });

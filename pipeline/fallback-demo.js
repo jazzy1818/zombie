@@ -4,13 +4,12 @@
 // Cached still drives a real cloud browser through a real Doc — only the model's
 // decisions are replayed. Say that out loud on stage.
 import { readFile, writeFile, mkdir } from 'node:fs/promises';
-import { openExploreSession, closeSession } from './session.js';
+import { openAuthedSession, openLocalSession, closeSession } from './session.js';
 import { explore } from './explore.js';
 import { prune } from './prune.js';
 import { emit } from './emit.js';
 import { validatePublishable } from './publish.js';
 import { RESOLVE_TIMEOUT_MS, VERIFY_TIMEOUT_MS } from './config.js';
-import { appFor, waitForApp } from './apps.js';
 
 const CACHE_DIR = new URL('./cache/', import.meta.url);
 
@@ -37,7 +36,7 @@ export async function fallbackDemo(opts = {}) {
   // Validate the local recording before allocating a billed cloud session.
   const cached = live ? null : await loadCache(spec.id);
   if (cached) validatePublishable(cached.lesson);
-  const handle = await openExploreSession({ app: appFor(docUrl), local, auth: spec.auth ?? 'auto' });
+  const handle = local ? await openLocalSession() : await openAuthedSession();
   console.log(`\n  Watch it here:  ${handle.viewerUrl}\n`);
 
   try {
@@ -52,7 +51,7 @@ export async function fallbackDemo(opts = {}) {
     }
 
     await handle.page.goto(docUrl, { waitUntil: 'domcontentloaded' });
-    await waitForApp(handle, handle.app ?? appFor(docUrl));
+    await handle.page.waitForSelector('#docs-toolbar-wrapper', { timeout: 30_000 });
     await handle.page.waitForTimeout(1500);
 
     for (const step of cached.lesson.steps) {
