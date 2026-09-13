@@ -5,7 +5,7 @@
   "description": "A teacher that lives in your browser. It points at things and waits for you to click them.",
   "content_scripts": [
     {
-      "matches": ["https://docs.google.com/document/d/*"],
+      "matches": ["http://*/*", "https://*/*"],
       "js": ["src/content.js"],
       "run_at": "document_idle"
     }
@@ -13,7 +13,7 @@
   "web_accessible_resources": [
     {
       "resources": ["lessons/*.json", "src/*", "src/*/*"],
-      "matches": ["https://docs.google.com/*"]
+      "matches": ["http://*/*", "https://*/*"]
     }
   ]
 }

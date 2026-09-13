@@ -11,6 +11,11 @@ contracts. This file is just how to get moving.
 **[A] and [D]: read [CHECKPOINT-1.md](CHECKPOINT-1.md) before H3:30.** B's layer is built; that file
 is what it needs from yours, plus one structural change to where the frozen import order lives.
 
+**[C]: read [PLAN.md §17](PLAN.md#17-addendum--overnight-batch-generation--open-items-for-c).** §10
+describes generating one lesson; §17 is what's missing to run a batch of questions overnight and
+wake up to a library. The one that blocks everything: the emitter must write `lessons/index.json`,
+because a Chrome extension can't list a directory and won't otherwise see a single generated lesson.
+
 ---
 
 ## Two halves that never talk at runtime
@@ -45,9 +50,9 @@ directory, you've broken rule 1 — revert, don't resolve.
 
 - **`extension/src/constants.js`** — written hour 0, **never edited again**
 - **`extension/src/content.js`** — B's; import order frozen
-- **`extension/src/teach.js`** — currently a stub. A and D replace it **jointly at Checkpoint 1**,
-  in the room, in one sitting, with the reference implementation in PLAN.md §6. It is the only file
-  two people touch, and it is touched exactly once.
+- **`extension/src/teach.js`** — the shared composition now connects the panel and paint.
+  Its cancellable adapter and the handoff to A are described in
+  [extension integration](docs/extension-integration.md); Contract 4 keeps its eight methods.
 
 ---
 
@@ -62,13 +67,16 @@ The three contracts (`window.__RESOLVE`, `window.__PAINT`, `window.__TEACH`) are
 which is what means **no two people ever have to read each other's code.**
 
 **Load the extension:** `chrome://extensions` → Developer mode → Load unpacked → pick `extension/`.
-Open a Google Doc. `teach.js` currently stubs every call and logs to the console, so the panel can
-be built against fake successes before the other layers exist.
+Refresh an HTTP/HTTPS website tab after loading or reloading the extension. The
+real teach bridge connects the panel to D's paint layer. The bundled lessons are
+Google Docs examples; other websites need matching lesson descriptors. See
+[extension integration and testing](docs/extension-integration.md) for the local
+extension fixture, cancellation behavior and the temporary adapter for A's stubs.
 
-**Work against stubs, not against each other:**
+**Development contracts** (select the Browser Teacher console context):
 
 ```js
-// B — teach.js already stubs __TEACH; just call it
+// B — the real __TEACH bridge composes resolution and paint
 // D — no stub needed, use raw rects
 __PAINT.spotlight({ top: 120, left: 300, width: 180, height: 32 });
 // A — no stub needed, log elements

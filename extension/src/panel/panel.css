@@ -21,9 +21,12 @@
   --bt-text: rgba(255, 255, 255, 0.94);
   --bt-muted: rgba(255, 255, 255, 0.58);
 
-  --bt-glass: rgba(38, 40, 47, 0.55);
-  --bt-glass-bar: rgba(38, 40, 47, 0.48);
-  --bt-blur: blur(44px) saturate(165%) brightness(0.92);
+  /* Thinner tint, heavier blur to compensate. The blur is what keeps text
+     legible once the fill gets this light — drop the blur and the narration
+     starts competing with whatever paragraph is behind it. */
+  --bt-glass: rgba(34, 36, 43, 0.38);
+  --bt-glass-bar: rgba(34, 36, 43, 0.34);
+  --bt-blur: blur(56px) saturate(180%) brightness(0.82);
 
   --bt-rim: rgba(255, 255, 255, 0.20);
   --bt-seam: rgba(255, 255, 255, 0.09);
@@ -42,6 +45,9 @@
   font-family: 'Google Sans', Roboto, -apple-system, BlinkMacSystemFont, sans-serif;
   color: var(--bt-text);
 }
+
+:host::backdrop { background: transparent !important; pointer-events: none !important; }
+.bt-window, .bt-bar { pointer-events: auto; }
 
 /* --------------------------------------------------------------- chat bar */
 
@@ -87,20 +93,26 @@
 
 .bt-bar.is-error .bt-bar-input::placeholder { color: var(--bt-wrong); }
 
+/* Tinted glass, not solid fill — the colour sits in the sheet rather than
+   sitting on top of it. */
 .bt-bar-go {
   flex: none;
   padding: 9px 17px;
-  border: 1px solid var(--bt-rim);
+  border: 1px solid rgba(143, 194, 255, 0.5);
   border-radius: 999px;
-  background: var(--bt-fill);
-  color: var(--bt-text);
+  background: rgba(79, 156, 249, 0.30);
+  color: #fff;
   font: inherit;
   font-size: 14px;
   font-weight: 500;
   cursor: pointer;
-  transition: background 150ms ease;
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.3);
+  transition: background 150ms ease, border-color 150ms ease;
 }
-.bt-bar-go:hover { background: var(--bt-fill-hover); }
+.bt-bar-go:hover {
+  background: rgba(79, 156, 249, 0.44);
+  border-color: rgba(175, 212, 255, 0.7);
+}
 
 .bt-bar-mic {
   flex: none;
@@ -108,27 +120,35 @@
   place-items: center;
   width: 34px;
   height: 34px;
-  border: 0;
+  border: 1px solid rgba(255, 138, 128, 0.45);
   border-radius: 50%;
-  background: var(--bt-fill);
+  background: rgba(234, 67, 53, 0.26);
   cursor: pointer;
-  transition: background 150ms ease;
+  transition: background 150ms ease, border-color 150ms ease;
 }
-.bt-bar-mic:hover { background: var(--bt-fill-hover); }
+.bt-bar-mic:hover {
+  background: rgba(234, 67, 53, 0.4);
+  border-color: rgba(255, 168, 160, 0.65);
+}
 .bt-bar-mic[hidden] { display: none; }   /* display: grid would otherwise win */
 
 .bt-mic-dot {
-  width: 10px;
-  height: 10px;
+  width: 9px;
+  height: 9px;
   border-radius: 50%;
-  background: var(--bt-muted);
+  background: rgba(255, 190, 184, 0.9);
   transition: background 160ms ease;
 }
 
-/* The pulse is the only signal that the mic is actually open. Make it obvious. */
+/* The pulse is the only signal that the mic is actually open. Make it obvious —
+   the button goes properly hot rather than just tinted. */
 .bt-bar.is-listening { border-color: rgba(255, 154, 144, 0.6); }
+.bt-bar.is-listening .bt-bar-mic {
+  background: rgba(234, 67, 53, 0.6);
+  border-color: rgba(255, 180, 172, 0.85);
+}
 .bt-bar.is-listening .bt-mic-dot {
-  background: var(--bt-wrong);
+  background: #fff;
   animation: bt-pulse 1.1s ease-in-out infinite;
 }
 
@@ -312,6 +332,9 @@
   margin: 0;
   font-size: 15px;
   line-height: 1.6;
+  /* Cheap insurance at this tint: holds the narration apart from a busy
+     paragraph showing through, without darkening the sheet. */
+  text-shadow: 0 1px 3px rgba(0, 0, 0, 0.35);
 }
 
 /* The preamble is the pitch in miniature and the generalization is the payoff

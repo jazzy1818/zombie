@@ -7,7 +7,7 @@ import { moveCursor, clickCursor, setCursorVisible } from './cursor.js';
 import { flashCorrect, flashWrong } from './feedback.js';
 
 window.__PAINT = {
-  init: mountHost,   // idempotent, called once on load
+  init: () => { mountHost(); },   // Contract 3 returns void; host details stay internal
   spotlight,
   clear,
   moveCursor,

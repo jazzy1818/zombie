@@ -3,23 +3,62 @@
 // Lesson JSON is READ-ONLY input. The schema is frozen (PLAN.md §5) and
 // extension/lessons/ belongs to C — if a lesson looks wrong, message them.
 
-/** Bundled lessons. `keywords` are B's matching aid only — never read by anything else. */
-export const LESSONS = [
-  {
-    id: 'styles-toc',
-    keywords: [
-      'table of contents', 'contents', 'toc', 'table of content',
-      'outline', 'headings', 'heading', 'styles', 'style', 'chapters', 'sections',
-    ],
-  },
-  {
-    id: 'version-history',
-    keywords: [
-      'version history', 'version', 'versions', 'history', 'revision', 'revisions',
-      'restore', 'revert', 'undo', 'previous', 'earlier', 'backup', 'saved', 'recover',
-    ],
-  },
-];
+import { buildIndex, search, isConfident } from './search.js';
+
+/**
+ * Which lessons exist.
+ *
+ * A Chrome extension can't list a directory, so a batch that drops fifty
+ * generated lessons into extension/lessons/ would be completely invisible to
+ * us. C's emitter therefore also writes `lessons/index.json` and we read that.
+ *
+ * Accepted shapes, so a hand-edited file is hard to get wrong:
+ *   ["styles-toc", "version-history"]
+ *   { "lessons": ["styles-toc", ...] }
+ *   [{ "id": "styles-toc" }, ...]
+ *
+ * No index yet -> fall back to the two hand-written lessons, so nothing breaks
+ * before C's batch runner exists.
+ */
+const FALLBACK_IDS = ['styles-toc', 'version-history'];
+
+function readIndex(data) {
+  const raw = Array.isArray(data) ? data : data?.lessons;
+  if (!Array.isArray(raw)) return [];
+  return raw
+    .map(entry => (typeof entry === 'string' ? entry : entry?.id))
+    .filter(id => typeof id === 'string' && id);
+}
+
+let idsPromise = null;
+
+export function listLessons() {
+  idsPromise ??= (async () => {
+    try {
+      const res = await fetch(chrome.runtime.getURL('lessons/index.json'));
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      const ids = readIndex(await res.json());
+      if (!ids.length) throw new Error('index lists no lessons');
+      return ids;
+    } catch (err) {
+      console.info(
+        `[browser-teacher] lessons/index.json unavailable (${err.message}) — using the built-in list`,
+      );
+      return FALLBACK_IDS;
+    }
+  })();
+  return idsPromise;
+}
+
+/**
+ * Vocabulary a lesson's own prose genuinely lacks — abbreviations, mostly.
+ * Deliberately tiny: matching runs off the lesson text C wrote, and anything
+ * long in here is a sign the lesson's own words need improving instead.
+ */
+const EXTRA_TERMS = {
+  'styles-toc': ['toc', 'table of contents'],
+  'version-history': ['version history', 'undo', 'revert'],
+};
 
 const cache = new Map();
 
@@ -92,57 +131,56 @@ export function validateLesson(lesson, id = lesson?.id) {
   return lesson;
 }
 
-export function loadAll() {
-  return Promise.all(LESSONS.map(l => loadLesson(l.id)));
+/**
+ * Every lesson we can actually run.
+ *
+ * Skips ones that fail to load or validate rather than rejecting, because a
+ * single bad file out of an overnight batch must not take the whole library
+ * down. The one the user explicitly asked for still throws — see loadLesson —
+ * so a direct failure is still visible rather than silently missing.
+ */
+export async function loadAll() {
+  const ids = await listLessons();
+  const results = await Promise.all(ids.map(async id => {
+    try {
+      return await loadLesson(id);
+    } catch (err) {
+      console.warn(`[browser-teacher] skipping lesson "${id}": ${err.message}`);
+      return null;
+    }
+  }));
+  return results.filter(Boolean);
 }
 
-const normalize = s => String(s || '').toLowerCase().replace(/[^a-z0-9\s]/g, ' ').replace(/\s+/g, ' ').trim();
+let index = null;
 
-// Words too common to carry signal — "how do I add a table" shouldn't match on "add".
-const STOP = new Set([
-  'how', 'do', 'i', 'a', 'an', 'the', 'to', 'in', 'my', 'me', 'can', 'you',
-  'what', 'is', 'this', 'that', 'of', 'on', 'for', 'and', 'it', 'with', 'get',
-  'make', 'add', 'put', 'want', 'need', 'please', 'docs', 'document', 'google',
-]);
+/** Built once from the lesson prose. Cheap — a few hundred tokens per lesson. */
+async function getIndex() {
+  if (!index) index = buildIndex(await loadAll(), EXTRA_TERMS);
+  return index;
+}
 
-/**
- * Score a question against every bundled lesson.
- * Returns { id, score } sorted best-first. Caller decides whether to trust it.
- */
-export function scoreLessons(question) {
-  const q = normalize(question);
-  const tokens = q.split(' ').filter(t => t && !STOP.has(t));
-
-  return LESSONS
-    .map(({ id, keywords }) => {
-      let score = 0;
-
-      // Phrase hits are worth much more than single words: "table of contents"
-      // appearing whole is near-certain intent, "history" alone is a guess.
-      for (const kw of keywords) {
-        if (!q.includes(kw)) continue;
-        score += kw.includes(' ') ? 10 * kw.split(' ').length : 4;
-      }
-
-      // Loose token overlap, so a phrasing we didn't anticipate still lands somewhere.
-      for (const t of tokens) {
-        if (keywords.some(kw => kw.includes(t))) score += 1;
-      }
-
-      return { id, score };
-    })
-    .sort((a, b) => b.score - a.score);
+/** Ranked lessons for a question, best first. Exported for the dev console. */
+export async function scoreLessons(question) {
+  return search(question, await getIndex());
 }
 
 /**
  * Pick a lesson for a question.
- * `confident` false → the panel shows both lessons and lets the user choose,
+ *
+ * `confident` false -> the panel shows the lessons and lets the user choose,
  * rather than confidently teaching the wrong thing on stage.
+ *
+ * Async because matching reads the lessons themselves. They're cached after the
+ * first call, so this is a map lookup from then on.
  */
-export function matchLesson(question) {
-  const [best, next] = scoreLessons(question);
-  // One solid keyword hit (4) is enough to commit. Below that we're guessing,
-  // and guessing wrong in front of a judge is worse than asking.
-  const confident = best.score >= 4 && best.score > (next?.score ?? 0);
-  return { id: best.id, score: best.score, confident };
+export async function matchLesson(question) {
+  const ranked = await scoreLessons(question);
+  const best = ranked[0];
+  return {
+    id: best?.id ?? FALLBACK_IDS[0],
+    score: best?.score ?? 0,
+    confident: isConfident(ranked),
+    ranked,
+  };
 }
