@@ -32,17 +32,17 @@
       "intent": "See version history. This opens the timeline itself — every version Docs has been quietly keeping.",
       "target": { "scope": "menu", "name": "See version history" },
       "action": "click",
-      "verify": { "kind": "none" },
+      "verify": { "kind": "dom", "selector": "[aria-label=\"Versions\"]" },
       "hints": ["The first option in the submenu that just opened.", "Top of the small menu that appeared to the right."]
     },
     {
       "id": "s4",
       "mode": "solo",
       "intent": "Your turn. Somewhere in what just opened is a way to give the current version a name — so that instead of a timestamp, this moment reads as something you'll recognise later. Find it.",
-      "target": { "scope": "menu", "name": "Name current version" },
+      "target": { "scope": "any", "name": "Name this version", "nth": 0 },
       "action": "click",
       "verify": { "kind": "none" },
-      "hints": ["You're labelling a point in time — look at the top of the panel that opened, or back in the same menu you came from.", "File menu, Version history, the option just below 'See version history'."]
+      "hints": ["You're labelling a point in time, and the panel is already showing you those points. One of them is this one.", "The newest entry at the top of the list — its date is an editable field, not just a label."]
     }
   ]
 }

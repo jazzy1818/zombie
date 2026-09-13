@@ -77,10 +77,21 @@ console.log([...document.querySelectorAll('[role="menuitem"]')]
 
 _(paste the query and its raw output — D copies this into `docs/findings.md`)_
 
-### CONFIRMED — viewport is genuinely 1440 in the Steel session
+### CORRECTED — the Steel session is 1435×809, not 1440×900
 
-`assertViewport` neither threw nor warned across several `verify` runs, so `innerWidth`
-is ≥1400 without needing the `Emulation.setDeviceMetricsOverride` fallback. Risk retired.
+Earlier runs only proved `assertViewport` didn't throw, and its bar is `≥1400`. Measured:
+
+```
+local Chrome:  1440x900
+Steel session: 1435x809
+```
+
+Steel's `dimensions` sets the **window**, so browser chrome comes off the inside. 1435 is
+wide enough that the toolbar does not collapse — both lessons pass in the cloud — so this
+is not blocking. But authoring happens at 809px tall and the learner is at 900, and
+`isVisible()` is the thing that differs: a menu item near the bottom of a tall list can be
+invisible to the author and visible to the learner. Worth one `Emulation.setDeviceMetrics
+Override` if anything ever resolves in one environment and not the other. [C]
 
 ### CONFIRMED — Docs ships the menubar DISABLED until the doc loads
 
