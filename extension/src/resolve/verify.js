@@ -4,9 +4,70 @@
 //   { kind: 'visible', name, scope? }     named element becomes visible
 //   { kind: 'none' }                      advance on click alone
 import { VERIFY_TIMEOUT_MS } from '../constants.js';
+import { findSync } from './resolver.js';
+
+const TARGET_SCOPES = new Set(['toolbar', 'menu', 'any']);
+
+function hasText(value) {
+  return typeof value === 'string' && value.trim().length > 0;
+}
+
+function isValidRule(v) {
+  if (!v || typeof v !== 'object' || Array.isArray(v)) return false;
+
+  switch (v.kind) {
+    case 'none':
+      return true;
+    case 'dom':
+      return hasText(v.selector);
+    case 'label':
+      return hasText(v.selector) && hasText(v.match);
+    case 'visible':
+      return hasText(v.name)
+        && (v.scope === undefined || TARGET_SCOPES.has(v.scope));
+    default:
+      return false;
+  }
+}
+
+function query(selector) {
+  try {
+    return document.querySelector(selector);
+  } catch {
+    return null;
+  }
+}
+
+function checkOnce(v) {
+  switch (v.kind) {
+    case 'dom':
+      return query(v.selector) !== null;
+    case 'label': {
+      const el = query(v.selector);
+      return Boolean(el?.textContent?.includes(v.match));
+    }
+    case 'visible':
+      return findSync({ name: v.name, scope: v.scope }) !== null;
+    default:
+      return false;
+  }
+}
 
 export async function verify(v) {
-  if (!v || v.kind === 'none') return true;
-  // TODO [A]
-  return true;
+  if (!isValidRule(v)) return false;
+  if (v.kind === 'none') return true;
+  if (typeof document === 'undefined') return false;
+
+  const start = performance.now();
+  let firstAttempt = true;
+
+  while (firstAttempt || performance.now() - start < VERIFY_TIMEOUT_MS) {
+    firstAttempt = false;
+    if (checkOnce(v)) return true;
+
+    if (performance.now() - start >= VERIFY_TIMEOUT_MS) return false;
+    await new Promise(resolve => requestAnimationFrame(resolve));
+  }
+
+  return false;
 }

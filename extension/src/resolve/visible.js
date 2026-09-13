@@ -5,12 +5,17 @@
 export function isVisible(el) {
   if (el?.nodeType !== 1 || !el.isConnected) return false;
 
-  const view = el.ownerDocument.defaultView;
+  const view = el.ownerDocument?.defaultView;
   if (!view) return false;
 
   // Unlike offsetParent, this works for visible fixed-position controls.
   if (typeof el.checkVisibility === 'function') {
-    if (!el.checkVisibility({ opacityProperty: true, visibilityProperty: true })) {
+    if (!el.checkVisibility({
+      opacityProperty: true,
+      visibilityProperty: true,
+      checkOpacity: true,
+      checkVisibilityCSS: true,
+    })) {
       return false;
     }
   } else {
