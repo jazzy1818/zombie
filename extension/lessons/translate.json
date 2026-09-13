@@ -1,0 +1,57 @@
+{
+  "id": "translate",
+  "app": "google-docs",
+  "goal": "how to translate",
+  "preamble": "Translating in Docs doesn't change the document in front of you. It reads it, hands it to a machine translator, and puts the result in a brand new document — yours stays exactly as it was, in its original language. So you're not editing anything here. You're asking Docs to produce a second copy that happens to speak another language.",
+  "generalization": "The menu bar is sorted by what a command acts on. File is about the document as an object, Format is about how text looks, Insert adds things that weren't there — and Tools is where Docs does work on your behalf: counting, checking, translating. When you can't find a command, ask what kind of thing it is rather than what you want the outcome to be. And note what the copy tells you: anything Docs generates for you tends to arrive as a new document, leaving the original untouched.",
+  "steps": [
+    {
+      "id": "s1",
+      "intent": "Translation isn't something you type, and it isn't a way the text looks — it's a job you hand to Docs to do for you. That kind of thing, where the machine reads your document and gives you something back, lives in one particular menu.",
+      "mode": "demo",
+      "target": {
+        "scope": "menu",
+        "name": "Tools"
+      },
+      "action": "click",
+      "verify": {
+        "kind": "visible",
+        "name": "Translate document",
+        "scope": "menu"
+      },
+      "hints": [
+        "You're not editing, formatting, or adding anything. You're asking Docs to perform a task on the whole document — which menu collects those?",
+        "The Tools menu, in the menu bar between Format and Extensions."
+      ],
+      "wrongHints": {
+        "Format": "A fair guess, because language feels like a property of text. But Format only controls appearance — fonts, spacing, alignment. It can't change what the words say.",
+        "Insert": "Insert adds something new into this document. Translation doesn't add to this one; it produces a separate one.",
+        "File": "File deals with the document as an object — naming, copying, exporting. Translation does end up making a copy, but Docs files it under the work being done, not the file being made.",
+        "Edit": "Edit is for changes you make by hand: undo, cut, paste, find and replace. Translation is work Docs does for you."
+      }
+    },
+    {
+      "id": "s2",
+      "intent": "Notice the name — Translate document, not translate selection. This command takes the whole thing, every page of it, and there's no way to point it at one paragraph. Clicking it opens a small dialog asking two things: what to call the new copy, and which language it should be in.",
+      "mode": "guided",
+      "target": {
+        "scope": "menu",
+        "name": "Translate document"
+      },
+      "action": "click",
+      "verify": {
+        "kind": "dom",
+        "selector": "[aria-label=\"Cancel\"]"
+      },
+      "hints": [
+        "You're looking for the one entry that names the whole document as what it acts on.",
+        "In the middle of the Tools menu, below Explore and above Voice typing."
+      ],
+      "wrongHints": {
+        "Spelling and grammar": "Also a machine reading your text and suggesting changes, so the instinct is right. But it corrects the language you already wrote in — it won't move you to another one.",
+        "Dictionary": "The dictionary defines a word in its own language. Useful for one word, but it won't carry a document across.",
+        "Preferences": "Preferences is about how Docs behaves as you type — autocorrect, substitutions. It's a setting, not an action performed on this document."
+      }
+    }
+  ]
+}

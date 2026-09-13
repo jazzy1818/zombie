@@ -14,7 +14,12 @@
 // Start it with:  npm run bridge
 //
 //   POST /generate  { goal, id?, docUrl?, check?, verify? }  -> { jobId }
+//
+// docUrl is whatever page the panel is open on, so a question asked on GitHub
+// explores GitHub. DEMO_DOC_URL is only the fallback for a panel that didn't
+// send one.
 //   GET  /jobs/:id                                           -> job state
+//   POST /jobs/:id/cancel                                    -> cancel job
 //   GET  /lessons                                            -> saved lesson ids
 //   GET  /health                                             -> { ok: true }
 //
@@ -22,12 +27,16 @@
 // a request open that long. The panel polls.
 import { createServer } from 'node:http';
 import { readFile, writeFile, mkdir, readdir } from 'node:fs/promises';
-import { fileURLToPath } from 'node:url';
+import { fileURLToPath, pathToFileURL } from 'node:url';
+import { resolve } from 'node:path';
 import { openAuthedSession, openLocalSession, closeSession } from './session.js';
 import { explore } from './explore.js';
 import { prune } from './prune.js';
 import { emit } from './emit.js';
 import { verifyLesson } from './verify.js';
+import { createJobViewer } from './session-viewer.js';
+import { createReplayService } from './session-replay.js';
+import { STEEL_API_KEY } from './config.js';
 
 const PORT = Number(process.env.BRIDGE_PORT ?? 7777);
 const LESSONS = new URL('../extension/lessons/', import.meta.url);
@@ -38,7 +47,11 @@ const INDEX = new URL('index.json', LESSONS);
 let running = false;
 
 const jobs = new Map();
-const JOB_TTL_MS = 30 * 60_000;
+const JOB_TTL_MS = 24 * 60 * 60_000;
+const replays = createReplayService({
+  apiKey: STEEL_API_KEY,
+  baseUrl: () => `http://127.0.0.1:${server.address()?.port ?? PORT}`,
+});
 
 /* ------------------------------------------------------------------ lessons */
 
@@ -102,6 +115,7 @@ function newJob(goal) {
     handle: null,        // the live Steel session, so cancel can release it now
     polledAt: Date.now(),
   };
+  createJobViewer(job);
   jobs.set(id, job);
 
   // Without this a long-lived bridge accumulates every lesson it ever made.
@@ -116,14 +130,23 @@ const note = (job, text) => {
   console.log(`  [${job.id}] ${text}`);
 };
 
+// Cancellation and normal finally blocks can race. They share the same release
+// promise so the server stays busy until cleanup finishes, without releasing a
+// paid session twice. Weak keys do not keep browser handles alive with job history.
+const handleReleases = new WeakMap();
+function releaseOnce(handle, close = closeSession) {
+  if (!handle) return Promise.resolve();
+  if (!handleReleases.has(handle)) {
+    handleReleases.set(handle, Promise.resolve().then(() => close(handle)));
+  }
+  return handleReleases.get(handle);
+}
+
 /**
- * Stop a job and release its cloud browser now.
- *
- * The signal stops the loop at its next safe point, but that can be a whole model call
- * away — so the session is closed here too. That makes the in-flight Playwright call
- * throw, which is the fastest way out of a wait nobody is watching any more.
+ * Stop a job and release its cloud browser now. Closing the session interrupts
+ * pending Playwright waits; the signal stops model output at its next safe point.
  */
-async function cancelJob(job, why) {
+export async function cancelJob(job, why) {
   if (job.state !== 'running') return false;
   job.state = 'cancelled';
   job.error = why;
@@ -131,7 +154,7 @@ async function cancelJob(job, why) {
   note(job, why);
   const handle = job.handle;
   job.handle = null;
-  if (handle) await closeSession(handle).catch(() => {});
+  if (handle) await (job.releaseHandle ?? releaseOnce)(handle).catch(() => {});
   return true;
 }
 
@@ -156,66 +179,116 @@ setInterval(() => {
  * replay doubles the wait for someone staring at a panel — and they are about
  * to walk the lesson themselves, which is a better test than any replay.
  */
-async function runJob(job, spec) {
+export async function runJob(job, spec, overrides = {}) {
   const { goal, docUrl, check, verify, local } = spec;
-  let trace = null;
+  const services = { openAuthedSession, openLocalSession, closeSession, explore, prune, emit, verifyLesson, uniqueId, saveLesson, ...overrides };
+  const viewer = createJobViewer(job, { registerRecording: overrides.registerRecording ?? replays.register });
+  job.abort ??= new AbortController();
+  const signal = job.abort.signal;
+  const releaseHandle = handle => releaseOnce(handle, services.closeSession);
+  job.releaseHandle = releaseHandle;
+  const checkCancelled = () => signal.throwIfAborted();
 
-  for (let attempt = 1; attempt <= 2 && !trace; attempt++) {
-    if (job.abort.signal.aborted) throw new Error('cancelled');
-    const handle = local ? await openLocalSession() : await openAuthedSession();
-    // Opening takes seconds, and a cancel arriving inside that window finds job.handle
-    // still null — so it has nothing to release. Re-check now that we hold one.
-    if (job.abort.signal.aborted) {
-      await closeSession(handle).catch(() => {});
-      throw new Error('cancelled');
+  // Cancelling clears the live link immediately, including while an opener is
+  // still pending. A later close callback may retain its recording, but a late
+  // ready callback must never bring a cancelled browser back into the panel.
+  let closeViewer = () => {};
+  const onAbort = () => closeViewer();
+  signal.addEventListener('abort', onAbort);
+  function beginViewer(options) {
+    const update = viewer.begin(options);
+    closeViewer = () => update({ ...job.viewer,
+      status: job.viewer.sessionId ? 'closed' : 'unavailable', url: null });
+    return state => {
+      if (!signal.aborted || state.status === 'closed') update(state);
+    };
+  }
+
+  let trace = null;
+  let browserNumber = 0;
+
+  try {
+    for (let attempt = 1; attempt <= 2 && !trace; attempt++) {
+      checkCancelled();
+      const onViewer = beginViewer({ attempt: ++browserNumber, local: !!local });
+      note(job, attempt === 1
+        ? `Opening a ${local ? 'local' : 'cloud'} browser…`
+        : `Retrying (attempt ${attempt})…`);
+      let handle;
+      try {
+        handle = local
+          ? await services.openLocalSession({ onViewer })
+          : await services.openAuthedSession({ onViewer });
+        job.handle = handle;
+        checkCancelled(); // cancellation may have arrived while opening
+        const result = await services.explore(handle, {
+          goal,
+          docUrl,
+          signal,
+          goalCheck: check ?? { kind: 'none' },
+          onStep(ev) {
+            if (signal.aborted) return;
+            if (ev.phase === 'opening') note(job, 'Loading the document…');
+            if (ev.phase === 'click') note(job, `Tried "${ev.name}" — ${ev.reasoning}`);
+            if (ev.phase === 'checking') note(job, 'Checking whether that worked…');
+            if (ev.phase === 'reached') note(job, 'Found a path that works.');
+            if (ev.phase === 'stuck') note(job, `Stuck: ${ev.reasoning}`);
+          },
+        });
+        checkCancelled();
+        if (result.ok) trace = result;
+        else note(job, `That attempt did not reach the goal (${result.reason}).`);
+      } finally {
+        if (job.handle === handle) job.handle = null;
+        if (handle) await releaseHandle(handle);
+      }
     }
-    job.handle = handle;
-    job.viewerUrl = handle.viewerUrl;
-    try {
-      note(job, attempt === 1 ? 'Opening a cloud browser…' : `Retrying (attempt ${attempt})…`);
-      const result = await explore(handle, {
-        goal,
-        docUrl,
-        signal: job.abort.signal,
-        goalCheck: check ?? { kind: 'none' },
-        onStep(ev) {
-          if (ev.phase === 'opening') note(job, 'Loading the document…');
-          if (ev.phase === 'click') note(job, `Tried "${ev.name}" — ${ev.reasoning}`);
-          if (ev.phase === 'checking') note(job, 'Checking whether that worked…');
-          if (ev.phase === 'reached') note(job, 'Found a path that works.');
-          if (ev.phase === 'stuck') note(job, `Stuck: ${ev.reasoning}`);
-        },
+
+    checkCancelled();
+    if (!trace) throw new Error(`I explored but couldn't find a reliable way to do "${goal}".`);
+
+    note(job, 'Removing the wrong turns…');
+    const pruned = services.prune(trace);
+
+    note(job, 'Writing the explanation…');
+    const id = spec.id ?? await services.uniqueId(goal);
+    checkCancelled();
+    const lesson = await services.emit(pruned, { id, goal });
+    checkCancelled();
+
+    if (verify) {
+      note(job, 'Replaying it in a fresh browser to be sure…');
+      const onViewer = beginViewer({ attempt: ++browserNumber, phase: 'verifying', local: !!local });
+      const report = await services.verifyLesson(lesson, {
+        docUrl, local: !!local, onViewer, signal,
+        // Verification owns a fresh session. Make it reachable by cancellation
+        // as soon as it opens and share release with its own finally block.
+        onHandle: handle => { job.handle = handle; },
+        releaseHandle,
       });
-      if (result.ok) trace = result;
-      else note(job, `That attempt did not reach the goal (${result.reason}).`);
+      checkCancelled();
+      if (!report.ok) throw new Error('The lesson did not replay cleanly, so I threw it away.');
+    }
+
+    checkCancelled();
+    note(job, 'Saving it for next time…');
+    await services.saveLesson(lesson);
+    checkCancelled();
+
+    job.lesson = lesson;
+    job.state = 'done';
+    note(job, `Done — ${lesson.steps.length} steps.`);
+  } finally {
+    try {
+      if (job.handle) await releaseHandle(job.handle);
     } finally {
       job.handle = null;
-      await closeSession(handle);
+      delete job.releaseHandle;
+      signal.removeEventListener('abort', onAbort);
+      // Keep closed recordings for the same 24-hour window as job history.
+      viewer.finish();
     }
   }
-
-  if (job.abort.signal.aborted) throw new Error('cancelled');
-  if (!trace) throw new Error(`I explored but couldn't find a reliable way to do "${goal}".`);
-
-  note(job, 'Removing the wrong turns…');
-  const pruned = prune(trace);
-
-  note(job, 'Writing the explanation…');
-  const id = spec.id ?? await uniqueId(goal);
-  const lesson = await emit(pruned, { id, goal });
-
-  if (verify) {
-    note(job, 'Replaying it in a fresh browser to be sure…');
-    const report = await verifyLesson(lesson, { docUrl, local: !!local });
-    if (!report.ok) throw new Error('The lesson did not replay cleanly, so I threw it away.');
-  }
-
-  note(job, 'Saving it for next time…');
-  await saveLesson(lesson);
-
-  job.lesson = lesson;
-  job.state = 'done';
-  note(job, `Done — ${lesson.steps.length} steps.`);
 }
 
 /* ------------------------------------------------------------------- server */
@@ -254,8 +327,15 @@ const server = createServer(async (req, res) => {
 
   if (req.method === 'OPTIONS') { cors(res); res.writeHead(204); res.end(); return; }
 
+  if (await replays.handle(req, res, url)) return;
+
   if (url.pathname === '/health') {
-    return send(res, 200, { ok: true, busy: running, docUrl: !!process.env.DEMO_DOC_URL });
+    return send(res, 200, {
+      ok: true,
+      busy: running,
+      docUrl: !!process.env.DEMO_DOC_URL,
+      // The panel sends its own page URL; this is only the fallback.
+    });
   }
 
   if (url.pathname === '/lessons') {
@@ -270,15 +350,17 @@ const server = createServer(async (req, res) => {
 
     // sendBeacon can only POST, and it is the only thing that survives a closing tab.
     if (cancelling) {
+      if (req.method !== 'POST') return send(res, 405, { error: 'cancel requires POST' });
       const stopped = await cancelJob(job, 'Cancelled — the cloud browser has been released.');
       return send(res, 200, { id: job.id, state: job.state, stopped });
     }
 
+    if (req.method !== 'GET') return send(res, 405, { error: 'job polling requires GET' });
     // Polling is the liveness signal: it is what tells the reaper someone still cares.
     job.polledAt = Date.now();
     return send(res, 200, {
       id: job.id, state: job.state, progress: job.progress,
-      viewerUrl: job.viewerUrl, lesson: job.lesson, error: job.error,
+      viewer: job.viewer, viewerUrl: job.viewerUrl, recordings: job.recordings, lesson: job.lesson, error: job.error,
     });
   }
 
@@ -299,7 +381,10 @@ const server = createServer(async (req, res) => {
     running = true;
     send(res, 202, { jobId: job.id });
 
-    runJob(job, { goal, docUrl, id: body.id, check: body.check, verify: !!body.verify, local: !!body.local })
+    runJob(job, {
+      goal, docUrl, id: body.id, check: body.check,
+      verify: !!body.verify, local: !!body.local,
+    })
       .catch(err => {
         // A cancelled job already has its state and its reason; the throw that got us
         // out of the loop is the mechanism, not news.
@@ -308,10 +393,10 @@ const server = createServer(async (req, res) => {
         job.error = err.message;
         note(job, `Failed: ${err.message}`);
       })
-      .finally(() => {
-        running = false;
-        if (job.handle) closeSession(job.handle).catch(() => {});
+      .finally(async () => {
+        if (job.handle) await (job.releaseHandle ?? releaseOnce)(job.handle).catch(() => {});
         job.handle = null;
+        running = false;
       });
     return;
   }
@@ -319,8 +404,9 @@ const server = createServer(async (req, res) => {
   send(res, 404, { error: 'not found' });
 });
 
-server.listen(PORT, '127.0.0.1', () => {
+if (process.argv[1] && import.meta.url === pathToFileURL(resolve(process.argv[1])).href) server.listen(PORT, '127.0.0.1', () => {
   console.log(`\n  Browser Teacher bridge on http://localhost:${PORT}`);
-  console.log(`  Doc: ${process.env.DEMO_DOC_URL ?? 'DEMO_DOC_URL not set — the panel must send one'}`);
-  console.log('\n  Leave this running. Ask the panel a question it has no lesson for.\n');
+  console.log(`  Fallback page: ${process.env.DEMO_DOC_URL ?? 'DEMO_DOC_URL not set — the panel must send its own'}`);
+  console.log('\n  Leave this running. Ask the panel a question it has no lesson for,');
+  console.log('  on any teachable site — it explores whatever page you asked from.\n');
 });

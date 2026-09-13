@@ -2,8 +2,9 @@
 
 The merged extension contains the real resolver, teaching adapter, panel and paint.
 Use the local fixture to check extension behavior, then a prepared Google Doc to
-rehearse the demo lesson. Generating a new lesson is a separate authoring operation;
-typing a question into **Teach me** only searches the published local library.
+rehearse the demo lesson. **Teach me** searches the published library first. When
+there is no confident match and the local authoring bridge is running, it also
+offers **Work it out for me**, which generates a new lesson in a cloud browser.
 
 ## 1. Start the local page on Windows
 
@@ -178,7 +179,80 @@ The page caches its library and search index. Confirm the new ID with
 and follow the lesson yourself. This final human run checks the teaching behavior
 that automated authoring replay alone cannot prove.
 
-## 5. Run the automated regression suites
+
+## 5. Watch a lesson being generated
+
+Use the configured pipeline from section 4. Start its local bridge:
+
+```powershell
+Set-Location C:\Storage\Repo\zombie\pipeline
+npm run bridge
+```
+
+If the bridge is already running an older version, let any active generation
+finish, stop that bridge with **Ctrl+C**, then run the command again. Reload
+Browser Teacher at `chrome://extensions` and refresh the website as well.
+
+1. Ask a question that is not already in your lesson library, then click
+   **Work it out for me**. A cached lesson does not start a cloud browser.
+2. Click the underlined **Opening a cloud browser…** row. A separate floating
+   **Cloud browser** window opens immediately; its waiting message changes to
+   Steel's live iframe when the session becomes available. The row then reads
+   **Watch cloud browser**.
+3. Watch the AI explore. Drag the window by its header or resize its bottom-right
+   corner. The embedded window is for viewing; it does not forward your clicks
+   or keystrokes to the browser the AI is controlling.
+4. Click **−** (Minimize cloud browser), or press **Escape** while the viewer has
+   keyboard focus. Its iframe unloads while lesson generation continues. Click
+   the status row again to resume watching the same active session.
+5. If the pipeline retries or verifies in a fresh browser, the open viewer
+   follows that session automatically. When a browser closes, its live stream
+   changes to a recording player. Use **Play**, **Pause**, or the timeline to
+   review what happened. The player waits briefly before loading and retries
+   automatically while Steel prepares the recording. **Retry** remains available
+   if processing takes longer than the automatic retry window.
+6. A **Watch recording** button appears near the chat bar (at the top edge in a
+   narrow window) and stays available
+   after generation succeeds or fails while you work through the lesson. Minimize
+   the viewer, then use this button to reopen it. With multiple attempts, the
+   **Session** selector lets you review earlier recordings or return to the live
+   browser. The generating panel's **Watch cloud browser** row always returns
+   to the current live attempt, even after you selected an earlier recording.
+   Viewing a recording does not start another cloud session. Clicking **Done**
+   closes the viewer and removes its recording button and history.
+7. If a newly created live browser is not ready, the viewer reconnects
+   automatically. **Retry live view** reconnects just the player; it does not
+   restart the AI's work. If playback still cannot start, use
+   **Open Steel player in a tab**. That
+   opens Steel's own player, whose interaction controls depend on Steel. A local
+   CDP run or a bridge that does not supply an embeddable URL shows an unavailable
+   message while generation can continue. Recordings also provide **Open session
+   in Steel** as a fallback to the dashboard's session preview.
+
+The replay button belongs to the current task on this webpage. **Done**, **Stop**, a new
+question or lesson, website navigation, or page refresh clears that local history.
+Close, Not now and viewer Minimize keep recordings already received. The
+bridge retains replay links in memory for 24 hours; restarting it expires those
+links. Steel's dashboard remains the place to find older recordings. The bridge
+uses the configured Steel key to fetch recording playlists and streams media
+through local routes; the extension receives no API key.
+
+The bridge's panel-generation path saves the lesson into the extension library
+and teaches it immediately. Its default skips automatic replay; the CLI authoring
+and verified-publication flow in section 4 remains available. Confirm the actual
+website outcome yourself. **Stop** ends the panel's wait, clears the viewer and
+recording history, and asks the bridge to cancel the active job and release its
+cloud browser. Closing the panel, replacing the task, and leaving the page also
+cancel active generation. Minimizing only hides the view. If a tab disappears
+before it can send cancellation, the bridge stops jobs after 60 seconds without
+a poll (checked every 10 seconds).
+
+The live embed uses Steel's documented `debugUrl` and `interactive=false` option.
+Completed-session playback uses Steel's HLS recording API with the packaged
+HLS.js player. See [Steel live session embeds](https://docs.steel.dev/overview/sessions-api/embed-sessions/live-sessions)
+and [past-session playback](https://docs.steel.dev/overview/sessions-api/embed-sessions/past-sessions).
+
+## 6. Run the automated regression suites
 
 From the repository root, with Node, Playwright and its Chromium installed:
 
@@ -187,6 +261,10 @@ node docs/paint-tests.cjs
 node docs/resolver-tests.cjs
 node docs/teaching-tests.cjs
 node docs/extension-tests.cjs
+node docs/generate-tests.cjs
+node --test --test-isolation=none pipeline/session-viewer-tests.mjs
+node --test --test-isolation=none pipeline/session-replay-tests.mjs
+node --test --test-isolation=none pipeline/replay-player-tests.mjs
 ```
 
 These runners start their own temporary local servers; they do not need port 8765.
@@ -208,6 +286,18 @@ Read the dated [paint](paint-test-results.md), [resolver](resolver-test-results.
 [teaching](teaching-test-results.md) and [extension](extension-test-results.md)
 reports for the actual run results. Local fixtures do not certify a live website,
 and none of these commands claims that a paid/cloud or signed-in live rehearsal ran.
+
+The [generation report](generate-test-results.md) covers the real extension with
+an ephemeral bridge stub and an inert Steel-player fixture, including viewer
+minimize/reopen, retries, completed-session history, cleanup, restricted page CSP and small viewports. It
+uses a disposable extension copy and leaves the running port-7777 bridge alone.
+The Node viewer and replay suites check session metadata, retained recordings,
+authenticated playlist rewriting, media streaming and cleanup without cloud
+or model calls. These checks do not prove live Steel video playback; use the
+manual generation steps above for that final end-to-end check.
+
+The [replay report](replay-test-results.md) records the separate successful
+read-only playback check against an existing completed Steel session.
 
 The pipeline also has a local browser suite. After installing its dependencies,
 run `npm test` from `pipeline/` (with `CHROME_PATH` set if needed). It checks observed

@@ -456,3 +456,187 @@
   .bt-bar { transition: none; }
   .bt-bar.is-listening .bt-mic-dot { animation: none; }
 }
+
+/* ------------------------------------------------------- live cloud viewer */
+
+.bt-cloud-watch {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  margin: 16px 0 0;
+  padding: 8px 0;
+  border: 0;
+  background: none;
+  color: var(--bt-accent);
+  font: inherit;
+  font-size: 13px;
+  line-height: 1.5;
+  text-align: left;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+  cursor: pointer;
+}
+.bt-cloud-watch::before {
+  content: '';
+  flex: none;
+  width: 14px;
+  height: 10px;
+  border: 1.5px solid currentColor;
+  border-radius: 3px;
+}
+.bt-cloud-watch:hover { color: #c7e2ff; }
+.bt-cloud-watch:focus-visible, .bt-cloud-minimize:focus-visible,
+.bt-cloud-external:focus-visible { outline: 2px solid var(--bt-accent); outline-offset: 4px; }
+
+.bt-cloud-window {
+  box-sizing: border-box;
+  position: fixed;
+  z-index: var(--bt-z, 2147483647);
+  display: flex;
+  flex-direction: column;
+  pointer-events: auto;
+  max-width: calc(100vw - 16px);
+  max-height: calc(100vh - 16px);
+  overflow: hidden;
+  background: rgba(30, 32, 38, 0.94);
+  -webkit-backdrop-filter: var(--bt-blur);
+  backdrop-filter: var(--bt-blur);
+  border: 1px solid var(--bt-rim);
+  border-radius: 20px;
+  box-shadow: var(--bt-shadow);
+}
+.bt-cloud-window[hidden] { display: none; }
+.bt-cloud-window.is-dragging .bt-head { cursor: grabbing; }
+.bt-cloud-window .bt-title { color: var(--bt-text); }
+.bt-cloud-status {
+  margin-inline-start: auto;
+  font-size: 11px;
+  color: var(--bt-muted);
+}
+.bt-cloud-status.is-live { color: var(--bt-correct); }
+.bt-cloud-minimize {
+  display: grid;
+  place-items: center;
+  width: 30px;
+  height: 30px;
+  flex: none;
+  border: 0;
+  border-radius: 50%;
+  background: var(--bt-fill);
+  color: var(--bt-text);
+  font: inherit;
+  font-size: 20px;
+  cursor: pointer;
+}
+.bt-cloud-minimize:hover { background: var(--bt-fill-hover); }
+.bt-cloud-screen {
+  position: relative;
+  display: flex;
+  flex: 1;
+  min-height: 0;
+  background: #15171c;
+}
+.bt-cloud-frame {
+  display: block;
+  width: 100%;
+  height: 100%;
+  border: 0;
+  /* Monitoring must not interfere with the browser the AI is operating. */
+  pointer-events: none;
+}
+.bt-cloud-message {
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  display: grid;
+  place-content: center;
+  margin: 0;
+  padding: 28px;
+  background: rgba(21, 23, 28, 0.94);
+  color: var(--bt-muted);
+  font-size: 14px;
+  line-height: 1.6;
+  text-align: center;
+  pointer-events: none;
+}
+.bt-cloud-message[hidden] { display: none; }
+.bt-cloud-footer {
+  display: flex;
+  flex: none;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px 16px;
+  padding: 12px 22px 12px 16px;
+  border-top: 1px solid var(--bt-seam);
+  color: var(--bt-muted);
+  font-size: 11px;
+  line-height: 1.5;
+}
+.bt-cloud-external { color: var(--bt-accent); }
+.bt-cloud-external[hidden] { display: none; }
+.bt-cloud-retry {
+  padding: 5px 10px;
+  border: 1px solid var(--bt-rim);
+  border-radius: 6px;
+  background: var(--bt-fill);
+  color: var(--bt-accent);
+  font: inherit;
+  cursor: pointer;
+}
+.bt-cloud-retry:hover { background: var(--bt-fill-hover); }
+.bt-cloud-retry:focus-visible {
+  outline: 2px solid var(--bt-accent);
+  outline-offset: 3px;
+}
+.bt-cloud-retry[hidden] { display: none; }
+
+/* Completed sessions remain accessible after the lesson window closes. */
+.bt-cloud-history {
+  position: fixed;
+  bottom: 88px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: var(--bt-z, 2147483647);
+  pointer-events: auto;
+  max-width: calc(100vw - 32px);
+  padding: 9px 16px;
+  border: 1px solid var(--bt-rim);
+  border-radius: 999px;
+  background: rgba(34, 36, 43, 0.94);
+  color: var(--bt-accent);
+  box-shadow: 0 4px 18px rgba(0, 0, 0, 0.22);
+  font: inherit;
+  font-size: 13px;
+  cursor: pointer;
+}
+.bt-cloud-history:hover { background: #3b414c; }
+.bt-cloud-history:focus-visible, .bt-cloud-session:focus-visible {
+  outline: 2px solid var(--bt-accent);
+  outline-offset: 3px;
+}
+.bt-cloud-frame.is-recording { pointer-events: auto; }
+.bt-cloud-session-wrap { padding: 8px 16px; font-size: 12px; }
+.bt-cloud-session-wrap[hidden] { display: none; }
+.bt-cloud-session-wrap label { display: flex; align-items: center; gap: 12px; }
+.bt-cloud-session {
+  flex: 1;
+  min-width: 0;
+  padding: 5px 8px;
+  border: 1px solid var(--bt-rim);
+  border-radius: 6px;
+  background: #292d35;
+  color: var(--bt-text);
+  font: inherit;
+}
+
+/* Narrow lesson windows fill the space above the launcher. Keep the replay
+   shortcut away from their Show me / Not now / Stop actions. */
+@media (max-width: 700px) {
+  .bt-cloud-history {
+    top: 8px;
+    bottom: auto;
+    left: 8px;
+    transform: none;
+  }
+}

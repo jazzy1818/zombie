@@ -5,6 +5,7 @@ import { Steel } from 'steel-sdk';
 import { chromium } from 'playwright-core';
 import { VIEWPORT, STEEL_API_KEY, PROFILE_PATH } from './config.js';
 import { PROBE_SOURCE } from './dom-probe.js';
+import { createSessionViewer } from './session-viewer.js';
 
 const DEFAULT_TIMEOUT_MS = 300_000;   // Steel bills per session-minute
 const CAPTURE_TIMEOUT_MS = 900_000;   // a human is typing a password in this one
@@ -23,17 +24,28 @@ export async function openSession(opts = {}) {
     sessionContext,
     timeout = DEFAULT_TIMEOUT_MS,
     injectProbe = true,
+    onViewer,
   } = opts;
 
-  const steel = client();
-  const session = await steel.sessions.create({
-    dimensions: { width: VIEWPORT.width, height: VIEWPORT.height },
-    ...(profileId ? { profileId } : {}),
-    ...(persistProfile ? { persistProfile: true } : {}),
-    ...(sessionContext ? { sessionContext } : {}),
-    timeout,
-    blockAds: true,
-  });
+  const viewer = createSessionViewer(onViewer);
+  let steel;
+  let session;
+  try {
+    steel = client();
+    session = await steel.sessions.create({
+      dimensions: { width: VIEWPORT.width, height: VIEWPORT.height },
+      ...(profileId ? { profileId } : {}),
+      ...(persistProfile ? { persistProfile: true } : {}),
+      ...(sessionContext ? { sessionContext } : {}),
+      timeout,
+      blockAds: true,
+    });
+  } catch (error) {
+    viewer.unavailable();
+    throw error;
+  }
+  // Advertise the embed as soon as Steel creates it, while CDP is connecting.
+  viewer.ready(session);
 
   let browser;
   try {
@@ -47,7 +59,8 @@ export async function openSession(opts = {}) {
 
     const handle = {
       steel, session, browser, context, page,
-      viewerUrl: session.sessionViewerUrl ?? session.debugUrl,
+      viewer,
+      viewerUrl: viewer.state.url,
       probe: (fn, ...args) => callProbe(page, fn, args),
     };
 
@@ -57,6 +70,7 @@ export async function openSession(opts = {}) {
     // Initialization can fail before the caller receives a handle to release.
     try { await browser?.close(); } catch { /* connection already closed */ }
     try { await steel.sessions.release(session.id); } catch { /* release attempted */ }
+    viewer.close();
     throw error;
   }
 }
@@ -243,7 +257,13 @@ export async function openAuthedSession(opts = {}) {
 // logic, but it runs in the browser the demo actually uses — and without Steel's
 // datacenter IP, which Google degrades Drive features on.
 export async function openLocalSession(opts = {}) {
-  const { cdpUrl = 'http://localhost:9222', injectProbe = true } = opts;
+  const {
+    cdpUrl = 'http://localhost:9222',
+    injectProbe = true,
+    onViewer,
+  } = opts;
+  const viewer = createSessionViewer(onViewer);
+  viewer.unavailable();
 
   let browser;
   try {
@@ -263,6 +283,7 @@ export async function openLocalSession(opts = {}) {
   const handle = {
     steel: null, session: null, browser, context, page,
     local: true,
+    viewer,
     viewerUrl: '(local Chrome)',
     probe: (fn, ...args) => callProbe(page, fn, args),
   };
@@ -277,8 +298,10 @@ export async function closeSession(handle) {
   if (!handle) return;
   if (handle.local) {
     try { await handle.browser?.close(); } catch { /* already gone */ }
+    handle.viewer?.close();
     return;
   }
   try { await handle.browser?.close(); } catch { /* already gone */ }
   try { await handle.steel?.sessions.release(handle.session.id); } catch { /* already released */ }
+  handle.viewer?.close();
 }

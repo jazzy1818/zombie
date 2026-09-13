@@ -1,0 +1,55 @@
+{
+  "id": "where-is-accesibility",
+  "app": "google-docs",
+  "goal": "where is accesibility",
+  "preamble": "Accessibility isn't a property of your document — nothing about the words on the page changes when you turn it on. It's a setting about how Docs behaves toward you: whether it announces things to a screen reader, whether it supports a braille display. That distinction is the whole reason it lives where it lives. The menu bar is sorted by what a command acts on, and this one acts on you, not the text.",
+  "generalization": "When you can't find a setting, stop guessing at its name and ask what it acts on. Format changes the text. File changes the document. Tools changes how Docs works while you work — spelling checks, voice typing, dictionary, accessibility. That one question will place most commands in the right menu before you've opened a single one.",
+  "steps": [
+    {
+      "id": "s1",
+      "intent": "Every menu in the bar owns a different target. File owns the document as an object, Format owns the text on the page, View owns what's on your screen right now. Accessibility is none of those — it changes how Docs assists you as you work, which is the same family as spell-check and voice typing. Open the menu that holds those.",
+      "mode": "demo",
+      "target": {
+        "scope": "menu",
+        "name": "Tools"
+      },
+      "action": "click",
+      "verify": {
+        "kind": "visible",
+        "name": "Accessibility",
+        "scope": "menu"
+      },
+      "hints": [
+        "Nothing on the page is going to change. You're looking for the menu that holds the things that help you while you write, not the things that alter what you wrote.",
+        "In the menu bar, between Format and Extensions."
+      ],
+      "wrongHints": {
+        "View": "A reasonable guess — accessibility is about how things are presented. But View only controls what this window shows you: rulers, print layout, zoom. It doesn't change how Docs talks to assistive software.",
+        "Format": "Format acts on the text itself — size, spacing, alignment. Making text bigger is a kind of accommodation, but it changes the document. Accessibility support changes Docs' behaviour and leaves the document alone.",
+        "Help": "Help is documentation about Docs, not settings for it. You want the switch, not the article describing the switch."
+      }
+    },
+    {
+      "id": "s2",
+      "intent": "Open Accessibility. What's behind it isn't a single toggle but a small set of switches — screen reader support, braille support, collaborator announcements — because \"accessibility\" here means telling Docs which assistive tools you're actually using, so it can talk to them.",
+      "mode": "guided",
+      "target": {
+        "scope": "menu",
+        "name": "Accessibility"
+      },
+      "action": "click",
+      "verify": {
+        "kind": "dom",
+        "selector": "[aria-label=\"Learn more about screen reader support\"]"
+      },
+      "hints": [
+        "It's sitting alongside the other things in this menu that assist you rather than edit for you.",
+        "In the lower half of the Tools menu, near Preferences."
+      ],
+      "wrongHints": {
+        "Preferences": "Close in spirit — Preferences is settings, and settings feel like where this belongs. But Preferences covers typing behaviour: autocorrect, capitalisation, substitutions. Accessibility has its own entry because it configures how Docs communicates outward to other software.",
+        "Voice typing": "Voice typing is an assistive feature, so the guess makes sense. The difference is that it does something now — it starts listening. Accessibility sets up how Docs behaves from here on."
+      }
+    }
+  ]
+}

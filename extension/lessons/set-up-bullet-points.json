@@ -1,0 +1,96 @@
+{
+  "id": "set-up-bullet-points",
+  "app": "google-docs",
+  "goal": "how to set up bullet points",
+  "preamble": "A bulleted list looks like a row of dots you could type yourself, but Docs doesn't see dots. It sees a paragraph that has been told it is a list item. Once a line knows that about itself, the bullet, the indent, and the spacing all follow automatically — and every new line you press Enter on inherits the same rule. So you're not decorating text here. You're changing what kind of paragraph it is.",
+  "generalization": "The toolbar bullet button would have given you one bullet style with no questions asked. Going through Format instead showed you the thing the button was hiding: a list is a paragraph property with options, not a character you insert. That's why the bullet survives when you reorder lines, why pressing Tab nests it, and why deleting the text doesn't leave a stray dot behind.",
+  "steps": [
+    {
+      "id": "s1",
+      "intent": "Bullets aren't something you add to a document — they're a decision about how an existing paragraph behaves. The menu that deals with how text and paragraphs behave, rather than what's in them, is where this starts.",
+      "mode": "demo",
+      "target": {
+        "scope": "menu",
+        "name": "Format"
+      },
+      "action": "click",
+      "verify": {
+        "kind": "visible",
+        "name": "Bullets & numbering",
+        "scope": "menu"
+      },
+      "hints": [
+        "You're not putting anything new on the page. You're changing the nature of a line that's already there — which menu owns that?",
+        "The menu bar along the top, between Insert and Tools."
+      ],
+      "wrongHints": {
+        "Insert": "Insert is for things that weren't in the document before — images, tables, page breaks. A bullet isn't a new object; it's a property of a paragraph you already have.",
+        "Tools": "Tools holds things that act on the document from outside — spelling, word count, voice typing. Formatting a paragraph is Format's job."
+      }
+    },
+    {
+      "id": "s2",
+      "intent": "Docs keeps every kind of list under one roof, because bulleted and numbered lists are the same mechanism wearing different clothes. Open the group that names both.",
+      "mode": "guided",
+      "target": {
+        "scope": "menu",
+        "name": "Bullets & numbering"
+      },
+      "action": "click",
+      "verify": {
+        "kind": "visible",
+        "name": "Bulleted list menu",
+        "scope": "menu"
+      },
+      "hints": [
+        "Bullets and numbers are two answers to the same question, so Docs files them together under one entry.",
+        "Middle of the Format menu, below the spacing options."
+      ],
+      "wrongHints": {
+        "Paragraph styles": "That's headings and body text — what a paragraph means in the document's structure. A list is about how the paragraph is laid out, not what rank it holds.",
+        "Align & indent": "Reasonable guess, since bullets indent. But indenting only moves text sideways; it won't make Docs treat the line as a list item or carry the bullet to the next line.",
+        "Line & paragraph spacing": "Spacing controls the gaps between lines. It'll change how the list breathes once it exists, but it can't create one."
+      }
+    },
+    {
+      "id": "s3",
+      "intent": "Now you pick which of the two list types you want. Bullets say the order doesn't matter; numbers say it does. That distinction is the only real difference between these two branches.",
+      "mode": "guided",
+      "target": {
+        "scope": "menu",
+        "name": "Bulleted list menu"
+      },
+      "action": "click",
+      "verify": {
+        "kind": "visible",
+        "name": "Row 1. Column 1. bullet, hollow, square",
+        "scope": "menu"
+      },
+      "hints": [
+        "Your items have no first, second, third about them — they're just a set. Choose the branch that says so.",
+        "The first of the two list types in the submenu that just opened."
+      ],
+      "wrongHints": {
+        "Numbered list menu": "Numbers imply sequence — steps, rankings, things that must happen in order. If the items could be shuffled without losing meaning, bullets are the honest choice.",
+        "List options": "That's for adjusting a list you already have — restarting numbering, editing prefixes. There's no list here yet to adjust."
+      }
+    },
+    {
+      "id": "s4",
+      "intent": "Your turn, with no highlight. What opened is a small grid of bullet shapes — the same mechanism every time, just a different mark. Pick the plain one in the top-left corner: it's the default Docs uses everywhere, which means your list will match anything else in the document.",
+      "mode": "solo",
+      "target": {
+        "scope": "menu",
+        "name": "Row 1. Column 1. bullet, hollow, square"
+      },
+      "action": "click",
+      "verify": {
+        "kind": "none"
+      },
+      "hints": [
+        "They all do the identical thing. Choose the one that draws the least attention to itself — the one you've seen in every document you've ever read.",
+        "First row, first column of the grid that just appeared."
+      ]
+    }
+  ]
+}

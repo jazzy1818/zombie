@@ -10,7 +10,7 @@ const EDITOR_DOC = /^\/(document|spreadsheets|presentation|forms)\/d\/([^/]+)/;
 
 export function pageKey(value = location.href) {
   const url = new URL(value, location.href);
-  const doc = url.pathname.match(EDITOR_DOC);
+  const doc = url.hostname === 'docs.google.com' && url.pathname.match(EDITOR_DOC);
   if (doc) return `${url.origin}/${doc[1]}/d/${doc[2]}`;
   return `${url.origin}${url.pathname}${url.search}`;
 }
