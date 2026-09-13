@@ -1,0 +1,27 @@
+{
+  "id": "help-me-find-beginner-friendly",
+  "app": "devpost.com",
+  "goal": "help me find beginner friendly hackathons",
+  "preamble": "It feels like this should be a search: type \"beginner friendly\" into a box and hope the right words show up in the right listings. But hackathon sites don't leave that to chance. Organisers tag their events with themes when they post them, and the site keeps a page for each tag. So there is already a list of beginner-friendly hackathons sitting there, maintained by the people who know. Your job isn't to describe what you want — it's to find where the site has already filed it.",
+  "generalization": "When a site shows you a row of themes, tags, or categories, it's showing you its own vocabulary — the words it actually indexes by. Searching makes the site guess what you meant; picking a theme tells it exactly, and gets you a list someone curated rather than a list a text match assembled. Look for the site's categories before you reach for the search box.",
+  "steps": [
+    {
+      "id": "s1",
+      "intent": "\"Beginner Friendly\" here isn't a description, it's a filter that already exists. Clicking it doesn't run a word search — it opens the list of every hackathon whose organisers tagged it that way, which is a far better signal than the phrase appearing somewhere in a description. You're choosing a shelf, not asking a question.",
+      "mode": "demo",
+      "target": {
+        "scope": "any",
+        "name": "Beginner Friendly"
+      },
+      "action": "click",
+      "verify": {
+        "kind": "none"
+      },
+      "hints": [
+        "You're not describing what you want — the site has already sorted events into groups. Look for a list of themes rather than somewhere to type.",
+        "It's among the popular themes listed on the homepage, shown as a clickable link."
+      ]
+    }
+  ],
+  "navigates": true
+}

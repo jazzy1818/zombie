@@ -305,3 +305,28 @@ export function isConfident(ranked) {
   // One matching word is only enough when it matched emphatically.
   return best.hits >= 2 || best.score >= SOLO_STRONG;
 }
+
+const RELEVANT_FLOOR = 0.35;   // below this the question didn't really match
+const RELEVANT_RATIO = 0.25;   // and a long way behind the leader is noise too
+
+/**
+ * The lessons a question actually matched, best first.
+ *
+ * `search` scores every lesson, so a question about something we don't teach
+ * still comes back as a full ranking — a lesson that shares one incidental word
+ * sits at 0.06 above five zeroes. Offering that list is worse than offering
+ * nothing: it reads as "here is your answer" when the honest answer is "I don't
+ * know that one", and the picker is where the user decides whether to spend a
+ * cloud browser on it.
+ *
+ * Two cuts, because one isn't enough. The floor drops questions where even the
+ * best lesson barely registered. The ratio drops the tail of a question that
+ * did match something — once the leader is clear, the ones trailing it are
+ * sharing a common word, not answering the question.
+ */
+export function relevant(ranked) {
+  const best = ranked?.[0]?.score ?? 0;
+  if (best < RELEVANT_FLOOR) return [];
+  const cutoff = Math.max(RELEVANT_FLOOR, best * RELEVANT_RATIO);
+  return ranked.filter(r => r.hits > 0 && r.score >= cutoff);
+}

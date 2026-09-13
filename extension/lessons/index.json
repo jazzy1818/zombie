@@ -1,8 +1,16 @@
 [
+  "add-email-draft",
   "add-image",
+  "center-align-text",
   "change-page-zoom-200",
+  "clone",
+  "find-contribution-info",
+  "help-me-find-beginner-friendly",
+  "list-of-products",
+  "see-developer-docs",
   "styles-toc",
   "version-history",
   "wanna-change-color-of-current",
+  "wanna-have-line-spacing-double",
   "wanna-increase-font-size"
 ]

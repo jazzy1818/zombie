@@ -193,6 +193,11 @@ async function report() {
   const count = id => page.evaluate(id => fixture.clicks[id] || 0, id);
   const progress = () => page.locator('#browser-teacher-root .bt-progress').textContent();
   const panelButton = name => page.locator('#browser-teacher-root').getByRole('button', { name, exact: true });
+  /** Every typed question lands on the picker now; a lesson starts when it's chosen. */
+  async function choose(goal) {
+    await page.locator('#browser-teacher-root .bt-card-picker').waitFor();
+    await panelButton(goal).click();
+  }
   async function stopped() {
     await page.locator('#browser-teacher-root .bt-window.is-open').waitFor({ state: 'hidden', timeout: 1500 });
     await cleared();
@@ -258,6 +263,8 @@ async function report() {
     const shipped = JSON.parse(await fs.readFile(path.join(extensionPath, 'lessons', 'styles-toc.json'), 'utf8'));
     await page.locator('#browser-teacher-root .bt-bar-input').fill('How do I add an automatic table of contents?');
     await panelButton('Teach me').click();
+    // Even a strong match is offered, never assumed — the user picks it.
+    await choose(shipped.goal);
     await page.locator('#browser-teacher-root .bt-card-preamble').waitFor();
     assert.equal(await page.locator('#browser-teacher-root .bt-card-title').textContent(), shipped.goal);
     assert.equal(await page.locator('#browser-teacher-root .bt-card-body').textContent(), shipped.preamble);
@@ -276,28 +283,51 @@ async function report() {
     const shipped = JSON.parse(await fs.readFile(path.join(extensionPath, 'lessons', 'version-history.json'), 'utf8'));
     await page.locator('#browser-teacher-root .bt-bar-input').fill('How can I find and name a version of my document?');
     await panelButton('Teach me').click();
+    await choose(shipped.goal);
     await page.locator('#browser-teacher-root .bt-card-preamble').waitFor();
     assert.equal(await page.locator('#browser-teacher-root .bt-card-title').textContent(), shipped.goal);
     assert.equal(await page.locator('#browser-teacher-root .bt-card-body').textContent(), shipped.preamble);
     await panelButton('Not now').click();
     await stopped();
   });
-  await test('An unknown typed question offers published lesson choices and opens the chosen lesson', async () => {
+  await test('An uncertain typed question offers only the lessons it matched, and opens the chosen one', async () => {
     const shipped = await evaluate(`import(chrome.runtime.getURL('src/panel/lessons.js')).then(module => module.loadAll()).then(lessons => lessons.map(({ id, goal, preamble }) => ({ id, goal, preamble })))`);
-    await page.locator('#browser-teacher-root .bt-bar-input').fill('zxqv nebular flibbertigibbet');
+    // Matches several lessons on "text"/"bigger" without being confident about
+    // any of them — the case the picker exists for.
+    await page.locator('#browser-teacher-root .bt-bar-input').fill('make my text bigger');
     await panelButton('Teach me').click();
     await page.locator('#browser-teacher-root .bt-card-picker').waitFor();
-    // Published lessons only. A reachable authoring bridge adds a "work it out
-    // for me" button here, and whether one is running must not change this.
+    // Published lessons only. A reachable authoring bridge adds a "none of
+    // these" button here, and whether one is running must not change this.
     const choices = page.locator('#browser-teacher-root .bt-actions .bt-btn:not(.bt-btn-generate)');
     const labels = await choices.allTextContents();
-    assert.equal(labels.length, Math.min(4, shipped.length));
+    assert.ok(labels.length > 0 && labels.length < shipped.length, `expected a shortlist, not the library, got ${JSON.stringify(labels)}`);
     assert.ok(labels.every(label => shipped.some(lesson => lesson.goal === label)));
     const selected = shipped.find(lesson => lesson.goal === labels[0]);
     await choices.first().click();
     await page.locator('#browser-teacher-root .bt-card-preamble').waitFor();
     assert.equal(await page.locator('#browser-teacher-root .bt-card-body').textContent(), selected.preamble);
     await panelButton('Not now').click();
+    await stopped();
+  });
+  await test('A question matching nothing offers no lesson choices at all', async () => {
+    await page.locator('#browser-teacher-root .bt-bar-input').fill('zxqv nebular flibbertigibbet');
+    await panelButton('Teach me').click();
+    await page.locator('#browser-teacher-root .bt-card-picker').waitFor();
+    // With an authoring bridge running this card carries one generate button
+    // and nothing else. Without one there is nothing to generate with, so the
+    // library is listed rather than leaving a dead end — but either way no
+    // lesson is ever presented as an answer to a question it did not match.
+    const generate = page.locator('#browser-teacher-root .bt-actions .bt-btn-generate');
+    const choices = page.locator('#browser-teacher-root .bt-actions .bt-btn:not(.bt-btn-generate)');
+    const body = await page.locator('#browser-teacher-root .bt-card-body').textContent();
+    assert.match(body, /no lesson for/);
+    if (await generate.count()) {
+      assert.equal(await choices.count(), 0, 'a matchless question must not offer guesses');
+    } else {
+      assert.ok(await choices.count() > 0, 'with no bridge the library is the only thing left to offer');
+    }
+    await panelButton('Close').click();
     await stopped();
   });
   await test('A measured fixture replay publishes into a copied extension and launches through its question box', async () => {
@@ -346,6 +376,8 @@ async function report() {
       const panel = publishedPage.locator('#browser-teacher-root');
       await panel.locator('.bt-bar-input').fill('How do I publish the sample article?');
       await panel.getByRole('button', { name: 'Teach me', exact: true }).click();
+      await panel.locator('.bt-card-picker').waitFor();
+      await panel.getByRole('button', { name: candidate.goal, exact: true }).click();
       await panel.locator('.bt-card-preamble').waitFor();
       assert.equal(await panel.locator('.bt-card-title').textContent(), candidate.goal);
       assert.equal(await panel.locator('.bt-card-body').textContent(), candidate.preamble);

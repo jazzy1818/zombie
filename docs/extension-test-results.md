@@ -1,12 +1,12 @@
 # Loaded extension integration results
 
-Run: 2026-09-13T04:07:04.225Z
+Run: 2026-09-13T04:26:58.874Z
 
 Browser: 153.0.8010.12
 
 Unpacked extension: hnknlggfefibmljpnjiodlliinakjhio
 
-Result: **38/38 checks passed**.
+Result: **39/39 checks passed**.
 
 The browser loaded the extension directory through the manifest content script, then its real module graph in the extension isolated world. Tests use the actual panel, teaching adapter, resolver/fallback and paint implementations. The publication check additionally loads a temporary copy of the same production files with one locally replayed fixture lesson added by the real publisher. No lesson-success, click, resolver or browser API mocks are installed.
 
@@ -14,7 +14,8 @@ The browser loaded the extension directory through the manifest content script, 
 - PASS: Packaged lesson index discovers and validates every published lesson
 - PASS: Typed question launches the packaged Styles lesson and waits for the real first click
 - PASS: Typed version-history question selects the actual bundled preamble
-- PASS: An unknown typed question offers published lesson choices and opens the chosen lesson
+- PASS: An uncertain typed question offers only the lessons it matched, and opens the chosen one
+- PASS: A question matching nothing offers no lesson choices at all
 - PASS: A measured fixture replay publishes into a copied extension and launches through its question box
 - PASS: Guided lesson waits for a real correct click and clears every effect
 - PASS: Synthetic page clicks do not advance the lesson

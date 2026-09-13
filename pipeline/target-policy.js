@@ -11,7 +11,12 @@ export function matchesCandidate(candidate, name, scope) {
   if (!text.startsWith(name)) return false;
   const suffix = text.slice(name.length).trim();
   return /^(?:(?:Updated|New)\s*)?[►▸▶›»]$/.test(suffix) || /^(?:Updated|New)$/.test(suffix)
-    || /^(?:\(?\s*(?:Ctrl|Control|Alt|Option|Shift|Meta|Cmd|Command|⌘|⌥|⇧|F\d{1,2})(?:\b|[+⌘⌥⇧]).*\)?)$/i.test(suffix);
+    || /^(?:\(?\s*(?:Ctrl|Control|Alt|Option|Shift|Meta|Cmd|Command|⌘|⌥|⇧|F\d{1,2})(?:\b|[+⌘⌥⇧]).*\)?)$/i.test(suffix)
+    // Outside Docs the trailing noise is a count badge rather than a shortcut:
+    // GitHub's "Issues 12", Gmail's "Inbox 1,203". Same rule as matchesName in
+    // the runtime resolver — if these drift, the pipeline authors a target the
+    // extension cannot resolve.
+    || /^\(?\d[\d,.\u202f\u00a0]*\+?k?\)?$/i.test(suffix);
 }
 
 export function candidatePool(pool, name, scope, { actionable = true } = {}) {

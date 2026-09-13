@@ -4,8 +4,14 @@
 //
 // Self-contained so it can be addInitScript'd or pasted into DevTools. No imports,
 // no module scope, no Node.
+//
+// The selectors are passed in rather than hardcoded: where an app keeps its
+// toolbar and menu bar is the only thing that differs between Google Docs and
+// anything else, and pipeline/apps.js owns that. See probeSource().
 
-export function installProbe() {
+import { appFor } from './apps.js';
+
+export function installProbe(SEL) {
   function isVisible(el) {
     if (!el?.isConnected) return false;
     if (el.checkVisibility && !el.checkVisibility({ opacityProperty: true, visibilityProperty: true })) return false;
@@ -49,7 +55,9 @@ export function installProbe() {
     if (!t.startsWith(name)) return false;
     const suffix = t.slice(name.length).trim();
     return /^(?:(?:Updated|New)\s*)?[►▸▶›»]$/.test(suffix) || /^(?:Updated|New)$/.test(suffix)
-      || /^(?:\(?\s*(?:Ctrl|Control|Alt|Option|Shift|Meta|Cmd|Command|⌘|⌥|⇧|F\d{1,2})(?:\b|[+⌘⌥⇧]).*\)?)$/i.test(suffix);
+      || /^(?:\(?\s*(?:Ctrl|Control|Alt|Option|Shift|Meta|Cmd|Command|⌘|⌥|⇧|F\d{1,2})(?:\b|[+⌘⌥⇧]).*\)?)$/i.test(suffix)
+      // A count badge, the non-Docs equivalent of a concatenated shortcut.
+      || /^\(?\d[\d,.\u202f\u00a0]*\+?k?\)?$/i.test(suffix);
   }
 
   // Only visible elements get stamped, so a model addressing elements by id cannot
@@ -73,6 +81,10 @@ export function installProbe() {
       .replace(/[▶▸►‣]\s*$/, '')
       .replace(/\s*\([A-Za-z0-9]{1,3}\)\s*$/, '')
       .replace(/(?:Ctrl|Alt|Shift|Cmd|⌘|⌥|⇧|⌃)[^\s]*$/, '')
+      // Outside Docs the trailing noise is a count badge, not a shortcut:
+      // GitHub's "Issues 12", Gmail's "Inbox 1,203". The number is not part of
+      // the control's name and changes between authoring and teaching.
+      .replace(/\s+\(?\d[\d,.\u202f\u00a0]*\+?k?\)?$/i, '')
       .trim();
   }
 
@@ -82,9 +94,12 @@ export function installProbe() {
     const raw = scope === 'toolbar' || scope === 'dialog'
       ? (el.getAttribute('aria-label') ?? el.textContent.trim())
       : (el.textContent.trim() || el.getAttribute('aria-label') || '');
+    // 'any' controls are named by their own text far more often than by an
+    // aria-label, so they strip like menu items: arrows, shortcuts, badges.
+    const stripAs = scope === 'toolbar' || scope === 'dialog' ? 'toolbar' : 'menu';
     const c = {
       id: stamp(el),
-      name: bare(raw, scope === 'menu' ? 'menu' : 'toolbar'),
+      name: bare(raw, stripAs),
       raw,
       scope,
       source,
@@ -113,13 +128,13 @@ export function installProbe() {
 
   function observe() {
     const seen = new Set();
-    const toolbar = collect('#docs-toolbar-wrapper [aria-label]', 'toolbar', 'toolbar', seen);
+    const toolbar = collect(SEL.toolbar, 'toolbar', 'toolbar', seen);
 
     // Unresolved: the menubar may not carry role="menuitem". Query both and record which
     // hit in `source` so the answer comes from output rather than a guess.
     const menubar = [
-      ...collect('#docs-menubar [role="menuitem"]', 'menu', 'menubar-role', seen),
-      ...collect('#docs-menubar [aria-label]', 'menu', 'menubar-aria', seen),
+      ...collect(SEL.menubarRole, 'menu', 'menubar-role', seen),
+      ...collect(SEL.menubarAria, 'menu', 'menubar-aria', seen),
     ];
     // Docs' toolbar dropdowns (Styles, Font, Zoom) are listboxes whose children are
     // role=option, not menuitem. Both count as "menu" for a lesson descriptor.
@@ -133,7 +148,14 @@ export function installProbe() {
       '[role="dialog"] [aria-label], [role="dialog"] button', 'dialog', 'dialog', seen,
     );
 
-    const all = [...toolbar, ...menu, ...dialog].sort((a, b) => {
+    // Everything else that could be clicked. Docs keeps almost nothing here;
+    // an app with no ARIA landmarks keeps almost everything here, and without
+    // this bucket the explorer would be handed a blank page to work from.
+    // Scope 'any' rather than a fourth scope name: §5's target scopes are
+    // frozen, and 'any' already means "search the whole page".
+    const any = collect(SEL.control, 'any', 'control', seen);
+
+    const all = [...toolbar, ...menu, ...dialog, ...any].sort((a, b) => {
       const position = byId.get(a.id).compareDocumentPosition(byId.get(b.id));
       return position & Node.DOCUMENT_POSITION_FOLLOWING ? -1 : position & Node.DOCUMENT_POSITION_PRECEDING ? 1 : 0;
     });
@@ -142,19 +164,24 @@ export function installProbe() {
       candidate.ancestors = all.filter(other => other.id !== candidate.id && byId.get(other.id).contains(byId.get(candidate.id))).map(other => other.id);
     });
     menu.sort((a, b) => a.order - b.order);
-    return { url: location.href, toolbar, menu, dialog, ts: Date.now() };
+    any.sort((a, b) => a.order - b.order);
+    return { url: location.href, toolbar, menu, dialog, any, ts: Date.now() };
   }
 
-  // Never tier on CSS classes — Docs minifies them (gb_Je) and they change between deploys.
+  // Never tier on CSS classes — apps minify them (Docs ships gb_Je) and they turn
+  // over between deploys. Roles and accessible names are the stable surface.
   function tiers(scope) {
-    const toolbar = { sel: '#docs-toolbar-wrapper [aria-label]', match: toolbarMatch };
+    const toolbar = { sel: SEL.toolbar, match: toolbarMatch };
     const menuitem = { sel: '[role="menuitem"], [role="option"], [role="listbox"], [role="menuitemradio"], [role="menuitemcheckbox"]', match: menuMatch };
-    const menubarAria = { sel: '#docs-menubar [aria-label]', match: toolbarMatch };
-    const any = { sel: '[aria-label]', match: toolbarMatch };
+    const menubarAria = { sel: SEL.menubarAria, match: toolbarMatch };
+    const labelled = { sel: '[aria-label]', match: toolbarMatch };
+    // Last, and menuMatch rather than toolbarMatch: outside Docs a control is
+    // usually named by its own text, which toolbarMatch cannot see at all.
+    const control = { sel: SEL.control, match: menuMatch };
 
     if (scope === 'toolbar') return [toolbar];
     if (scope === 'menu') return [menuitem, menubarAria];
-    return [toolbar, menuitem, any];
+    return [toolbar, menuitem, labelled, control];
   }
 
   /** → { id, count, tier } | null. `count` is visible matches; emit needs it for nth. */
@@ -210,4 +237,15 @@ export function installProbe() {
   return true;
 }
 
-export const PROBE_SOURCE = `(${installProbe.toString()})();`;
+/**
+ * The probe as an injectable string, bound to one app's selectors.
+ *
+ * addInitScript takes source, not a closure, so the selectors have to be
+ * serialised into the text rather than passed at call time.
+ */
+export function probeSource(selectors) {
+  return `(${installProbe.toString()})(${JSON.stringify(selectors)});`;
+}
+
+/** Google Docs, for callers that predate app profiles. */
+export const PROBE_SOURCE = probeSource(appFor('https://docs.google.com/').selectors);
