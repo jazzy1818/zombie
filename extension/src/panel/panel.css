@@ -1,68 +1,116 @@
-/* [B] Chat bar + floating lesson window.
+/* [B] Chat bar + floating lesson window + cloud browser viewer.
 
-   Lives inside a shadow root, so nothing here leaks into Docs and Docs' global
-   CSS can't reach in — which it absolutely would.
+   Lives inside a shadow root, so nothing here leaks into the page and the
+   page's global CSS can't reach in — which it absolutely would.
 
-   Material: one continuous sheet of smoked glass, visionOS-style. Heavy blur, a
-   neutral dark tint, a bright rim along the top edge where light would catch,
-   and a wide soft shadow so it reads as floating well above the page. The whole
-   surface is the same material — the header and footer are not separate
-   chrome, they're the same glass with the faintest possible seams.
+   Material: one continuous sheet of dark glass. A deep graphite tint with a
+   heavy blur behind it, a bright hairline along the top edge where light would
+   catch, a faint bloom in the top-left corner, and a wide soft shadow so the
+   sheet reads as floating well above the page. Header, body and footer are the
+   same material — the seams between them are the faintest possible lines.
 
-   Light text on dark glass is deliberate: over a white document it's what gives
-   the narration enough contrast to stay readable while the page shows through.
-   The tint is carrying that contrast, so don't thin it much further. */
+   Light text on dark glass is deliberate: over a white document it is what
+   keeps the narration readable while the page still shows through.
+
+   Two rules that everything below follows:
+   - Every icon is a CSS shape with `content: ''`. Text in generated content
+     becomes part of a control's accessible name, and the tests (and screen
+     readers) match buttons by name.
+   - Nothing here changes what the panel does. Class names, `[hidden]` rules,
+     `display` toggles and the fixed-position geometry that floating.js drives
+     are exactly as they were. */
 
 :host {
-  --bt-accent: #8FC2FF;          /* lifted for legibility on dark glass */
-  --bt-correct: #7BE0A4;
-  --bt-wrong: #FF9A90;
+  /* Ink */
+  --bt-text: rgba(255, 255, 255, 0.95);
+  --bt-text-2: rgba(255, 255, 255, 0.74);
+  --bt-muted: rgba(255, 255, 255, 0.52);
+  --bt-faint: rgba(255, 255, 255, 0.30);
 
-  --bt-text: rgba(255, 255, 255, 0.94);
-  --bt-muted: rgba(255, 255, 255, 0.58);
+  /* Signal colours. Lifted for legibility on dark glass; the strong variants
+     are for fills and rails, the plain ones for text and rings. */
+  --bt-accent: #A7C8FF;
+  --bt-accent-strong: #5B9DFF;
+  --bt-correct: #86DFA9;
+  --bt-correct-strong: #34C26B;
+  --bt-wrong: #FF9C93;
+  --bt-wrong-strong: #F2554B;
 
-  /* Thinner tint, heavier blur to compensate. The blur is what keeps text
-     legible once the fill gets this light — drop the blur and the narration
-     starts competing with whatever paragraph is behind it. */
-  --bt-glass: rgba(34, 36, 43, 0.38);
-  --bt-glass-bar: rgba(34, 36, 43, 0.34);
-  --bt-blur: blur(56px) saturate(180%) brightness(0.82);
+  /* Glass. The brightness term darkens whatever shows through, so the sheet
+     reads as graphite over a white document and not as a mid grey; the tint
+     alone would need to be nearly opaque to do the same job. */
+  --bt-glass: rgba(17, 18, 22, 0.78);
+  --bt-glass-bar: rgba(17, 18, 22, 0.76);
+  --bt-glass-solid: rgba(17, 18, 22, 0.95);
+  --bt-blur: blur(28px) saturate(150%) brightness(0.85);
 
-  --bt-rim: rgba(255, 255, 255, 0.20);
-  --bt-seam: rgba(255, 255, 255, 0.09);
-  --bt-fill: rgba(255, 255, 255, 0.13);
-  --bt-fill-hover: rgba(255, 255, 255, 0.20);
+  --bt-rim: rgba(255, 255, 255, 0.13);
+  --bt-rim-strong: rgba(255, 255, 255, 0.22);
+  --bt-seam: rgba(255, 255, 255, 0.07);
+  --bt-fill: rgba(255, 255, 255, 0.07);
+  --bt-fill-hover: rgba(255, 255, 255, 0.12);
+  --bt-fill-active: rgba(255, 255, 255, 0.16);
 
-  /* Depth, then the rim highlight along the top edge, then an inner darkening
-     at the base so the sheet has a little thickness to it. */
+  /* Depth: a crisp dark contour, then the ambient shadow, then the rim light
+     along the top edge and a little darkening at the base for thickness. */
   --bt-shadow:
-    0 32px 80px rgba(0, 0, 0, 0.38),
-    0 8px 24px rgba(0, 0, 0, 0.22),
-    inset 0 1px 0 rgba(255, 255, 255, 0.24),
-    inset 0 -1px 0 rgba(0, 0, 0, 0.18);
+    0 0 0 0.5px rgba(0, 0, 0, 0.55),
+    0 28px 70px -14px rgba(0, 0, 0, 0.60),
+    0 10px 28px -10px rgba(0, 0, 0, 0.45),
+    inset 0 1px 0 rgba(255, 255, 255, 0.16),
+    inset 0 -1px 0 rgba(0, 0, 0, 0.30);
+
+  --bt-radius: 22px;
+  --bt-ease: cubic-bezier(0.2, 0.8, 0.2, 1);
+  --bt-spring: cubic-bezier(0.32, 1.25, 0.5, 1);
+  --bt-font: -apple-system, BlinkMacSystemFont, 'SF Pro Text', 'Inter', 'Segoe UI',
+    Roboto, 'Helvetica Neue', Arial, sans-serif;
+  --bt-mono: ui-monospace, 'SF Mono', SFMono-Regular, Menlo, Consolas, monospace;
 
   all: initial;
-  font-family: 'Google Sans', Roboto, -apple-system, BlinkMacSystemFont, sans-serif;
+  font-family: var(--bt-font);
   color: var(--bt-text);
 }
 
 :host::backdrop { background: transparent !important; pointer-events: none !important; }
+
+*, *::before, *::after { box-sizing: border-box; }
+
 .bt-window, .bt-bar { pointer-events: auto; }
+
+/* The host inherits the page's font declaration; every surface names its own. */
+.bt-bar, .bt-window, .bt-cloud-window, .bt-cloud-history {
+  font-family: var(--bt-font);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  text-rendering: optimizeLegibility;
+}
+
+/* Same ring on everything that takes keyboard focus. */
+.bt-bar :is(button, input):focus-visible,
+.bt-window button:focus-visible,
+.bt-cloud-window :is(button, a, select):focus-visible,
+.bt-cloud-history:focus-visible {
+  outline: 2px solid var(--bt-accent);
+  outline-offset: 2px;
+}
+.bt-bar-input:focus-visible { outline: none; }   /* the whole bar lights up instead */
 
 /* --------------------------------------------------------------- chat bar */
 
 .bt-bar {
   position: fixed;
-  bottom: 24px;
+  bottom: 26px;
   left: 50%;
   transform: translateX(-50%);
   z-index: var(--bt-z, 2147483647);
 
   display: flex;
   align-items: center;
-  gap: 6px;
-  width: min(560px, calc(100vw - 48px));
-  padding: 7px 7px 7px 18px;
+  gap: 8px;
+  width: min(600px, calc(100vw - 48px));
+  height: 56px;
+  padding: 0 7px 0 18px;
 
   background: var(--bt-glass-bar);
   -webkit-backdrop-filter: var(--bt-blur);
@@ -71,91 +119,165 @@
   border-radius: 999px;
   box-shadow: var(--bt-shadow);
 
-  transition: opacity 200ms ease;
+  transition:
+    opacity 220ms var(--bt-ease),
+    border-color 220ms var(--bt-ease),
+    box-shadow 220ms var(--bt-ease),
+    transform 220ms var(--bt-ease);
+}
+
+/* Leading glyph: a ring with a dot — the thing that points at things. */
+.bt-bar::before {
+  content: '';
+  flex: none;
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  border: 1.5px solid var(--bt-accent);
+  background: radial-gradient(circle, var(--bt-accent) 0 2.5px, transparent 3px);
+  opacity: 0.9;
+  transition: transform 300ms var(--bt-spring), opacity 200ms ease;
+}
+.bt-bar:focus-within::before { transform: scale(1.08); opacity: 1; }
+
+.bt-bar:focus-within {
+  border-color: var(--bt-rim-strong);
+  box-shadow:
+    var(--bt-shadow),
+    0 0 0 4px rgba(91, 157, 255, 0.14);
 }
 
 .bt-bar-input {
   flex: 1;
   min-width: 0;
+  height: 100%;
   border: 0;
   background: none;
   outline: none;
   font: inherit;
-  font-size: 15px;
+  font-size: 15.5px;
+  letter-spacing: -0.005em;
   color: var(--bt-text);
+  caret-color: var(--bt-accent);
 }
-.bt-bar-input::placeholder { color: var(--bt-muted); }
+.bt-bar-input::placeholder { color: var(--bt-muted); transition: color 160ms ease; }
+.bt-bar:focus-within .bt-bar-input::placeholder { color: var(--bt-faint); }
 .bt-bar-input:disabled { color: var(--bt-muted); }
 
 /* Locked while a lesson runs. Visible, so it doesn't feel like the UI vanished,
    but not focusable — a focused input mid-step would dismiss a Docs menu. */
-.bt-bar.is-locked { opacity: 0.4; }
-.bt-bar.is-locked.is-explained { opacity: 0.75; }
+.bt-bar.is-locked { opacity: 0.5; }
+.bt-bar.is-locked::before { opacity: 0.45; }
+.bt-bar.is-locked.is-explained { opacity: 0.85; }
 
+.bt-bar.is-error { border-color: rgba(242, 85, 75, 0.55); }
 .bt-bar.is-error .bt-bar-input::placeholder { color: var(--bt-wrong); }
 
-/* Tinted glass, not solid fill — the colour sits in the sheet rather than
-   sitting on top of it. */
+/* The one bright control on screen: an off-white pill on dark glass. */
 .bt-bar-go {
   flex: none;
-  padding: 9px 17px;
-  border: 1px solid rgba(143, 194, 255, 0.5);
+  height: 40px;
+  padding: 0 18px;
+  border: 0;
   border-radius: 999px;
-  background: rgba(79, 156, 249, 0.30);
-  color: #fff;
+  background: #F4F5F7;
+  color: #111318;
   font: inherit;
   font-size: 14px;
-  font-weight: 500;
+  font-weight: 600;
+  letter-spacing: -0.005em;
   cursor: pointer;
-  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.3);
-  transition: background 150ms ease, border-color 150ms ease;
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.9),
+    0 1px 2px rgba(0, 0, 0, 0.35),
+    0 8px 18px -8px rgba(0, 0, 0, 0.6);
+  transition: background 160ms ease, transform 160ms var(--bt-ease), box-shadow 160ms ease;
 }
-.bt-bar-go:hover {
-  background: rgba(79, 156, 249, 0.44);
-  border-color: rgba(175, 212, 255, 0.7);
-}
+.bt-bar-go:hover { background: #FFFFFF; }
+.bt-bar-go:active { transform: scale(0.97); box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.9), 0 1px 2px rgba(0, 0, 0, 0.35); }
+.bt-bar.is-locked .bt-bar-go { cursor: default; }
 
+/* Microphone. Idle it is a quiet glass disc with a drawn mic glyph; while
+   listening it turns hot and the glyph becomes a moving level meter. */
 .bt-bar-mic {
+  position: relative;
   flex: none;
   display: grid;
   place-items: center;
-  width: 34px;
-  height: 34px;
-  border: 1px solid rgba(255, 138, 128, 0.45);
+  width: 40px;
+  height: 40px;
+  border: 1px solid var(--bt-rim);
   border-radius: 50%;
-  background: rgba(234, 67, 53, 0.26);
+  background: var(--bt-fill);
+  color: var(--bt-text-2);
   cursor: pointer;
-  transition: background 150ms ease, border-color 150ms ease;
+  transition: background 160ms ease, border-color 160ms ease, color 160ms ease, transform 160ms var(--bt-ease);
 }
-.bt-bar-mic:hover {
-  background: rgba(234, 67, 53, 0.4);
-  border-color: rgba(255, 168, 160, 0.65);
-}
+.bt-bar-mic:hover { background: var(--bt-fill-hover); color: var(--bt-text); }
+.bt-bar-mic:active { transform: scale(0.96); }
 .bt-bar-mic[hidden] { display: none; }   /* display: grid would otherwise win */
 
+/* The glyph: capsule head, cup, stem. */
 .bt-mic-dot {
-  width: 9px;
-  height: 9px;
-  border-radius: 50%;
-  background: rgba(255, 190, 184, 0.9);
+  position: relative;
+  width: 7px;
+  height: 11px;
+  border-radius: 4px;
+  background: currentColor;
+  transform: translateY(-2px);
   transition: background 160ms ease;
 }
+.bt-mic-dot::before {
+  content: '';
+  position: absolute;
+  left: -3.5px;
+  top: 4px;
+  width: 14px;
+  height: 10px;
+  border: 1.5px solid currentColor;
+  border-top: 0;
+  border-radius: 0 0 8px 8px;
+}
+.bt-mic-dot::after {
+  content: '';
+  position: absolute;
+  left: 2.75px;
+  top: 14px;
+  width: 1.5px;
+  height: 4px;
+  background: currentColor;
+}
 
-/* The pulse is the only signal that the mic is actually open. Make it obvious —
-   the button goes properly hot rather than just tinted. */
-.bt-bar.is-listening { border-color: rgba(255, 154, 144, 0.6); }
+.bt-bar.is-listening { border-color: rgba(255, 156, 147, 0.55); }
 .bt-bar.is-listening .bt-bar-mic {
-  background: rgba(234, 67, 53, 0.6);
-  border-color: rgba(255, 180, 172, 0.85);
+  color: #fff;
+  background: var(--bt-wrong-strong);
+  border-color: rgba(255, 190, 184, 0.7);
+  animation: bt-mic-ring 1.2s ease-out infinite;
 }
-.bt-bar.is-listening .bt-mic-dot {
-  background: #fff;
-  animation: bt-pulse 1.1s ease-in-out infinite;
+/* Three bars, each on its own beat. */
+.bt-bar.is-listening .bt-mic-dot,
+.bt-bar.is-listening .bt-mic-dot::before,
+.bt-bar.is-listening .bt-mic-dot::after {
+  width: 3px;
+  height: 14px;
+  border: 0;
+  border-radius: 2px;
+  background: currentColor;
+  transform-origin: 50% 50%;
+  animation: bt-level 0.9s ease-in-out infinite;
 }
+.bt-bar.is-listening .bt-mic-dot { transform: none; }
+.bt-bar.is-listening .bt-mic-dot::before { left: -6px; top: 0; animation-delay: -0.3s; }
+.bt-bar.is-listening .bt-mic-dot::after { left: 6px; top: 0; animation-delay: -0.6s; }
 
-@keyframes bt-pulse {
-  0%, 100% { box-shadow: 0 0 0 0 rgba(255, 154, 144, 0.5); }
-  50%      { box-shadow: 0 0 0 9px rgba(255, 154, 144, 0); }
+@keyframes bt-level {
+  0%, 100% { transform: scaleY(0.35); }
+  50%      { transform: scaleY(1); }
+}
+@keyframes bt-mic-ring {
+  0%   { box-shadow: 0 0 0 0 rgba(242, 85, 75, 0.45); }
+  100% { box-shadow: 0 0 0 12px rgba(242, 85, 75, 0); }
 }
 
 /* --------------------------------------------------------- lesson window */
@@ -175,83 +297,136 @@
   -webkit-backdrop-filter: var(--bt-blur);
   backdrop-filter: var(--bt-blur);
   border: 1px solid var(--bt-rim);
-  border-radius: 26px;
+  border-radius: var(--bt-radius);
   box-shadow: var(--bt-shadow);
+}
+
+/* A soft bloom where light lands, painted under the content. */
+.bt-window::before,
+.bt-cloud-window::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  border-radius: inherit;
+  background:
+    radial-gradient(120% 70% at 0% 0%, rgba(255, 255, 255, 0.09), transparent 55%),
+    linear-gradient(180deg, rgba(255, 255, 255, 0.03), transparent 40%);
+  pointer-events: none;
 }
 
 .bt-window.is-open {
   display: flex;
-  animation: bt-appear 260ms cubic-bezier(0.2, 0, 0, 1);
+  animation: bt-appear 340ms var(--bt-spring);
 }
 
 @keyframes bt-appear {
-  from { opacity: 0; transform: scale(0.96) translateY(8px); }
+  from { opacity: 0; transform: translateY(10px) scale(0.965); }
   to   { opacity: 1; transform: none; }
 }
 
 /* Snappier while dragging — a transition here makes the window lag the cursor. */
-.bt-window.is-dragging {
+.bt-window.is-dragging,
+.bt-cloud-window.is-dragging {
   animation: none;
   box-shadow:
-    0 44px 110px rgba(0, 0, 0, 0.46),
-    inset 0 1px 0 rgba(255, 255, 255, 0.28);
+    0 0 0 0.5px rgba(0, 0, 0, 0.6),
+    0 44px 110px -16px rgba(0, 0, 0, 0.7),
+    inset 0 1px 0 rgba(255, 255, 255, 0.2);
   user-select: none;
 }
 
 .bt-head {
+  position: relative;
   flex: none;
   display: flex;
   align-items: center;
-  gap: 9px;
-  padding: 14px 16px 12px 18px;
+  gap: 10px;
+  min-height: 48px;
+  padding: 0 12px 0 16px;
   border-bottom: 1px solid var(--bt-seam);
   cursor: grab;
   touch-action: none;
+  user-select: none;
 }
 .bt-window.is-dragging .bt-head { cursor: grabbing; }
 
-.bt-grip {
-  width: 11px;
-  height: 11px;
-  flex: none;
-  border-radius: 2px;
-  background-image: radial-gradient(currentColor 1px, transparent 1.2px);
-  background-size: 4px 4px;
-  color: rgba(255, 255, 255, 0.42);
+/* Step progress, drawn along the header's bottom edge. panel.js sets
+   --bt-step-progress on the window for each step; the rail is hidden whenever
+   the numeric progress is. */
+.bt-head::after {
+  content: '';
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: -1px;
+  height: 2px;
+  background: linear-gradient(90deg, var(--bt-accent-strong), var(--bt-accent));
+  box-shadow: 0 0 10px rgba(91, 157, 255, 0.55);
+  transform-origin: 0 50%;
+  transform: scaleX(var(--bt-step-progress, 0));
+  transition: transform 520ms var(--bt-ease), opacity 200ms ease;
+  pointer-events: none;
 }
+.bt-head:has(.bt-progress[hidden])::after { opacity: 0; }
+
+/* Brand mark: a ring with a dot, the same glyph as the bar. */
+.bt-mark {
+  flex: none;
+  display: grid;
+  place-items: center;
+  width: 22px;
+  height: 22px;
+  border-radius: 7px;
+  color: var(--bt-accent);
+  background: linear-gradient(160deg, rgba(255, 255, 255, 0.16), rgba(255, 255, 255, 0.05));
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.12), inset 0 1px 0 rgba(255, 255, 255, 0.12);
+}
+.bt-mark svg { display: block; width: 14px; height: 14px; pointer-events: none; }
 
 .bt-title {
-  font-size: 12px;
+  font-size: 12.5px;
   font-weight: 600;
-  letter-spacing: 0.02em;
-  color: var(--bt-muted);
+  letter-spacing: 0.01em;
+  color: var(--bt-text-2);
+  white-space: nowrap;
 }
 
 .bt-progress {
   margin-inline-start: auto;
-  font-size: 12px;
+  padding: 3px 9px;
+  border-radius: 999px;
+  background: var(--bt-fill);
+  box-shadow: inset 0 0 0 1px var(--bt-seam);
+  font-size: 11.5px;
+  font-weight: 600;
   font-variant-numeric: tabular-nums;
-  color: var(--bt-muted);
+  letter-spacing: 0.02em;
+  color: var(--bt-text-2);
+  white-space: nowrap;
 }
 
 .bt-close,
 .bt-speak {
   display: grid;
   place-items: center;
-  width: 24px;
-  height: 24px;
+  width: 28px;
+  height: 28px;
   border: 0;
   border-radius: 50%;
-  background: var(--bt-fill);
-  font-size: 15px;
+  background: transparent;
+  font-size: 17px;
   line-height: 1;
-  color: var(--bt-text);
+  color: var(--bt-muted);
   cursor: pointer;
-  transition: background 150ms ease, color 150ms ease;
+  transition: background 150ms ease, color 150ms ease, transform 150ms var(--bt-ease);
   flex: none;
 }
 .bt-close:hover,
-.bt-speak:hover { background: var(--bt-fill-hover); }
+.bt-speak:hover { background: var(--bt-fill-hover); color: var(--bt-text); }
+.bt-close:active,
+.bt-speak:active { transform: scale(0.94); }
+.bt-close { font-weight: 300; padding-bottom: 2px; }
 .bt-progress[hidden] ~ .bt-speak { margin-inline-start: auto; }
 
 /* An explicit `display` beats the UA's [hidden] rule, so these need saying —
@@ -263,12 +438,13 @@
 .bt-speak svg { pointer-events: none; }
 
 /* Off: muted colour, slash shown, waves hidden. On: accent, waves, no slash. */
-.bt-speak { color: var(--bt-muted); }
 .bt-speak .bt-waves { display: none; }
 .bt-speak.is-on {
-  color: #16191d;
+  color: #0F1420;
   background: var(--bt-accent);
+  box-shadow: 0 0 0 4px rgba(167, 200, 255, 0.16);
 }
+.bt-speak.is-on:hover { background: #C4DBFF; color: #0F1420; }
 .bt-speak.is-on .bt-waves { display: block; }
 .bt-speak.is-on .bt-slash { display: none; }
 
@@ -276,228 +452,459 @@
   flex: 1;
   min-height: 0;
   overflow-y: auto;
-  padding: 20px 18px;
+  padding: 20px 20px 18px;
   scrollbar-width: thin;
-  scrollbar-color: rgba(255, 255, 255, 0.26) transparent;
+  scrollbar-color: rgba(255, 255, 255, 0.22) transparent;
+  /* Content scrolls under a soft edge rather than being sliced off. */
+  -webkit-mask-image: linear-gradient(180deg, transparent 0, #000 14px, #000 calc(100% - 14px), transparent 100%);
+  mask-image: linear-gradient(180deg, transparent 0, #000 14px, #000 calc(100% - 14px), transparent 100%);
 }
 .bt-body::-webkit-scrollbar { width: 8px; }
 .bt-body::-webkit-scrollbar-thumb {
-  background: rgba(255, 255, 255, 0.24);
+  background: rgba(255, 255, 255, 0.2);
+  border: 2px solid transparent;
+  background-clip: padding-box;
   border-radius: 999px;
 }
+.bt-body::-webkit-scrollbar-thumb:hover { background-color: rgba(255, 255, 255, 0.32); }
 
+/* Secondary actions on the left, the primary on the right, lesson choices as
+   full-width rows. row-reverse keeps DOM (and tab) order intact. */
 .bt-actions {
   flex: none;
   display: flex;
-  flex-direction: column;
-  gap: 7px;
-  padding: 12px 18px 16px;
+  flex-direction: row-reverse;
+  flex-wrap: wrap;
+  gap: 8px;
+  padding: 12px 16px 16px;
   border-top: 1px solid var(--bt-seam);
 }
 .bt-actions:empty { display: none; }
 
-/* Resize grip, bottom-right. */
+/* Resize grip, bottom-right: two short diagonal strokes. */
 .bt-resize {
   position: absolute;
   right: 0;
   bottom: 0;
-  width: 20px;
-  height: 20px;
+  width: 22px;
+  height: 22px;
   cursor: nwse-resize;
   touch-action: none;
+  opacity: 0.55;
+  transition: opacity 150ms ease;
 }
+.bt-resize:hover { opacity: 1; }
 .bt-resize::after {
   content: '';
   position: absolute;
   right: 6px;
   bottom: 6px;
-  width: 7px;
-  height: 7px;
-  border-right: 2px solid rgba(255, 255, 255, 0.4);
-  border-bottom: 2px solid rgba(255, 255, 255, 0.4);
-  border-radius: 0 0 2px 0;
+  width: 10px;
+  height: 10px;
+  background:
+    linear-gradient(135deg, transparent 0 calc(50% + 1px), rgba(255, 255, 255, 0.65) calc(50% + 1px) calc(50% + 2.5px), transparent calc(50% + 2.5px) calc(50% + 4.5px), rgba(255, 255, 255, 0.65) calc(50% + 4.5px) calc(50% + 6px), transparent calc(50% + 6px));
 }
 
 /* ------------------------------------------------------------------ cards */
 
+.bt-card {
+  animation: bt-card-in 300ms var(--bt-ease) both;
+}
+@keyframes bt-card-in {
+  from { opacity: 0; transform: translateY(6px); }
+  to   { opacity: 1; transform: none; }
+}
+
+/* Eyebrow: small caps with a leading dot. */
 .bt-card-title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
   margin: 0 0 10px;
   font-size: 11px;
   font-weight: 600;
   text-transform: uppercase;
-  letter-spacing: 0.09em;
+  letter-spacing: 0.1em;
   color: var(--bt-accent);
+}
+.bt-card-title::before {
+  content: '';
+  flex: none;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: currentColor;
+  box-shadow: 0 0 10px currentColor;
 }
 
 .bt-card-body {
   margin: 0;
-  font-size: 15px;
+  font-size: 15.5px;
   line-height: 1.6;
-  /* Cheap insurance at this tint: holds the narration apart from a busy
-     paragraph showing through, without darkening the sheet. */
-  text-shadow: 0 1px 3px rgba(0, 0, 0, 0.35);
+  letter-spacing: -0.003em;
+  color: var(--bt-text);
+  /* Holds the narration apart from a busy paragraph showing through. */
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.3);
 }
 
-/* The preamble is the pitch in miniature and the generalization is the payoff
-   the presenter reads aloud (PLAN.md §14). Give them real weight. */
+/* The preamble is the pitch in miniature: its title is the lesson's goal, so
+   set it as a real heading under a short accent rule rather than as an eyebrow. */
+.bt-card-preamble .bt-card-title,
+.bt-card-picker .bt-card-title {
+  display: block;
+  margin: 0 0 10px;
+  padding-top: 12px;
+  font-size: 19px;
+  font-weight: 600;
+  line-height: 1.25;
+  letter-spacing: -0.015em;
+  text-transform: none;
+  color: var(--bt-text);
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.3);
+}
+.bt-card-preamble .bt-card-title::before,
+.bt-card-picker .bt-card-title::before {
+  display: block;
+  width: 28px;
+  height: 3px;
+  margin: -12px 0 12px;
+  border-radius: 2px;
+  background: linear-gradient(90deg, var(--bt-accent-strong), var(--bt-accent));
+  box-shadow: 0 0 12px rgba(91, 157, 255, 0.5);
+}
+.bt-card-preamble .bt-card-title::first-letter,
+.bt-card-picker .bt-card-title::first-letter { text-transform: uppercase; }
+
 .bt-card-preamble .bt-card-body,
 .bt-card-generalization .bt-card-body {
-  font-size: 17px;
-  line-height: 1.62;
-  letter-spacing: -0.005em;
+  font-size: 16.5px;
+  line-height: 1.6;
+  color: var(--bt-text-2);
 }
+.bt-card-picker .bt-card-body { color: var(--bt-text-2); font-size: 15px; }
 
+/* The generalization is the payoff the presenter reads aloud (PLAN.md §14). */
 .bt-card-generalization {
-  border-inline-start: 2px solid var(--bt-correct);
-  padding-inline-start: 14px;
+  padding: 2px 0 0 16px;
+  border-inline-start: 2px solid var(--bt-correct-strong);
 }
 .bt-card-generalization .bt-card-title { color: var(--bt-correct); }
+.bt-card-generalization .bt-card-body { color: var(--bt-text); }
+
+/* Steps: the intent is the instruction, so it gets the weight. */
+.bt-card-step .bt-card-body {
+  font-size: 16px;
+  font-weight: 500;
+  line-height: 1.55;
+  letter-spacing: -0.008em;
+}
 
 /* A solo step is the one where we deliberately stop helping. Say so. */
 .bt-mode-solo .bt-card-title { color: var(--bt-muted); }
+.bt-mode-solo .bt-card-title::before { box-shadow: none; background: var(--bt-faint); }
 
 /* Not an error — the page is fine, it just isn't something we can teach.
    Muted rather than red: nothing has gone wrong and nothing needs fixing. */
 .bt-card-unsupported .bt-card-title { color: var(--bt-muted); }
-.bt-card-unsupported .bt-card-body { color: var(--bt-muted); }
+.bt-card-unsupported .bt-card-title::before { box-shadow: none; }
+.bt-card-unsupported .bt-card-body { color: var(--bt-text-2); }
 
 .bt-card-error .bt-card-title { color: var(--bt-wrong); }
 .bt-card-error .bt-card-body {
-  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
-  font-size: 13px;
-  line-height: 1.5;
+  padding: 12px 14px;
+  border-radius: 12px;
+  background: rgba(0, 0, 0, 0.32);
+  box-shadow: inset 0 0 0 1px rgba(255, 156, 147, 0.25);
+  font-family: var(--bt-mono);
+  font-size: 12.5px;
+  line-height: 1.55;
+  color: var(--bt-text-2);
+  text-shadow: none;
+  overflow-wrap: anywhere;
+}
+
+/* Waiting on something: a thin light sweeps the top of the card and the
+   eyebrow's dot breathes. */
+.bt-card-loading { position: relative; padding-top: 12px; }
+.bt-card-loading::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 0;
+  height: 2px;
+  border-radius: 2px;
+  background:
+    linear-gradient(90deg, transparent, var(--bt-accent) 50%, transparent) 0 0 / 45% 100% no-repeat,
+    rgba(255, 255, 255, 0.07);
+  animation: bt-sweep 1.5s var(--bt-ease) infinite;
+}
+.bt-card-loading .bt-card-title::before { animation: bt-breathe 1.4s ease-in-out infinite; }
+@keyframes bt-sweep {
+  from { background-position: -45% 0, 0 0; }
+  to   { background-position: 145% 0, 0 0; }
+}
+@keyframes bt-breathe {
+  0%, 100% { opacity: 0.35; transform: scale(0.85); }
+  50%      { opacity: 1; transform: scale(1); }
 }
 
 /* ------------------------------------------------------------------ notes */
 
 .bt-note {
-  margin: 15px 0 0;
-  padding: 11px 13px;
-  border-radius: 12px;
+  position: relative;
+  margin: 14px 0 0;
+  padding: 11px 14px 11px 38px;
+  border-radius: 14px;
   font-size: 14px;
   line-height: 1.5;
+  color: var(--bt-text);
   border: 1px solid transparent;
+  animation: bt-note-in 280ms var(--bt-ease) both;
+}
+@keyframes bt-note-in {
+  from { opacity: 0; transform: translateY(4px); }
+  to   { opacity: 1; transform: none; }
+}
+/* The badge every note carries at its left; each kind draws its own glyph. */
+.bt-note::before {
+  content: '';
+  position: absolute;
+  left: 12px;
+  top: 12px;
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
 }
 
 .bt-note-hint {
-  background: rgba(143, 194, 255, 0.14);
-  border-color: rgba(143, 194, 255, 0.26);
+  background: rgba(91, 157, 255, 0.12);
+  border-color: rgba(167, 200, 255, 0.22);
+}
+.bt-note-hint::before {
+  background: radial-gradient(circle, var(--bt-accent) 0 2.5px, transparent 3px);
+  box-shadow: inset 0 0 0 1.5px var(--bt-accent);
 }
 
 .bt-note-wrong {
-  background: rgba(255, 154, 144, 0.15);
-  border-color: rgba(255, 154, 144, 0.3);
+  background: rgba(242, 85, 75, 0.13);
+  border-color: rgba(255, 156, 147, 0.26);
+}
+.bt-note-wrong::before {
+  background:
+    linear-gradient(45deg,  transparent 0 44%, var(--bt-wrong) 44% 56%, transparent 56%) center / 9px 9px no-repeat,
+    linear-gradient(-45deg, transparent 0 44%, var(--bt-wrong) 44% 56%, transparent 56%) center / 9px 9px no-repeat;
+  box-shadow: inset 0 0 0 1.5px var(--bt-wrong);
 }
 
 .bt-note-ok {
-  background: rgba(123, 224, 164, 0.15);   /* --bt-correct, as wrong uses --bt-wrong */
-  border-color: rgba(123, 224, 164, 0.3);
+  background: rgba(52, 194, 107, 0.13);
+  border-color: rgba(134, 223, 169, 0.26);
+}
+.bt-note-ok::before {
+  background: var(--bt-correct-strong);
+  box-shadow: 0 0 14px rgba(52, 194, 107, 0.45);
+}
+.bt-note-ok::after {
+  content: '';
+  position: absolute;
+  left: 17.5px;
+  top: 15.5px;
+  width: 4px;
+  height: 7.5px;
+  border-right: 2px solid #0E1A12;
+  border-bottom: 2px solid #0E1A12;
+  transform: rotate(45deg);
 }
 
 /* ------------------------------------------------- authoring progress trail */
 
 /* The cloud agent's reasoning while it explores. Quieter than a note: this is
-   something to glance at during a wait, not something to read. */
+   something to glance at during a wait, not something to read. A thin
+   timeline, with the newest line — the one actually happening — lit. */
 .bt-trail {
-  margin: 14px 0 0;
-  padding: 0;
+  position: relative;
+  margin: 16px 0 0;
+  padding: 0 0 0 20px;
   list-style: none;
   font-size: 13px;
-  line-height: 1.45;
+  line-height: 1.5;
+}
+.bt-trail::before {
+  content: '';
+  position: absolute;
+  left: 4.5px;
+  top: 8px;
+  bottom: 8px;
+  width: 1px;
+  background: linear-gradient(180deg, transparent, var(--bt-faint) 20%, var(--bt-faint));
 }
 
 .bt-trail li {
   position: relative;
-  margin: 0 0 6px;
-  padding-left: 16px;
-  opacity: 0.62;
+  margin: 0 0 8px;
+  color: var(--bt-muted);
+  animation: bt-note-in 260ms var(--bt-ease) both;
 }
-
 .bt-trail li::before {
   content: '';
   position: absolute;
-  left: 2px;
+  left: -19px;
   top: 7px;
-  width: 5px;
-  height: 5px;
+  width: 6px;
+  height: 6px;
   border-radius: 50%;
-  background: currentColor;
+  background: var(--bt-faint);
 }
-
-/* The newest line is the one that's actually happening. */
 .bt-trail li:last-child {
-  opacity: 1;
+  color: var(--bt-text);
+}
+.bt-trail li:last-child::before {
+  background: var(--bt-accent);
+  box-shadow: 0 0 0 3px rgba(167, 200, 255, 0.18), 0 0 12px rgba(91, 157, 255, 0.6);
+  animation: bt-breathe 1.4s ease-in-out infinite;
 }
 
 /* ---------------------------------------------------------------- buttons */
 
 .bt-btn {
-  padding: 11px 16px;
-  border: 1px solid var(--bt-rim);
+  position: relative;
+  flex: 1 1 auto;
+  min-height: 42px;
+  padding: 10px 18px;
+  border: 1px solid transparent;
   border-radius: 999px;
-  background: var(--bt-fill);
-  color: var(--bt-text);
+  background: #F4F5F7;
+  color: #111318;
   font: inherit;
   font-size: 14px;
-  font-weight: 500;
+  font-weight: 600;
+  letter-spacing: -0.005em;
+  line-height: 1.3;
   cursor: pointer;
   text-align: center;
-  transition: background 150ms ease;
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.9),
+    0 1px 2px rgba(0, 0, 0, 0.35),
+    0 10px 20px -10px rgba(0, 0, 0, 0.6);
+  transition: background 160ms ease, border-color 160ms ease, color 160ms ease,
+    transform 160ms var(--bt-ease), box-shadow 160ms ease;
 }
-.bt-btn:hover { background: var(--bt-fill-hover); }
+.bt-btn:hover { background: #FFFFFF; }
+.bt-btn:active { transform: scale(0.98); }
 
 .bt-btn-subtle {
-  background: none;
-  border-color: transparent;
-  color: var(--bt-muted);
-  font-size: 13px;
-  padding: 7px 12px;
+  background: var(--bt-fill);
+  border-color: var(--bt-rim);
+  color: var(--bt-text-2);
+  font-weight: 500;
+  box-shadow: none;
 }
-.bt-btn-subtle:hover { background: rgba(255, 255, 255, 0.1); }
+.bt-btn-subtle:hover { background: var(--bt-fill-hover); color: var(--bt-text); border-color: var(--bt-rim-strong); }
+
+/* One choice per row, text on the left, a chevron on the right. */
+.bt-btn-lesson {
+  flex-basis: 100%;
+  padding: 12px 40px 12px 16px;
+  border-radius: 14px;
+  border-color: var(--bt-rim);
+  background: var(--bt-fill);
+  color: var(--bt-text);
+  font-weight: 500;
+  text-align: left;
+  box-shadow: none;
+}
+.bt-btn-lesson::first-letter { text-transform: uppercase; }
+.bt-btn-lesson::after {
+  content: '';
+  position: absolute;
+  right: 18px;
+  top: 50%;
+  width: 7px;
+  height: 7px;
+  border-top: 1.5px solid var(--bt-muted);
+  border-right: 1.5px solid var(--bt-muted);
+  transform: translateY(-50%) rotate(45deg);
+  transition: transform 200ms var(--bt-spring), border-color 160ms ease;
+}
+.bt-btn-lesson:hover {
+  background: var(--bt-fill-hover);
+  border-color: var(--bt-rim-strong);
+}
+.bt-btn-lesson:hover::after {
+  border-color: var(--bt-text);
+  transform: translate(3px, -50%) rotate(45deg);
+}
+.bt-btn-lesson:active { transform: scale(0.99); }
+
+/* "Work it out for me": the cloud browser, offered in the accent. Subtle
+   when it sits under guesses ("None of these"), tinted when it's the answer. */
+.bt-btn-generate:not(.bt-btn-subtle) {
+  flex-basis: 100%;
+  background: linear-gradient(180deg, rgba(91, 157, 255, 0.34), rgba(91, 157, 255, 0.22));
+  border-color: rgba(167, 200, 255, 0.45);
+  color: #fff;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.18), 0 10px 22px -12px rgba(91, 157, 255, 0.7);
+}
+.bt-btn-generate:not(.bt-btn-subtle):hover {
+  background: linear-gradient(180deg, rgba(91, 157, 255, 0.44), rgba(91, 157, 255, 0.3));
+  border-color: rgba(196, 219, 255, 0.6);
+}
+.bt-btn-generate.bt-btn-subtle { flex-basis: 100%; }
 
 /* Safari and Firefox without backdrop-filter would render this as a nearly
    transparent dark box with unreadable text. Fall back to a solid sheet. */
 @supports not ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
-  .bt-window { background: rgba(30, 32, 38, 0.94); }
-  .bt-bar { background: rgba(30, 32, 38, 0.94); }
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .bt-window.is-open { animation: none; }
-  .bt-bar { transition: none; }
-  .bt-bar.is-listening .bt-mic-dot { animation: none; }
+  .bt-window, .bt-cloud-window { background: var(--bt-glass-solid); }
+  .bt-bar { background: var(--bt-glass-solid); }
 }
 
 /* ------------------------------------------------------- live cloud viewer */
 
+/* The row under a "Working it out" card that opens the viewer. */
 .bt-cloud-watch {
+  position: relative;
   display: flex;
   align-items: center;
-  gap: 9px;
+  gap: 10px;
+  width: 100%;
   margin: 16px 0 0;
-  padding: 8px 0;
-  border: 0;
-  background: none;
-  color: var(--bt-accent);
+  padding: 10px 36px 10px 12px;
+  border: 1px solid var(--bt-rim);
+  border-radius: 12px;
+  background: var(--bt-fill);
+  color: var(--bt-text);
   font: inherit;
   font-size: 13px;
-  line-height: 1.5;
+  font-weight: 500;
+  line-height: 1.4;
   text-align: left;
-  text-decoration: underline;
-  text-underline-offset: 3px;
   cursor: pointer;
+  transition: background 160ms ease, border-color 160ms ease;
 }
 .bt-cloud-watch::before {
   content: '';
   flex: none;
-  width: 14px;
-  height: 10px;
-  border: 1.5px solid currentColor;
+  width: 15px;
+  height: 11px;
+  border: 1.5px solid var(--bt-accent);
   border-radius: 3px;
+  box-shadow: 0 3px 0 -1.5px var(--bt-accent);   /* the stand */
 }
-.bt-cloud-watch:hover { color: #c7e2ff; }
-.bt-cloud-watch:focus-visible, .bt-cloud-minimize:focus-visible,
-.bt-cloud-external:focus-visible { outline: 2px solid var(--bt-accent); outline-offset: 4px; }
+.bt-cloud-watch::after {
+  content: '';
+  position: absolute;
+  right: 16px;
+  top: 50%;
+  width: 6px;
+  height: 6px;
+  border-top: 1.5px solid var(--bt-muted);
+  border-right: 1.5px solid var(--bt-muted);
+  transform: translateY(-50%) rotate(45deg);
+  transition: transform 200ms var(--bt-spring), border-color 160ms ease;
+}
+.bt-cloud-watch:hover { background: var(--bt-fill-hover); border-color: var(--bt-rim-strong); }
+.bt-cloud-watch:hover::after { border-color: var(--bt-text); transform: translate(3px, -50%) rotate(45deg); }
 
 .bt-cloud-window {
   box-sizing: border-box;
@@ -509,43 +916,87 @@
   max-width: calc(100vw - 16px);
   max-height: calc(100vh - 16px);
   overflow: hidden;
-  background: rgba(30, 32, 38, 0.94);
+  background: var(--bt-glass-solid);
   -webkit-backdrop-filter: var(--bt-blur);
   backdrop-filter: var(--bt-blur);
   border: 1px solid var(--bt-rim);
   border-radius: 20px;
   box-shadow: var(--bt-shadow);
+  animation: bt-appear 340ms var(--bt-spring);
 }
 .bt-cloud-window[hidden] { display: none; }
+.bt-cloud-window .bt-head { cursor: grab; }
 .bt-cloud-window.is-dragging .bt-head { cursor: grabbing; }
+.bt-cloud-window .bt-head::after { display: none; }
 .bt-cloud-window .bt-title { color: var(--bt-text); }
+
+/* Status pill. Live gets a breathing green dot. */
 .bt-cloud-status {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
   margin-inline-start: auto;
+  padding: 3px 10px;
+  border-radius: 999px;
+  background: var(--bt-fill);
+  box-shadow: inset 0 0 0 1px var(--bt-seam);
   font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
   color: var(--bt-muted);
+  white-space: nowrap;
 }
-.bt-cloud-status.is-live { color: var(--bt-correct); }
+.bt-cloud-status::before {
+  content: '';
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: currentColor;
+  opacity: 0.7;
+}
+.bt-cloud-status.is-live {
+  color: var(--bt-correct);
+  background: rgba(52, 194, 107, 0.14);
+  box-shadow: inset 0 0 0 1px rgba(134, 223, 169, 0.3);
+}
+.bt-cloud-status.is-live::before {
+  opacity: 1;
+  box-shadow: 0 0 8px var(--bt-correct);
+  animation: bt-breathe 1.6s ease-in-out infinite;
+}
+
 .bt-cloud-minimize {
   display: grid;
   place-items: center;
-  width: 30px;
-  height: 30px;
+  width: 28px;
+  height: 28px;
   flex: none;
   border: 0;
   border-radius: 50%;
-  background: var(--bt-fill);
-  color: var(--bt-text);
+  background: transparent;
+  color: var(--bt-muted);
   font: inherit;
   font-size: 20px;
+  line-height: 1;
+  padding-bottom: 3px;
   cursor: pointer;
+  transition: background 150ms ease, color 150ms ease, transform 150ms var(--bt-ease);
 }
-.bt-cloud-minimize:hover { background: var(--bt-fill-hover); }
+.bt-cloud-minimize:hover { background: var(--bt-fill-hover); color: var(--bt-text); }
+.bt-cloud-minimize:active { transform: scale(0.94); }
+
+/* The screen sits in its own bezel, like a device inside the sheet. */
 .bt-cloud-screen {
   position: relative;
   display: flex;
   flex: 1;
   min-height: 0;
-  background: #15171c;
+  margin: 12px 12px 0;
+  border-radius: 12px;
+  overflow: hidden;
+  background: #0A0B0E;
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.08), inset 0 1px 0 rgba(255, 255, 255, 0.06);
 }
 .bt-cloud-frame {
   display: block;
@@ -562,15 +1013,19 @@
   display: grid;
   place-content: center;
   margin: 0;
-  padding: 28px;
-  background: rgba(21, 23, 28, 0.94);
-  color: var(--bt-muted);
+  padding: 32px;
+  background:
+    radial-gradient(60% 50% at 50% 45%, rgba(91, 157, 255, 0.10), transparent 70%),
+    rgba(10, 11, 14, 0.96);
+  color: var(--bt-text-2);
   font-size: 14px;
   line-height: 1.6;
   text-align: center;
+  text-wrap: balance;
   pointer-events: none;
 }
 .bt-cloud-message[hidden] { display: none; }
+
 .bt-cloud-footer {
   display: flex;
   flex: none;
@@ -578,68 +1033,98 @@
   align-items: center;
   justify-content: space-between;
   gap: 8px 16px;
-  padding: 12px 22px 12px 16px;
-  border-top: 1px solid var(--bt-seam);
+  padding: 12px 24px 14px 16px;
   color: var(--bt-muted);
-  font-size: 11px;
+  font-size: 11.5px;
   line-height: 1.5;
 }
-.bt-cloud-external { color: var(--bt-accent); }
-.bt-cloud-external[hidden] { display: none; }
-.bt-cloud-retry {
-  padding: 5px 10px;
+.bt-cloud-external {
+  padding: 5px 11px;
   border: 1px solid var(--bt-rim);
-  border-radius: 6px;
+  border-radius: 999px;
   background: var(--bt-fill);
   color: var(--bt-accent);
+  font-weight: 500;
+  text-decoration: none;
+  transition: background 150ms ease, border-color 150ms ease;
+}
+.bt-cloud-external:hover { background: var(--bt-fill-hover); border-color: var(--bt-rim-strong); }
+.bt-cloud-external[hidden] { display: none; }
+.bt-cloud-retry {
+  padding: 5px 12px;
+  border: 1px solid rgba(167, 200, 255, 0.4);
+  border-radius: 999px;
+  background: rgba(91, 157, 255, 0.2);
+  color: #fff;
   font: inherit;
+  font-size: 12px;
+  font-weight: 600;
   cursor: pointer;
+  transition: background 150ms ease;
 }
-.bt-cloud-retry:hover { background: var(--bt-fill-hover); }
-.bt-cloud-retry:focus-visible {
-  outline: 2px solid var(--bt-accent);
-  outline-offset: 3px;
-}
+.bt-cloud-retry:hover { background: rgba(91, 157, 255, 0.32); }
 .bt-cloud-retry[hidden] { display: none; }
 
 /* Completed sessions remain accessible after the lesson window closes. */
 .bt-cloud-history {
   position: fixed;
-  bottom: 88px;
+  bottom: 94px;
   left: 50%;
   transform: translateX(-50%);
   z-index: var(--bt-z, 2147483647);
+  display: inline-flex;
+  align-items: center;
+  gap: 9px;
   pointer-events: auto;
   max-width: calc(100vw - 32px);
-  padding: 9px 16px;
+  padding: 9px 18px 9px 14px;
   border: 1px solid var(--bt-rim);
   border-radius: 999px;
-  background: rgba(34, 36, 43, 0.94);
-  color: var(--bt-accent);
-  box-shadow: 0 4px 18px rgba(0, 0, 0, 0.22);
+  background: var(--bt-glass-solid);
+  -webkit-backdrop-filter: var(--bt-blur);
+  backdrop-filter: var(--bt-blur);
+  color: var(--bt-text);
+  box-shadow: var(--bt-shadow);
   font: inherit;
   font-size: 13px;
+  font-weight: 500;
   cursor: pointer;
+  transition: background 150ms ease, border-color 150ms ease;
 }
-.bt-cloud-history:hover { background: #3b414c; }
-.bt-cloud-history:focus-visible, .bt-cloud-session:focus-visible {
-  outline: 2px solid var(--bt-accent);
-  outline-offset: 3px;
+.bt-cloud-history::before {
+  content: '';
+  flex: none;
+  width: 0;
+  height: 0;
+  border-style: solid;
+  border-width: 5px 0 5px 8px;
+  border-color: transparent transparent transparent var(--bt-accent);
 }
+.bt-cloud-history:hover { background: rgba(28, 30, 36, 0.96); border-color: var(--bt-rim-strong); }
 .bt-cloud-frame.is-recording { pointer-events: auto; }
-.bt-cloud-session-wrap { padding: 8px 16px; font-size: 12px; }
+
+.bt-cloud-session-wrap { padding: 10px 12px 0; font-size: 12px; color: var(--bt-muted); }
 .bt-cloud-session-wrap[hidden] { display: none; }
 .bt-cloud-session-wrap label { display: flex; align-items: center; gap: 12px; }
 .bt-cloud-session {
   flex: 1;
   min-width: 0;
-  padding: 5px 8px;
+  padding: 7px 32px 7px 10px;
   border: 1px solid var(--bt-rim);
-  border-radius: 6px;
-  background: #292d35;
+  border-radius: 9px;
+  background:
+    url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6' viewBox='0 0 10 6'%3E%3Cpath d='M1 1l4 4 4-4' fill='none' stroke='%23ffffff' stroke-opacity='.6' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E") no-repeat right 12px center,
+    var(--bt-fill);
   color: var(--bt-text);
   font: inherit;
+  font-size: 12.5px;
+  -webkit-appearance: none;
+  appearance: none;
+  cursor: pointer;
+  transition: background-color 150ms ease, border-color 150ms ease;
 }
+.bt-cloud-session:hover { background-color: var(--bt-fill-hover); border-color: var(--bt-rim-strong); }
+.bt-cloud-session option { background: #1A1C22; color: #fff; }
 
 /* Narrow lesson windows fill the space above the launcher. Keep the replay
    shortcut away from their Show me / Not now / Stop actions. */
@@ -650,4 +1135,22 @@
     left: 8px;
     transform: none;
   }
+}
+
+/* ------------------------------------------------------------------ motion */
+
+@media (prefers-reduced-motion: reduce) {
+  .bt-window.is-open, .bt-cloud-window, .bt-card, .bt-note, .bt-trail li { animation: none; }
+  .bt-bar, .bt-bar::before, .bt-head::after, .bt-btn, .bt-btn-lesson::after, .bt-cloud-watch::after { transition: none; }
+  .bt-bar.is-listening .bt-bar-mic,
+  .bt-bar.is-listening .bt-mic-dot,
+  .bt-bar.is-listening .bt-mic-dot::before,
+  .bt-bar.is-listening .bt-mic-dot::after,
+  .bt-card-loading::before,
+  .bt-card-loading .bt-card-title::before,
+  .bt-trail li:last-child::before,
+  .bt-cloud-status.is-live::before { animation: none; }
+  .bt-bar.is-listening .bt-mic-dot,
+  .bt-bar.is-listening .bt-mic-dot::before,
+  .bt-bar.is-listening .bt-mic-dot::after { transform: none; }
 }

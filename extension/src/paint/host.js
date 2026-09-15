@@ -72,12 +72,32 @@ export function mountHost() {
     .scrim { position: absolute; inset: 0; background: ${SCRIM}; }
     .spot, .feedback { position: absolute; left: 0; top: 0; border-radius: ${SPOT_RADIUS}px; }
     .spot { outline: 2px solid ${ACCENT}; background: transparent; }
-    .feedback { border: 3px solid; }
+    /* Presentation only. The spot's own box-shadow is the scrim cut-out and its
+       outline is what feedback.js recolours, so the finish lives on two
+       pseudo-elements: a hairline of light just inside the ring keeps the edge
+       crisp against the dim, and a soft halo outside it breathes so the eye
+       finds the target. The halo follows the outline to green on a correct
+       click by matching the inline colour feedback.js writes. */
+    .spot::before { content: ''; position: absolute; inset: 0; border-radius: inherit;
+      box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.38); }
+    .spot::after { content: ''; position: absolute; inset: -2px; border-radius: ${SPOT_RADIUS + 2}px;
+      --halo: 79, 156, 249;
+      box-shadow: 0 0 0 4px rgba(var(--halo), 0.22), 0 0 30px 6px rgba(var(--halo), 0.38);
+      animation: bt-halo 2.2s ease-in-out infinite; }
+    .spot[style*="rgb(52, 168, 83)"]::after { --halo: 52, 168, 83; animation: none; }
+    @keyframes bt-halo {
+      0%, 100% { opacity: 0.55; box-shadow: 0 0 0 4px rgba(var(--halo), 0.22), 0 0 30px 6px rgba(var(--halo), 0.38); }
+      50%      { opacity: 1;    box-shadow: 0 0 0 6px rgba(var(--halo), 0.26), 0 0 40px 10px rgba(var(--halo), 0.42); }
+    }
+    .feedback { border: 2px solid; box-shadow: 0 0 0 4px rgba(234, 67, 53, 0.16), 0 0 28px 4px rgba(234, 67, 53, 0.4); }
     .cursor { position: absolute; left: 0; top: 0; width: 28px; height: 34px;
-      filter: drop-shadow(0 2px 3px #0006); transform-origin: 2px 2px; }
+      filter: drop-shadow(0 1px 1px rgba(0, 0, 0, 0.3)) drop-shadow(0 6px 10px rgba(0, 0, 0, 0.35));
+      transform-origin: 2px 2px; }
     .cursor svg { display: block; width: 28px; height: 34px; overflow: visible; }
     .ripple { position: absolute; width: 30px; height: 30px; border-radius: 50%;
-      border: 2px solid ${ACCENT}; background: #4f9cf933; }
+      border: 1.5px solid rgba(79, 156, 249, 0.95); background: rgba(79, 156, 249, 0.16);
+      box-shadow: 0 0 22px rgba(79, 156, 249, 0.5); }
+    @media (prefers-reduced-motion: reduce) { .spot::after { animation: none; } }
   `;
   root.append(sheet);
   const node = (className) => {

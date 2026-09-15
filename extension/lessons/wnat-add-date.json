@@ -1,0 +1,94 @@
+{
+  "id": "wnat-add-date",
+  "app": "google-docs",
+  "goal": "i wnat to add date",
+  "preamble": "Typing a date takes four seconds, so it's worth asking why Docs has a command for it at all. What you're about to insert isn't text that happens to look like a date — it's a chip that Docs knows *is* a date. It can be re-picked from a calendar later, it stays formatted consistently, and other people's documents read it the same way yours does. You're inserting an object, not characters.",
+  "generalization": "Smart chips are the general pattern: Docs has a small family of things that look like text but carry meaning underneath — dates, people, files, places. The tell is that you reach them through Insert rather than by typing. Anything you can type, you can type wrong; anything you insert, Docs keeps track of for you.",
+  "steps": [
+    {
+      "id": "s1",
+      "intent": "Nothing here is about changing text that already exists, so the formatting menus are the wrong family. You're putting a new object into the document at your cursor — that's one menu's entire job.",
+      "mode": "demo",
+      "target": {
+        "scope": "menu",
+        "name": "Insert"
+      },
+      "action": "click",
+      "verify": {
+        "kind": "visible",
+        "name": "Smart chips(Z)",
+        "scope": "menu"
+      },
+      "hints": [
+        "Ask what kind of action this is: changing something already on the page, or adding something that isn't there yet.",
+        "The Insert menu, in the menu bar along the top."
+      ],
+      "wrongHints": {
+        "Format": "Format changes the appearance of text that's already in the document. Nothing has been added yet, so there's nothing for it to work on.",
+        "Edit": "Edit is for moving existing content around — cut, copy, paste, find. A date chip doesn't exist yet to be edited."
+      }
+    },
+    {
+      "id": "s2",
+      "intent": "Date isn't in the top level of this menu, and that tells you something: Docs doesn't treat it as an ordinary insertable object like an image or a table. It belongs to a small family of items that look like text but carry data underneath. Open the group that holds them.",
+      "mode": "guided",
+      "target": {
+        "scope": "menu",
+        "name": "Smart chips(Z)"
+      },
+      "action": "click",
+      "verify": {
+        "kind": "visible",
+        "name": "Date",
+        "scope": "menu"
+      },
+      "hints": [
+        "You're looking for the group of things that sit inline with your writing but aren't really writing — a person, a file, a date.",
+        "'Smart chips', in the upper half of the Insert menu."
+      ],
+      "wrongHints": {
+        "Building blocks": "A reasonable guess — building blocks are also prefabricated content. But those are whole templates dropped into the page, like a meeting-notes layout. A date sits inside a line of text.",
+        "Table": "Tables structure a region of the page. You want a single item at the cursor."
+      }
+    },
+    {
+      "id": "s3",
+      "intent": "Here's the family: people, files, calendar events, dates. Each one is a chip that stays connected to what it represents. Pick Date, and Docs will offer you a calendar to choose from rather than asking you to type digits.",
+      "mode": "guided",
+      "target": {
+        "scope": "menu",
+        "name": "Date"
+      },
+      "action": "click",
+      "verify": {
+        "kind": "visible",
+        "name": "OK",
+        "scope": "any"
+      },
+      "hints": [
+        "Of the chips listed, only one refers to a point in time rather than a person, a file, or a place.",
+        "'Date', partway down the submenu that just opened to the right."
+      ],
+      "wrongHints": {
+        "Place": "Places are locations on a map. Close in spirit — both are chips — but the wrong kind of fact."
+      }
+    },
+    {
+      "id": "s4",
+      "intent": "The calendar that appeared is the point of doing it this way: you're choosing a date rather than spelling one. Nothing lands in the document until you confirm the choice, so finish it.",
+      "mode": "solo",
+      "target": {
+        "scope": "any",
+        "name": "OK"
+      },
+      "action": "click",
+      "verify": {
+        "kind": "none"
+      },
+      "hints": [
+        "The picker is waiting on you — it wants a decision, not another selection.",
+        "The confirm button at the bottom of the date picker."
+      ]
+    }
+  ]
+}

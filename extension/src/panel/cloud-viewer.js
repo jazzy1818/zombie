@@ -45,7 +45,12 @@ export function createCloudViewer(root, raise) {
   win.hidden = true;
   win.innerHTML = `
     <header class="bt-head">
-      <span class="bt-grip" aria-hidden="true"></span>
+      <span class="bt-mark" aria-hidden="true">
+        <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+          <rect x="2" y="3" width="12" height="8.5" rx="1.8"/>
+          <path d="M6 13.5h4"/>
+        </svg>
+      </span>
       <span class="bt-title">Cloud browser</span>
       <span class="bt-cloud-status" role="status"></span>
       <button class="bt-cloud-minimize" type="button" aria-label="Minimize cloud browser" title="Minimize cloud browser">−</button>

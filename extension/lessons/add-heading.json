@@ -1,0 +1,52 @@
+{
+  "id": "add-heading",
+  "app": "google-docs",
+  "goal": "how to add a heading",
+  "preamble": "Making a line look like a heading and making it *be* a heading are two different things. You could make the text bigger and bold and it would read fine on screen — but Docs wouldn't know anything had changed. A heading is a label you attach to a line, saying \"this starts a section.\" The larger, bolder look is just what that label happens to look like. You're about to attach the label, not paint the text.",
+  "generalization": "The formatting you get is a side effect. What you actually did was tell Docs the structure of the document — and now the outline pane knows about this line, a table of contents would pick it up, a PDF export would carry the structure across, and changing your heading look once changes every heading at once. That's the difference between styling text and describing it: description scales, decoration doesn't.",
+  "steps": [
+    {
+      "id": "s1",
+      "intent": "The toolbar has two kinds of control side by side: ones that change how text looks, and one that changes what the text is. That second kind is a single box, and it always shows the current line's role in the document — right now it almost certainly reads \"Normal text,\" which is Docs' way of saying \"just prose.\" Open it to see the other roles a line can have.",
+      "mode": "demo",
+      "target": {
+        "scope": "toolbar",
+        "name": "Styles"
+      },
+      "action": "click",
+      "verify": {
+        "kind": "visible",
+        "name": "Heading 1",
+        "scope": "menu"
+      },
+      "hints": [
+        "Skip past the bold, italic and size controls — those only affect appearance. You want the one control that names the line rather than decorating it.",
+        "Toolbar, left-hand end, just right of the undo and redo arrows — a wide box showing 'Normal text'."
+      ],
+      "wrongHints": {
+        "Bold": "Reasonable, since headings are bold. But bold is paint: Docs would still file this line as ordinary prose, and no outline or contents would ever find it.",
+        "Font size": "Headings are bigger, so this looks like the right lever. Size is a property, though, not a role — Docs can't tell a large sentence from a section title."
+      }
+    },
+    {
+      "id": "s2",
+      "intent": "The list you're looking at is a hierarchy, not a set of sizes. Heading 1 is the top level — the beginning of a major section. Choosing it tells Docs this line opens a section, and everything below it until the next Heading 1 belongs to it.",
+      "mode": "guided",
+      "target": {
+        "scope": "menu",
+        "name": "Heading 1"
+      },
+      "action": "click",
+      "verify": {
+        "kind": "none"
+      },
+      "hints": [
+        "You're picking a rank, not a look. Which entry means 'top-level section' rather than 'the name of the whole document'?",
+        "In the open dropdown, below 'Title' and 'Subtitle', above Heading 2 and Heading 3."
+      ],
+      "wrongHints": {
+        "Title": "It sits at the top of the list and looks the grandest, so it's a fair guess. But Docs reserves Title for the name of the document as a whole — it doesn't create a section, so it won't behave like a heading in the outline or a contents list."
+      }
+    }
+  ]
+}

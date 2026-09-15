@@ -117,7 +117,12 @@ export async function mountPanel() {
   win.className = 'bt-window';
   win.innerHTML = `
     <header class="bt-head">
-      <span class="bt-grip" aria-hidden="true"></span>
+      <span class="bt-mark" aria-hidden="true">
+        <svg viewBox="0 0 16 16" fill="none" aria-hidden="true">
+          <circle cx="8" cy="8" r="5.5" stroke="currentColor" stroke-width="1.5"/>
+          <circle cx="8" cy="8" r="2" fill="currentColor"/>
+        </svg>
+      </span>
       <span class="bt-title">Browser Teacher</span>
       <span class="bt-progress" hidden></span>
       <button class="bt-speak" type="button" aria-pressed="false">${SPEAKER_SVG}</button>
@@ -564,6 +569,7 @@ function createUI(els, raise, speech, viewer) {
       spoken = '';
       setOpen(false);
       els.progress.hidden = true;
+      els.win.style.removeProperty('--bt-step-progress');   // rail starts fresh next lesson
       els.body.replaceChildren();
       els.actions.replaceChildren();
       bar?.setEnabled(teachable, lockReason);
@@ -797,6 +803,8 @@ function createUI(els, raise, speech, viewer) {
     step(step, index, total) {
       els.progress.hidden = false;
       els.progress.textContent = `${index + 1} / ${total}`;
+      // Presentation only: the header's progress rail reads this.
+      els.win.style.setProperty('--bt-step-progress', String((index + 1) / total));
       renderCard({ kind: 'step', mode: step.mode, title: modeLabel(step.mode), body: step.intent });
       renderActions([
         { label: 'Show me where', value: ACTION.DEMO_REST, subtle: true },

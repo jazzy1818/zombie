@@ -8,10 +8,12 @@
   "add-footer",
   "add-header",
   "add-header-and-footer",
+  "add-heading",
   "add-image",
   "add-image-2",
   "add-table",
   "add-table-2",
+  "add-table-3",
   "allign-right",
   "center-align-text",
   "change-font-style",
@@ -38,5 +40,6 @@
   "wanna-change-color-of-current",
   "wanna-have-line-spacing-double",
   "wanna-increase-font-size",
-  "where-is-accesibility"
+  "where-is-accesibility",
+  "wnat-add-date"
 ]
